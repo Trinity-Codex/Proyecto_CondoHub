@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block titulo %}Incidente #{{ incidente.pk }}{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'incidentes:lista' %}">Incidentes</a></li>
+  <li class="breadcrumb-item active" aria-current="page">#{{ incidente.pk }}</li>
+</ol></nav>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <h1 class="h4">#{{ incidente.pk }} {{ incidente.titulo }}</h1>
+          {% include "incidentes/_estado.html" %}
+        </div>
+        <dl class="row small mb-3">
+          <dt class="col-sm-4">Categoría</dt><dd class="col-sm-8">{{ incidente.get_categoria_display }}</dd>
+          <dt class="col-sm-4">Unidad</dt><dd class="col-sm-8">{{ incidente.unidad|default:"Área común" }}</dd>
+          <dt class="col-sm-4">Reportado por</dt><dd class="col-sm-8">{{ incidente.reportado_por }}</dd>
+          <dt class="col-sm-4">Fecha</dt><dd class="col-sm-8">{{ incidente.fecha_reporte|date:"d-m-Y H:i" }}</dd>
+          <dt class="col-sm-4">Última actualización</dt><dd class="col-sm-8">{{ incidente.actualizado|date:"d-m-Y H:i" }}</dd>
+        </dl>
+        <h2 class="h6">Descripción</h2>
+        <p class="texto-largo">{{ incidente.descripcion }}</p>
+        {% if incidente.respuesta %}
+        <div class="alert alert-info mb-0">
+          <strong>Respuesta de la administración:</strong>
+          <div class="texto-largo">{{ incidente.respuesta }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Cambio de estado (RF08): solo administrador y conserje #}
+  {% if form_estado %}
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header">Gestionar incidente</div>
+      <div class="card-body">
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% include "_formulario.html" with form=form_estado %}
+          <button class="btn btn-primary" type="submit">Actualizar estado</button>
+        </form>
+        <p class="text-muted small mt-2 mb-0"><i class="bi bi-bell"></i> Se notificará a {{ incidente.reportado_por }}.</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

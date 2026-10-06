@@ -1,0 +1,54 @@
+/*
+  Estilos propios de CondoHub (lo demás viene de Bootstrap 5).
+  Colores de la marca: verde azulado.
+*/
+:root {
+  --condohub-primario: #0f5f5c;
+  --condohub-primario-oscuro: #0a4644;
+  --condohub-acento: #2bb59a;
+  /* Bootstrap usa estas variables para los botones y enlaces "primary". */
+  --bs-primary: #0f5f5c;
+  --bs-primary-rgb: 15, 95, 92;
+  --bs-link-color: #0f5f5c;
+  --bs-link-color-rgb: 15, 95, 92;
+  --bs-link-hover-color: #0a4644;
+}
+
+body {
+  background-color: #f4f7f6;
+}
+
+.barra-principal {
+  background: linear-gradient(90deg, var(--condohub-primario-oscuro), var(--condohub-primario));
+}
+
+.btn-primary {
+  --bs-btn-bg: var(--condohub-primario);
+  --bs-btn-border-color: var(--condohub-primario);
+  --bs-btn-hover-bg: var(--condohub-primario-oscuro);
+  --bs-btn-hover-border-color: var(--condohub-primario-oscuro);
+  --bs-btn-active-bg: var(--condohub-primario-oscuro);
+  --bs-btn-disabled-bg: var(--condohub-primario);
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--condohub-primario);
+  --bs-btn-border-color: var(--condohub-primario);
+  --bs-btn-hover-bg: var(--condohub-primario);
+  --bs-btn-hover-border-color: var(--condohub-primario);
+  --bs-btn-active-bg: var(--condohub-primario-oscuro);
+}
+
+.tarjeta-indicador {
+  border-left: 4px solid var(--condohub-acento);
+}
+
+.card-header {
+  background-color: #fff;
+  font-weight: 600;
+}
+
+/* Contenido de los comunicados: respeta los saltos de línea que escribió el autor. */
+.texto-largo {
+  white-space: pre-line;
+}

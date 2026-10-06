@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block titulo %}{{ comunicado.titulo }}{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'comunicados:lista' %}">Comunicados</a></li>
+  <li class="breadcrumb-item active" aria-current="page">{{ comunicado.titulo|truncatechars:40 }}</li>
+</ol></nav>
+
+<article class="card">
+  <div class="card-body p-4">
+    <h1 class="h3">{% if comunicado.fijado %}<i class="bi bi-pin-angle-fill text-danger"></i>{% endif %} {{ comunicado.titulo }}</h1>
+    <div class="text-muted small mb-3">
+      Publicado el {{ comunicado.fecha_publicacion|date:"d-m-Y \a \l\a\s H:i" }} por {{ comunicado.autor }} ·
+      {% if comunicado.edificio %}Para {{ comunicado.edificio.nombre }}{% else %}Para todo el condominio{% endif %}
+    </div>
+    <div class="texto-largo">{{ comunicado.contenido }}</div>
+  </div>
+  {% if es_admin %}
+  <div class="card-footer d-flex gap-2">
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'comunicados:editar' comunicado.pk %}"><i class="bi bi-pencil"></i> Editar</a>
+    <a class="btn btn-outline-danger btn-sm" href="{% url 'comunicados:eliminar' comunicado.pk %}"><i class="bi bi-trash"></i> Eliminar</a>
+  </div>
+  {% endif %}
+</article>
+{% endblock %}

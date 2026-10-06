@@ -1,0 +1,8 @@
+{# Etiqueta de color según el estado del incidente. Uso: {% include "incidentes/_estado.html" with incidente=i %} #}
+{% if incidente.estado == "RESUELTO" %}
+<span class="badge text-bg-success">{{ incidente.get_estado_display }}</span>
+{% elif incidente.estado == "EN_PROCESO" %}
+<span class="badge text-bg-warning">{{ incidente.get_estado_display }}</span>
+{% else %}
+<span class="badge text-bg-secondary">{{ incidente.get_estado_display }}</span>
+{% endif %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{# Misma plantilla para crear y editar: "object" existe solo al editar. #}
+{% block titulo %}{% if object %}Editar comunicado{% else %}Nuevo comunicado{% endif %}{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <h1 class="h3 mb-3">{% if object %}Editar comunicado{% else %}Nuevo comunicado{% endif %}</h1>
+    <div class="card"><div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% include "_formulario.html" with form=form %}
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">{% if object %}Guardar cambios{% else %}Publicar{% endif %}</button>
+          <a class="btn btn-outline-secondary" href="{% url 'comunicados:lista' %}">Cancelar</a>
+        </div>
+      </form>
+    </div></div>
+    {% if not object %}
+    <p class="text-muted small mt-2"><i class="bi bi-bell"></i> Al publicar, se notificará a los residentes que corresponda.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

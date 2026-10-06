@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block titulo %}Inicio{% endblock %}
+
+{% block contenido %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+  <div>
+    <h1 class="h3 mb-0">Hola, {{ user.first_name|default:user.email }}</h1>
+    <p class="text-muted mb-0">{{ condominio_activo.nombre }} · {{ condominio_activo.comuna }}</p>
+  </div>
+  <div class="d-flex gap-2">
+    {% if es_residente %}
+    <a class="btn btn-primary" href="{% url 'reservas:nueva' %}"><i class="bi bi-calendar-plus"></i> Reservar espacio</a>
+    <a class="btn btn-outline-primary" href="{% url 'incidentes:nuevo' %}"><i class="bi bi-exclamation-triangle"></i> Reportar incidente</a>
+    {% endif %}
+    {% if es_admin %}
+    <a class="btn btn-primary" href="{% url 'comunicados:nuevo' %}"><i class="bi bi-megaphone"></i> Nuevo comunicado</a>
+    {% endif %}
+  </div>
+</div>
+
+{# ---- Resumen del condominio (administrador, comité y conserje) ---- #}
+{% if resumen %}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
+    <div class="text-muted small">Unidades</div><div class="fs-3 fw-semibold">{{ resumen.unidades }}</div>
+  </div></div></div>
+  <div class="col-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
+    <div class="text-muted small">Residentes</div><div class="fs-3 fw-semibold">{{ resumen.residentes }}</div>
+  </div></div></div>
+  <div class="col-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
+    <div class="text-muted small">Incidentes abiertos</div><div class="fs-3 fw-semibold">{{ resumen.incidentes_abiertos }}</div>
+  </div></div></div>
+  <div class="col-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
+    <div class="text-muted small">Reservas hoy</div><div class="fs-3 fw-semibold">{{ resumen.reservas_hoy }}</div>
+  </div></div></div>
+</div>
+{% if es_admin and suma_alicuotas != 1 %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle"></i>
+  Las alícuotas de las unidades suman {{ suma_alicuotas|floatformat:4 }} y deberían sumar 1 (100 %).
+  Revísalas antes de calcular gastos comunes.
+</div>
+{% endif %}
+{% endif %}
+
+<div class="row g-4">
+  {# ---- Últimos comunicados (todos los roles) ---- #}
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-megaphone"></i> Últimos comunicados</span>
+        <a href="{% url 'comunicados:lista' %}" class="small">Ver todos</a>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for c in comunicados %}
+        <li class="list-group-item">
+          <a href="{{ c.get_absolute_url }}" class="fw-semibold text-decoration-none">
+            {% if c.fijado %}<i class="bi bi-pin-angle-fill text-danger"></i>{% endif %} {{ c.titulo }}
+          </a>
+          <div class="small text-muted">{{ c.fecha_publicacion|date:"d-m-Y H:i" }}{% if c.edificio %} · {{ c.edificio.nombre }}{% endif %}</div>
+        </li>
+        {% empty %}
+        <li class="list-group-item text-muted">Aún no hay comunicados.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    {# ---- Equipo del condominio: incidentes por atender ---- #}
+    {% if incidentes_pendientes is not None and not es_residente %}
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-tools"></i> Incidentes por atender</span>
+        <a href="{% url 'incidentes:lista' %}" class="small">Ver todos</a>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for i in incidentes_pendientes %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <a href="{{ i.get_absolute_url }}" class="text-decoration-none">#{{ i.pk }} {{ i.titulo }}</a>
+          {% include "incidentes/_estado.html" with incidente=i %}
+        </li>
+        {% empty %}
+        <li class="list-group-item text-muted">No hay incidentes pendientes.</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {# ---- Residentes: sus reservas e incidentes ---- #}
+    {% if es_residente %}
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-calendar-check"></i> Mis próximas reservas</span>
+        <a href="{% url 'reservas:mis_reservas' %}" class="small">Ver todas</a>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for r in mis_reservas %}
+        <li class="list-group-item">
+          <span class="fw-semibold">{{ r.espacio }}</span>
+          <div class="small text-muted">{{ r.fecha|date:"l d-m-Y" }} · {{ r.hora_inicio|time:"H:i" }} a {{ r.hora_fin|time:"H:i" }}</div>
+        </li>
+        {% empty %}
+        <li class="list-group-item text-muted">No tienes reservas próximas.</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-tools"></i> Mis incidentes abiertos</span>
+        <a href="{% url 'incidentes:lista' %}" class="small">Ver todos</a>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for i in mis_incidentes %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <a href="{{ i.get_absolute_url }}" class="text-decoration-none">#{{ i.pk }} {{ i.titulo }}</a>
+          {% include "incidentes/_estado.html" with incidente=i %}
+        </li>
+        {% empty %}
+        <li class="list-group-item text-muted">No tienes incidentes abiertos.</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

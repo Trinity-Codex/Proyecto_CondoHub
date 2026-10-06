@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block titulo %}{{ espacio.nombre }}{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'reservas:espacios' %}">Espacios comunes</a></li>
+  <li class="breadcrumb-item active" aria-current="page">{{ espacio.nombre }}</li>
+</ol></nav>
+
+<div class="row g-4">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-body">
+        <h1 class="h4">{{ espacio.nombre }}</h1>
+        <p class="text-muted">{{ espacio.descripcion|default:"Sin descripción." }}</p>
+        <ul class="list-unstyled small">
+          <li><i class="bi bi-people"></i> Hasta {{ espacio.capacidad }} personas</li>
+          <li><i class="bi bi-clock"></i> Horario: {{ espacio.hora_apertura|time:"H:i" }} a {{ espacio.hora_cierre|time:"H:i" }}</li>
+          <li><i class="bi bi-cash"></i> {% if espacio.tarifa %}${{ espacio.tarifa }} por reserva{% else %}Sin costo{% endif %}</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  {# RF05: disponibilidad del espacio en la fecha elegida #}
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">Disponibilidad</div>
+      <div class="card-body">
+        <form method="get" class="d-flex gap-2 align-items-end mb-3">
+          <div>
+            <label class="form-label" for="{{ form_fecha.fecha.id_for_label }}">Fecha</label>
+            {{ form_fecha.fecha }}
+          </div>
+          <button class="btn btn-outline-primary" type="submit">Consultar</button>
+        </form>
+
+        <h2 class="h6">Reservas del {{ fecha|date:"l d-m-Y" }}</h2>
+        {% if reservas_del_dia %}
+        <ul class="list-group mb-3">
+          {% for r in reservas_del_dia %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span><i class="bi bi-lock"></i> {{ r.hora_inicio|time:"H:i" }} a {{ r.hora_fin|time:"H:i" }}</span>
+            <span class="text-muted small">Ocupado</span>
+          </li>
+          {% endfor %}
+        </ul>
+        <p class="small text-muted">El resto del horario ({{ espacio.hora_apertura|time:"H:i" }} a {{ espacio.hora_cierre|time:"H:i" }}) está disponible.</p>
+        {% else %}
+        <p class="text-success"><i class="bi bi-check-circle"></i> Todo el día disponible ({{ espacio.hora_apertura|time:"H:i" }} a {{ espacio.hora_cierre|time:"H:i" }}).</p>
+        {% endif %}
+
+        {% if es_residente and espacio.activo %}
+        <a class="btn btn-primary" href="{% url 'reservas:nueva' %}?espacio={{ espacio.pk }}&fecha={{ fecha|date:'Y-m-d' }}">Reservar este día</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% comment %}
+  Botones de paginación para las listas con "paginate_by" (ListView).
+  Uso:  {% include "_paginacion.html" %}
+  Conserva los filtros de la URL (ej. ?estado=RECIBIDO) al cambiar de página.
+{% endcomment %}
+{% if is_paginated %}
+<nav aria-label="Páginas">
+  <ul class="pagination justify-content-center">
+    {% if page_obj.has_previous %}
+    <li class="page-item"><a class="page-link" href="?{% if filtros_url %}{{ filtros_url }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a></li>
+    {% endif %}
+    <li class="page-item disabled"><span class="page-link">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span></li>
+    {% if page_obj.has_next %}
+    <li class="page-item"><a class="page-link" href="?{% if filtros_url %}{{ filtros_url }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}

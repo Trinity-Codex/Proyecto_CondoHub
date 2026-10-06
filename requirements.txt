@@ -1,0 +1,15 @@
+# Librerías de CondoHub con versiones EXACTAS (todos instalan lo mismo).
+# Instalar con:  pip install -r requirements.txt     (Python 3.12)
+
+# Django 5.2 LTS: framework web (soporte de seguridad hasta abril de 2028).
+# Requiere MySQL 8.0.11 o superior (o MariaDB 10.5+).
+Django==5.2.18
+# Conector de Django con MySQL.
+mysqlclient==2.3.0
+# Lee la configuración local del archivo .env
+python-dotenv==1.2.4
+
+# Dependencias de Django (pip las instala solas; se fijan igual).
+asgiref==3.12.1
+sqlparse==0.6.0
+tzdata==2026.5

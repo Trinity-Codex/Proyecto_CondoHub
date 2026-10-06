@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block titulo %}Unidades y residentes{% endblock %}
+
+{% block contenido %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h3 mb-0"><i class="bi bi-buildings"></i> Unidades y residentes</h1>
+  <span class="badge {% if suma_alicuotas == 1 %}text-bg-success{% else %}text-bg-warning{% endif %} fs-6">
+    Suma de alícuotas: {{ suma_alicuotas|floatformat:4 }}
+  </span>
+</div>
+
+{% for edificio in edificios %}
+<div class="card mb-4">
+  <div class="card-header">{{ edificio.nombre }} <span class="text-muted fw-normal small">· {{ edificio.unidades.all|length }} unidades</span></div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Unidad</th><th>Piso</th><th>Tipo</th><th>Alícuota</th><th>Residentes</th></tr></thead>
+      <tbody>
+        {% for u in edificio.unidades.all %}
+        <tr>
+          <td class="fw-semibold">{{ u.numero }}</td>
+          <td>{{ u.piso }}</td>
+          <td>{{ u.get_tipo_display }}</td>
+          <td>{{ u.alicuota|floatformat:6 }}</td>
+          <td>
+            {% for r in u.residentes.all %}
+            <div class="small">{{ r.usuario }} <span class="text-muted">({{ r.get_tipo_display }})</span></div>
+            {% empty %}
+            <span class="text-muted small">Sin residentes</span>
+            {% endfor %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-muted">Sin unidades.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% empty %}
+<div class="alert alert-light border">Este condominio aún no tiene edificios registrados.</div>
+{% endfor %}
+{% endblock %}

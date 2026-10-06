@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block titulo %}Espacios comunes{% endblock %}
+
+{% block contenido %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h3 mb-0"><i class="bi bi-calendar-check"></i> Espacios comunes</h1>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if es_residente %}
+    <a class="btn btn-outline-primary" href="{% url 'reservas:mis_reservas' %}">Mis reservas</a>
+    <a class="btn btn-primary" href="{% url 'reservas:nueva' %}"><i class="bi bi-plus-lg"></i> Nueva reserva</a>
+    {% endif %}
+    {% if es_admin or es_comite or es_conserje %}
+    <a class="btn btn-outline-primary" href="{% url 'reservas:todas' %}">Todas las reservas</a>
+    {% endif %}
+    {% if es_admin %}
+    <a class="btn btn-outline-secondary" href="{% url 'reservas:espacio_nuevo' %}"><i class="bi bi-plus-lg"></i> Agregar espacio</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3">
+  {% for e in espacios %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card h-100 {% if not e.activo %}opacity-50{% endif %}">
+      <div class="card-body">
+        <h2 class="h5">{{ e.nombre }} {% if not e.activo %}<span class="badge text-bg-secondary">Inactivo</span>{% endif %}</h2>
+        <p class="text-muted small mb-2">{{ e.descripcion|default:"Sin descripción." }}</p>
+        <ul class="list-unstyled small mb-0">
+          <li><i class="bi bi-people"></i> Hasta {{ e.capacidad }} personas</li>
+          <li><i class="bi bi-clock"></i> {{ e.hora_apertura|time:"H:i" }} a {{ e.hora_cierre|time:"H:i" }}</li>
+          <li><i class="bi bi-cash"></i> {% if e.tarifa %}${{ e.tarifa }}{% else %}Sin costo{% endif %}</li>
+        </ul>
+      </div>
+      <div class="card-footer d-flex gap-2">
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'reservas:espacio_detalle' e.pk %}">Ver disponibilidad</a>
+        {% if es_residente and e.activo %}
+        <a class="btn btn-sm btn-primary" href="{% url 'reservas:nueva' %}?espacio={{ e.pk }}">Reservar</a>
+        {% endif %}
+        {% if es_admin %}
+        <a class="btn btn-sm btn-outline-secondary ms-auto" href="{% url 'reservas:espacio_editar' e.pk %}" aria-label="Editar"><i class="bi bi-pencil"></i></a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12"><div class="alert alert-light border">Aún no hay espacios comunes registrados.</div></div>
+  {% endfor %}
+</div>
+{% endblock %}

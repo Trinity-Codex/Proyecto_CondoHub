@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{# Django usa esta plantilla para las páginas que no existen (solo con DJANGO_DEBUG=0). #}
+{% block titulo %}Página no encontrada{% endblock %}
+
+{% block contenido %}
+<div class="text-center py-5">
+  <i class="bi bi-signpost-split display-4 text-muted"></i>
+  <h1 class="h4 mt-3">No encontramos esta página</h1>
+  <p class="text-muted">Puede que el enlace esté mal escrito o que el contenido ya no exista.</p>
+  <a class="btn btn-primary" href="{% url 'core:inicio' %}">Volver al inicio</a>
+</div>
+{% endblock %}

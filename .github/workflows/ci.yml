@@ -1,0 +1,50 @@
+# Integración continua (CI): GitHub ejecuta este flujo en cada push y en cada
+# Pull Request. Si algo falla, el PR muestra una X roja y NO se debe unir a main.
+name: CI - pruebas con MySQL 8
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: condohub
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    # Configuración que lee config/settings.py (en el PC viene del archivo .env)
+    env:
+      DB_NAME: condohub
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Librerías del sistema para mysqlclient
+        run: sudo apt-get install -y pkg-config default-libmysqlclient-dev
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+      - name: Revisar el proyecto y que no falten migraciones
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+      - name: Migrar y cargar los datos demo
+        run: |
+          python manage.py migrate --noinput
+          python manage.py cargar_demo
+      - name: Pruebas automáticas
+        run: python manage.py test apps -v 2

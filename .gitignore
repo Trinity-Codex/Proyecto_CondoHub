@@ -1,0 +1,25 @@
+# Entorno virtual de Python (cada uno crea el suyo)
+venv/
+.venv/
+
+# Configuración local con claves (cada uno tiene su .env; el modelo es .env.example)
+.env
+
+# Archivos compilados de Python
+__pycache__/
+*.pyc
+
+# Base de datos SQLite de pruebas (USE_SQLITE=1)
+db.sqlite3
+
+# Archivos estáticos recolectados para producción (collectstatic)
+staticfiles/
+
+# Editores y sistema operativo
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Registros
+*.log

@@ -1,0 +1,13 @@
+{
+  "name": "CondoHub - Gestión de condominios",
+  "short_name": "CondoHub",
+  "description": "Comunicados, reservas e incidentes de tu condominio.",
+  "lang": "es-CL",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f7f6",
+  "theme_color": "#0f5f5c",
+  "icons": [
+    { "src": "/static/img/icono.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

@@ -1,0 +1,165 @@
+"""
+Carga datos de demostración para probar CondoHub.
+
+Uso:
+    python manage.py cargar_demo              # carga los datos (si no existen)
+    python manage.py cargar_demo --reiniciar  # borra los datos demo y los vuelve a crear
+
+Crea:
+  - 2 condominios: "Condominio Vista Verde" (el del Informe 2) y "Edificio Los Aromos",
+    para mostrar que la plataforma es multi-condominio.
+  - 1 usuario por rol (todos con la clave CLAVE_DEMO, ver tabla en README.md).
+  - Edificios y unidades con alícuotas que suman 1, espacios comunes,
+    comunicados, incidentes y reservas.
+"""
+from datetime import date, time, timedelta
+from decimal import Decimal
+
+from django.core.management.base import BaseCommand
+from django.db import transaction
+
+from apps.comunicados.models import Comunicado
+from apps.condominios.models import Condominio, Edificio, Membresia, Residente, Unidad
+from apps.cuentas.models import Usuario
+from apps.incidentes.models import Incidente
+from apps.reservas.models import EspacioComun, Reserva
+
+CLAVE_DEMO = "condohub2026"
+NOMBRES_DEMO = ["Condominio Vista Verde", "Edificio Los Aromos"]
+
+# correo, nombre, apellido, RUT válido
+USUARIOS = {
+    "superadmin": ("superadmin@condohub.cl", "Super", "Administrador", "11.111.111-1"),
+    "administrador": ("administrador@condohub.cl", "Ana", "Rojas", "12.345.678-5"),
+    "comite": ("comite@condohub.cl", "Carlos", "Pérez", "13.579.246-2"),
+    "conserje": ("conserje@condohub.cl", "Jorge", "Muñoz", "14.725.836-4"),
+    "residente": ("residente@condohub.cl", "Valentina", "Soto", "15.975.346-8"),
+    "residente2": ("residente2@condohub.cl", "Diego", "Castro", "16.482.759-3"),
+    "residente3": ("residente3@condohub.cl", "Camila", "Fuentes", "17.258.369-5"),
+}
+
+
+class Command(BaseCommand):
+    help = "Carga datos de demostración (condominios, usuarios por rol, espacios, comunicados...)."
+
+    def add_arguments(self, parser):
+        parser.add_argument("--reiniciar", action="store_true", help="Borra los datos demo y los crea de nuevo.")
+
+    @transaction.atomic  # todo o nada: si algo falla, no queda la base a medias
+    def handle(self, *args, **opciones):
+        if Condominio.objects.filter(nombre__in=NOMBRES_DEMO).exists():
+            if not opciones["reiniciar"]:
+                self.stdout.write(self.style.WARNING(
+                    "Los datos demo ya existen. Usa --reiniciar para borrarlos y crearlos de nuevo."
+                ))
+                return
+            # Borrar el condominio borra en cascada edificios, unidades, comunicados, etc.
+            Condominio.objects.filter(nombre__in=NOMBRES_DEMO).delete()
+
+        u = self._crear_usuarios()
+        vista_verde = self._crear_vista_verde(u)
+        self._crear_los_aromos(u)
+
+        self.stdout.write(self.style.SUCCESS("Datos demo cargados."))
+        self.stdout.write(f"Clave de todos los usuarios demo: {CLAVE_DEMO}")
+        for correo, *_ in USUARIOS.values():
+            self.stdout.write(f"  - {correo}")
+        self.stdout.write(f"Suma de alícuotas de {vista_verde}: {vista_verde.suma_alicuotas()}")
+
+    # ------------------------------------------------------------------
+    def _crear_usuarios(self):
+        usuarios = {}
+        for clave, (correo, nombre, apellido, rut) in USUARIOS.items():
+            usuario, creado = Usuario.objects.get_or_create(
+                email=correo, defaults={"first_name": nombre, "last_name": apellido, "rut": rut}
+            )
+            if creado:
+                usuario.set_password(CLAVE_DEMO)
+                if clave == "superadmin":
+                    usuario.is_staff = usuario.is_superuser = True
+                usuario.save()
+            usuarios[clave] = usuario
+        return usuarios
+
+    def _crear_vista_verde(self, u):
+        condominio = Condominio.objects.create(
+            nombre="Condominio Vista Verde", direccion="Av. Los Pinos 1234", comuna="Maipú"
+        )
+        # Alícuotas por torre: 0.12 + 0.08 + 0.12 + 0.08 + 0.10 = 0.50 -> dos torres = 1 (100 %)
+        alicuotas = [("101", 1, "0.12"), ("102", 1, "0.08"), ("201", 2, "0.12"), ("202", 2, "0.08"), ("301", 3, "0.10")]
+        unidades = {}
+        for nombre_torre in ["Torre A", "Torre B"]:
+            torre = Edificio.objects.create(condominio=condominio, nombre=nombre_torre)
+            for numero, piso, alicuota in alicuotas:
+                unidades[f"{nombre_torre[-1]}-{numero}"] = Unidad.objects.create(
+                    edificio=torre, numero=numero, piso=piso, alicuota=Decimal(alicuota)
+                )
+
+        # Roles. Residente.save() agrega solo el rol RESIDENTE (ver condominios/models.py).
+        Membresia.objects.create(usuario=u["administrador"], condominio=condominio, rol=Membresia.Rol.ADMINISTRADOR)
+        Membresia.objects.create(usuario=u["comite"], condominio=condominio, rol=Membresia.Rol.COMITE)
+        Membresia.objects.create(usuario=u["conserje"], condominio=condominio, rol=Membresia.Rol.CONSERJE)
+        Residente.objects.create(usuario=u["residente"], unidad=unidades["A-101"], tipo=Residente.Tipo.PROPIETARIO)
+        Residente.objects.create(usuario=u["comite"], unidad=unidades["A-201"], tipo=Residente.Tipo.PROPIETARIO)
+        Residente.objects.create(usuario=u["residente2"], unidad=unidades["B-102"], tipo=Residente.Tipo.ARRENDATARIO)
+
+        quincho = EspacioComun.objects.create(
+            condominio=condominio, nombre="Quincho", descripcion="Quincho techado con parrilla y 4 mesas.",
+            capacidad=20, tarifa=15000, hora_apertura=time(12), hora_cierre=time(23),
+        )
+        EspacioComun.objects.create(
+            condominio=condominio, nombre="Salón de eventos", descripcion="Salón con cocina, sillas y mesas.",
+            capacidad=40, tarifa=25000, hora_apertura=time(10), hora_cierre=time(23),
+        )
+        EspacioComun.objects.create(
+            condominio=condominio, nombre="Gimnasio", descripcion="Máquinas de cardio y pesas.",
+            capacidad=8, tarifa=0, hora_apertura=time(6), hora_cierre=time(22),
+        )
+
+        # Comunicados: publicar() también genera las notificaciones (patrón Observer).
+        Comunicado(
+            condominio=condominio, autor=u["administrador"], fijado=True,
+            titulo="Bienvenidos a CondoHub",
+            contenido="Desde hoy los comunicados, reservas de espacios comunes e incidentes se gestionan en esta plataforma.\n\nCualquier duda, escriban a la administración.",
+        ).publicar()
+        Comunicado(
+            condominio=condominio, autor=u["administrador"], tipo=Comunicado.Tipo.POR_EDIFICIO,
+            edificio=condominio.edificios.get(nombre="Torre B"),
+            titulo="Corte de agua programado en Torre B",
+            contenido="El jueves entre las 10:00 y las 14:00 se cortará el agua en la Torre B por mantención de bombas.",
+        ).publicar()
+
+        Incidente(
+            condominio=condominio, reportado_por=u["residente"], unidad=unidades["A-101"],
+            categoria=Incidente.Categoria.MANTENCION, titulo="Ampolleta quemada en pasillo piso 1",
+            descripcion="La luz del pasillo frente al departamento 101 no enciende desde ayer.",
+        ).reportar()
+        en_proceso = Incidente(
+            condominio=condominio, reportado_por=u["residente2"], categoria=Incidente.Categoria.AREAS_COMUNES,
+            titulo="Portón de estacionamientos lento", descripcion="El portón demora mucho en abrir.",
+        )
+        en_proceso.reportar()
+        en_proceso.cambiar_estado(Incidente.Estado.EN_PROCESO, "Se solicitó la visita del técnico para el viernes.")
+
+        Reserva(
+            espacio=quincho, unidad=unidades["A-101"], solicitante=u["residente"],
+            fecha=date.today() + timedelta(days=3), hora_inicio=time(13), hora_fin=time(17),
+        ).confirmar()
+        return condominio
+
+    def _crear_los_aromos(self, u):
+        condominio = Condominio.objects.create(nombre="Edificio Los Aromos", direccion="Calle Los Aromos 456", comuna="Ñuñoa")
+        edificio = Edificio.objects.create(condominio=condominio, nombre="Edificio único")
+        unidades = [
+            Unidad.objects.create(edificio=edificio, numero=n, piso=int(n[0]), alicuota=Decimal("0.25"))
+            for n in ["101", "102", "201", "202"]
+        ]
+        # El mismo administrador lleva los dos condominios: verá el selector en el menú.
+        Membresia.objects.create(usuario=u["administrador"], condominio=condominio, rol=Membresia.Rol.ADMINISTRADOR)
+        Residente.objects.create(usuario=u["residente3"], unidad=unidades[0], tipo=Residente.Tipo.PROPIETARIO)
+        EspacioComun.objects.create(condominio=condominio, nombre="Sala multiuso", capacidad=15)
+        Comunicado(
+            condominio=condominio, autor=u["administrador"], titulo="Limpieza de estanques",
+            contenido="El sábado se realizará la limpieza anual de los estanques de agua.",
+        ).publicar()
+        return condominio
