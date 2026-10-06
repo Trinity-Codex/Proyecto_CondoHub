@@ -58,6 +58,17 @@ class ComunicadoTest(TestCase):
         self.assertCountEqual(visibles, [general, torre_a])
         self.assertEqual(self.client.get(torre_b.get_absolute_url()).status_code, 404)
 
+    def test_panel_de_inicio_aplica_la_misma_regla(self):
+        # Error encontrado en la revisión visual: el panel mostraba comunicados de otro edificio.
+        Comunicado.objects.create(
+            condominio=self.e.condominio, autor=self.e.administrador, titulo="Solo Torre B", contenido="x",
+            tipo=Comunicado.Tipo.POR_EDIFICIO, edificio=self.e.torre_b,
+        )
+        self.client.force_login(self.e.residente)  # vive en la Torre A
+        self.assertEqual(list(self.client.get(reverse("core:inicio")).context["comunicados"]), [])
+        self.client.force_login(self.e.residente_b)  # vive en la Torre B
+        self.assertEqual(len(self.client.get(reverse("core:inicio")).context["comunicados"]), 1)
+
     def test_no_se_ven_comunicados_de_otro_condominio(self):
         ajeno = Comunicado.objects.create(condominio=self.e.ajeno, autor=self.e.residente_ajeno, titulo="Ajeno", contenido="x")
         self.client.force_login(self.e.administrador)

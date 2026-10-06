@@ -13,6 +13,23 @@ from apps.condominios.models import Membresia, Residente
 from apps.notificaciones.observador import Evento, Sujeto
 
 
+class ComunicadoQuerySet(models.QuerySet):
+    """Consultas reutilizables de comunicados (se usan con Comunicado.objects.<método>)."""
+
+    def visibles_para(self, usuario, condominio, ve_todos):
+        """
+        Comunicados que un usuario puede ver en un condominio. Es la ÚNICA regla
+        de visibilidad: la usan la lista, el detalle y el panel de inicio.
+          - ve_todos=True (administrador, comité, conserje): todos los del condominio.
+          - residente: los generales y los dirigidos a los edificios donde vive.
+        """
+        qs = self.filter(condominio=condominio)
+        if ve_todos:
+            return qs
+        mis_edificios = usuario.residencias.filter(activo=True).values("unidad__edificio")
+        return qs.filter(models.Q(tipo=Comunicado.Tipo.GENERAL) | models.Q(edificio__in=mis_edificios))
+
+
 class Comunicado(Sujeto, models.Model):
     class Tipo(models.TextChoices):
         GENERAL = "GENERAL", "General (todo el condominio)"
@@ -29,6 +46,9 @@ class Comunicado(Sujeto, models.Model):
     )
     fijado = models.BooleanField(default=False, help_text="Los fijados aparecen primero.")
     fecha_publicacion = models.DateTimeField("fecha de publicación", auto_now_add=True)
+
+    # Manager con los métodos de ComunicadoQuerySet (ej. Comunicado.objects.visibles_para(...)).
+    objects = ComunicadoQuerySet.as_manager()
 
     class Meta:
         ordering = ["-fijado", "-fecha_publicacion"]

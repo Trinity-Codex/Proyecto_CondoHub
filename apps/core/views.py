@@ -30,7 +30,10 @@ class InicioView(RolRequeridoMixin, TemplateView):
         usuario = self.request.user
         hoy = date.today()
 
-        contexto["comunicados"] = Comunicado.objects.filter(condominio=condominio)[:3]
+        # Misma regla que la lista de comunicados: un residente solo ve los de su edificio.
+        contexto["comunicados"] = Comunicado.objects.visibles_para(
+            usuario, condominio, ve_todos=tiene_rol(self.request, ADMINISTRADOR, COMITE, CONSERJE)
+        ).select_related("edificio")[:3]
         contexto["mis_reservas"] = Reserva.objects.filter(
             solicitante=usuario, espacio__condominio=condominio, fecha__gte=hoy, estado=Reserva.Estado.CONFIRMADA
         ).select_related("espacio", "unidad__edificio")[:5]

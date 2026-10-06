@@ -13,7 +13,6 @@ Permisos:
   - Crear, editar y eliminar:      administrador
 """
 from django.contrib import messages
-from django.db.models import Q
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
@@ -37,11 +36,17 @@ class ComunicadosVisiblesMixin(CondominioQuerysetMixin):
     """
 
     def get_queryset(self):
-        qs = super().get_queryset().select_related("autor", "edificio")
-        if tiene_rol(self.request, ADMINISTRADOR, COMITE, CONSERJE):
-            return qs
-        mis_edificios = self.request.user.residencias.filter(activo=True).values("unidad__edificio")
-        return qs.filter(Q(tipo=Comunicado.Tipo.GENERAL) | Q(edificio__in=mis_edificios))
+        # La regla de visibilidad está en el modelo (ComunicadoQuerySet.visibles_para).
+        return (
+            super()
+            .get_queryset()
+            .visibles_para(
+                self.request.user,
+                self.request.condominio,
+                ve_todos=tiene_rol(self.request, ADMINISTRADOR, COMITE, CONSERJE),
+            )
+            .select_related("autor", "edificio")
+        )
 
 
 class ComunicadoListView(RolRequeridoMixin, ComunicadosVisiblesMixin, ListView):
