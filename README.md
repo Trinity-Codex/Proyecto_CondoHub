@@ -68,6 +68,9 @@ Las funcionalidades pendientes (gastos comunes, pagos, reportes, proveedores, et
 python manage.py test apps
 ```
 
-## Cómo colaborar
+## Documentación
 
-Ver [CONTRIBUTING.md](CONTRIBUTING.md): ramas, commits, Pull Requests y revisiones.
+- [DOCUMENTACION.md](DOCUMENTACION.md): instalación paso a paso, arquitectura, roles, modelo de datos, trazabilidad con el Informe 2 y problemas comunes.
+- [CONTRIBUTING.md](CONTRIBUTING.md): cómo trabajamos con ramas, Pull Requests y revisiones.
+- [docs/GUIA_NUEVA_FEATURE.md](docs/GUIA_NUEVA_FEATURE.md): receta para agregar un módulo nuevo.
+- [Tablero del backlog](https://github.com/orgs/Trinity-Codex/projects/1): las funcionalidades para repartir.
