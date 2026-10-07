@@ -14,10 +14,10 @@
   <div class="card-body">
     <div class="d-flex justify-content-between flex-wrap gap-2">
       <h2 class="h5 mb-1">
-        {% if c.fijado %}<i class="bi bi-pin-angle-fill text-danger" title="Fijado"></i>{% endif %}
+        {% if c.fijado %}<i class="bi bi-pin-angle-fill icono-fijado" title="Fijado"></i>{% endif %}
         <a href="{{ c.get_absolute_url }}" class="text-decoration-none">{{ c.titulo }}</a>
       </h2>
-      <span class="badge {% if c.edificio %}text-bg-info{% else %}text-bg-secondary{% endif %} align-self-start">
+      <span class="badge {% if c.edificio %}insignia-edificio{% else %}text-bg-secondary{% endif %} align-self-start">
         {% if c.edificio %}{{ c.edificio.nombre }}{% else %}General{% endif %}
       </span>
     </div>

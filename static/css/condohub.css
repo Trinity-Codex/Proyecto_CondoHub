@@ -1,54 +1,160 @@
 /*
   Estilos propios de CondoHub (lo demás viene de Bootstrap 5).
-  Colores de la marca: verde azulado.
+
+  Paleta tomada del logo (logos/logo_condohub.jpg):
+    azul marino  #113358  -> color principal: botones, títulos, menú
+    teal         #13989e  -> acentos decorativos (bordes, íconos, indicadores)
+    naranjo      #f67e2b  -> acentos destacados (elementos fijados, avisos)
+    verde        #81bc46  -> acentos de éxito
+
+  Contraste (accesibilidad WCAG AA): el teal, el naranjo y el verde del logo
+  son claros y NO alcanzan el mínimo como texto sobre blanco. Para texto se usan
+  sus versiones oscuras (--condohub-*-texto). Los colores originales se usan solo
+  en elementos decorativos o con texto oscuro encima.
 */
 :root {
-  --condohub-primario: #0f5f5c;
-  --condohub-primario-oscuro: #0a4644;
-  --condohub-acento: #2bb59a;
-  /* Bootstrap usa estas variables para los botones y enlaces "primary". */
-  --bs-primary: #0f5f5c;
-  --bs-primary-rgb: 15, 95, 92;
-  --bs-link-color: #0f5f5c;
-  --bs-link-color-rgb: 15, 95, 92;
-  --bs-link-hover-color: #0a4644;
+  --condohub-azul: #113358;
+  --condohub-azul-oscuro: #0b2440;
+  --condohub-teal: #13989e;
+  --condohub-teal-texto: #0d7a7f;     /* 5,1:1 sobre blanco */
+  --condohub-naranjo: #f67e2b;
+  --condohub-naranjo-texto: #c55a12;  /* 4,3:1 sobre blanco */
+  --condohub-verde: #81bc46;
+  --condohub-fondo: #f4f7f9;
+
+  /* Bootstrap usa estas variables para "primary", enlaces, foco, etc. */
+  --bs-primary: #113358;
+  --bs-primary-rgb: 17, 51, 88;
+  --bs-link-color: #0d7a7f;
+  --bs-link-color-rgb: 13, 122, 127;
+  --bs-link-hover-color: #113358;
+  --bs-link-hover-color-rgb: 17, 51, 88;
+  --bs-focus-ring-color: rgba(19, 152, 158, 0.35);
 }
 
 body {
-  background-color: #f4f7f6;
+  background-color: var(--condohub-fondo);
+  color: #1f2d3d;
 }
 
+/* Tipografía de marca (Montserrat, como el logo) en títulos y en el nombre. */
+h1, h2, h3, .h1, .h2, .h3, .h4, .h5, .marca {
+  font-family: "Montserrat", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--condohub-azul);
+}
+
+/* ---------------------------------------------------------------- Menú */
 .barra-principal {
-  background: linear-gradient(90deg, var(--condohub-primario-oscuro), var(--condohub-primario));
+  background-color: #fff;
+  /* Franja inferior con los cuatro colores del logo */
+  border-bottom: 4px solid transparent;
+  border-image: linear-gradient(90deg, var(--condohub-azul), var(--condohub-teal), var(--condohub-verde), var(--condohub-naranjo)) 1;
+  box-shadow: 0 1px 4px rgba(17, 51, 88, 0.08);
 }
 
+.barra-principal .nav-link,
+.barra-principal .navbar-text {
+  color: var(--condohub-azul);
+  font-weight: 500;
+}
+
+.barra-principal .nav-link:hover {
+  color: var(--condohub-teal-texto);
+}
+
+.barra-principal .nav-link.active {
+  color: var(--condohub-teal-texto);
+  box-shadow: inset 0 -3px 0 var(--condohub-teal);  /* subrayado de la sección actual */
+}
+
+/* Nombre "CondoHub" con los colores del logotipo */
+.marca {
+  font-weight: 700;
+  font-size: 1.35rem;
+  letter-spacing: -0.01em;
+}
+.marca .marca-hu { color: var(--condohub-teal); }
+.marca .marca-b { color: var(--condohub-naranjo); }
+
+/* ---------------------------------------------------------------- Botones */
 .btn-primary {
-  --bs-btn-bg: var(--condohub-primario);
-  --bs-btn-border-color: var(--condohub-primario);
-  --bs-btn-hover-bg: var(--condohub-primario-oscuro);
-  --bs-btn-hover-border-color: var(--condohub-primario-oscuro);
-  --bs-btn-active-bg: var(--condohub-primario-oscuro);
-  --bs-btn-disabled-bg: var(--condohub-primario);
+  --bs-btn-bg: var(--condohub-azul);
+  --bs-btn-border-color: var(--condohub-azul);
+  --bs-btn-hover-bg: var(--condohub-azul-oscuro);
+  --bs-btn-hover-border-color: var(--condohub-azul-oscuro);
+  --bs-btn-active-bg: var(--condohub-azul-oscuro);
+  --bs-btn-active-border-color: var(--condohub-azul-oscuro);
+  --bs-btn-disabled-bg: var(--condohub-azul);
+  --bs-btn-disabled-border-color: var(--condohub-azul);
 }
 
 .btn-outline-primary {
-  --bs-btn-color: var(--condohub-primario);
-  --bs-btn-border-color: var(--condohub-primario);
-  --bs-btn-hover-bg: var(--condohub-primario);
-  --bs-btn-hover-border-color: var(--condohub-primario);
-  --bs-btn-active-bg: var(--condohub-primario-oscuro);
+  --bs-btn-color: var(--condohub-azul);
+  --bs-btn-border-color: var(--condohub-azul);
+  --bs-btn-hover-bg: var(--condohub-azul);
+  --bs-btn-hover-border-color: var(--condohub-azul);
+  --bs-btn-active-bg: var(--condohub-azul-oscuro);
+  --bs-btn-active-border-color: var(--condohub-azul-oscuro);
 }
 
-.tarjeta-indicador {
-  border-left: 4px solid var(--condohub-acento);
+/* ---------------------------------------------------------------- Tarjetas */
+.card {
+  border-color: #e3e9ef;
 }
 
 .card-header {
   background-color: #fff;
   font-weight: 600;
+  color: var(--condohub-azul);
+}
+
+.card-header .bi {
+  color: var(--condohub-teal);
+}
+
+/* Indicadores del panel de inicio: borde con un color de la marca cada uno */
+.tarjeta-indicador {
+  border-left: 4px solid var(--condohub-teal);
+}
+.col-6:nth-child(2) > .tarjeta-indicador { border-left-color: var(--condohub-azul); }
+.col-6:nth-child(3) > .tarjeta-indicador { border-left-color: var(--condohub-naranjo); }
+.col-6:nth-child(4) > .tarjeta-indicador { border-left-color: var(--condohub-verde); }
+
+/* Comunicado fijado */
+.icono-fijado {
+  color: var(--condohub-naranjo);
+}
+
+/* Paginación y elementos activos con el color principal */
+.pagination {
+  --bs-pagination-color: var(--condohub-azul);
+  --bs-pagination-active-bg: var(--condohub-azul);
+  --bs-pagination-active-border-color: var(--condohub-azul);
+}
+
+.list-group-item-primary {
+  background-color: #e6f4f4;  /* teal muy claro: notificaciones no leídas */
+  color: var(--condohub-azul);
 }
 
 /* Contenido de los comunicados: respeta los saltos de línea que escribió el autor. */
 .texto-largo {
   white-space: pre-line;
+}
+
+/* Logo de la página de inicio de sesión */
+.logo-inicio {
+  max-width: 320px;
+  width: 100%;
+  height: auto;
+}
+
+footer {
+  background-color: #fff;
+}
+
+/* Etiqueta de comunicado dirigido a un edificio (teal oscuro: 5,1:1 con texto blanco) */
+.insignia-edificio {
+  background-color: var(--condohub-teal-texto);
+  color: #fff;
 }

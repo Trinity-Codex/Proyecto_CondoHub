@@ -55,7 +55,7 @@
         {% for c in comunicados %}
         <li class="list-group-item">
           <a href="{{ c.get_absolute_url }}" class="fw-semibold text-decoration-none">
-            {% if c.fijado %}<i class="bi bi-pin-angle-fill text-danger"></i>{% endif %} {{ c.titulo }}
+            {% if c.fijado %}<i class="bi bi-pin-angle-fill icono-fijado"></i>{% endif %} {{ c.titulo }}
           </a>
           <div class="small text-muted">{{ c.fecha_publicacion|date:"d-m-Y H:i" }}{% if c.edificio %} · {{ c.edificio.nombre }}{% endif %}</div>
         </li>

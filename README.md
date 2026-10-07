@@ -1,3 +1,5 @@
+<p align="center"><img src="static/img/logo_condohub.png" alt="CondoHub - Administración de condominios" width="420"></p>
+
 # CondoHub
 
 [![CI - pruebas con MySQL 8](https://github.com/Trinity-Codex/Proyecto_CondoHub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Trinity-Codex/Proyecto_CondoHub/actions/workflows/ci.yml)
