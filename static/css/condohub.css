@@ -158,3 +158,8 @@ footer {
   background-color: var(--condohub-teal-texto);
   color: #fff;
 }
+
+/* Barras del resumen por categoría en el detalle de un período de gastos */
+.barra-categoria {
+  background-color: var(--condohub-teal);
+}

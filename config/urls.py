@@ -9,6 +9,7 @@ Rutas principales de CondoHub. Cada app tiene su propio urls.py y aquí se
     /reservas/        -> espacios comunes y reservas
     /incidentes/      -> incidentes
     /notificaciones/  -> notificaciones del usuario
+    /gastos/          -> gastos comunes: períodos y egresos
     /admin/           -> administración de Django (solo superusuario de la plataforma)
 """
 from django.contrib import admin
@@ -22,6 +23,7 @@ urlpatterns = [
     path("reservas/", include("apps.reservas.urls")),
     path("incidentes/", include("apps.incidentes.urls")),
     path("notificaciones/", include("apps.notificaciones.urls")),
+    path("gastos/", include("apps.gastos.urls")),
     path("", include("apps.core.urls")),
 ]
 

@@ -1,0 +1,6 @@
+{# Etiqueta del estado de un período. Uso: {% include "gastos/_estado.html" with periodo=p %} #}
+{% if periodo.esta_abierto %}
+<span class="badge text-bg-warning">Abierto</span>
+{% else %}
+<span class="badge text-bg-success">Emitido</span>
+{% endif %}

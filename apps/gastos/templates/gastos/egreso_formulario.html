@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{# Misma plantilla para registrar y editar: "object" existe solo al editar. #}
+{% block titulo %}{% if object %}Editar egreso{% else %}Registrar egreso{% endif %}{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'gastos:periodos' %}">Gastos comunes</a></li>
+  <li class="breadcrumb-item"><a href="{{ periodo.get_absolute_url }}">{{ periodo }}</a></li>
+  <li class="breadcrumb-item active" aria-current="page">{% if object %}Editar egreso{% else %}Registrar egreso{% endif %}</li>
+</ol></nav>
+
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <h1 class="h3 mb-3">{% if object %}Editar egreso{% else %}Registrar egreso{% endif %} <span class="text-muted fs-5">· {{ periodo }}</span></h1>
+    <div class="card"><div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% include "_formulario.html" with form=form %}
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Guardar</button>
+          <a class="btn btn-outline-secondary" href="{{ periodo.get_absolute_url }}">Cancelar</a>
+        </div>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

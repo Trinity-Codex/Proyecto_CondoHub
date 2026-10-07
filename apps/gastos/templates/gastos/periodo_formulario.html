@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{# Misma plantilla para abrir y editar: "object" existe solo al editar. #}
+{% block titulo %}{% if object %}Editar período{% else %}Abrir período{% endif %}{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <h1 class="h3 mb-3">{% if object %}Editar {{ object }}{% else %}Abrir período de gastos{% endif %}</h1>
+    <div class="card"><div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% include "_formulario.html" with form=form %}
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">{% if object %}Guardar cambios{% else %}Abrir período{% endif %}</button>
+          <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'gastos:periodos' %}{% endif %}">Cancelar</a>
+        </div>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}
