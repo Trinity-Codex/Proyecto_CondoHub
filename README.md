@@ -76,3 +76,4 @@ python manage.py test apps
 - [CONTRIBUTING.md](CONTRIBUTING.md): cómo trabajamos con ramas, Pull Requests y revisiones.
 - [docs/GUIA_NUEVA_FEATURE.md](docs/GUIA_NUEVA_FEATURE.md): receta para agregar un módulo nuevo.
 - [Tablero del backlog](https://github.com/orgs/Trinity-Codex/projects/1): las funcionalidades para repartir.
+- [docs/equipo/](docs/equipo/PLAN_DE_TRABAJO.md): plan de trabajo, calendario y guía de inicio de cada integrante.
