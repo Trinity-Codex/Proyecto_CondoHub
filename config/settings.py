@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "apps.reservas",        # reservas de espacios comunes (RF05, RF06)
     "apps.incidentes",      # incidentes reportados por residentes (RF07, RF08)
     "apps.notificaciones",  # notificaciones dentro del sitio (RF10, patrón Observer)
+    "apps.gastos",          # gastos comunes: períodos y egresos (RF02)
 ]
 
 MIDDLEWARE = [

@@ -10,7 +10,7 @@ Crea:
     para mostrar que la plataforma es multi-condominio.
   - 1 usuario por rol (todos con la clave CLAVE_DEMO, ver tabla en README.md).
   - Edificios y unidades con alícuotas que suman 1, espacios comunes,
-    comunicados, incidentes y reservas.
+    comunicados, incidentes, reservas y un período de gastos comunes con egresos.
 """
 from datetime import date, time, timedelta
 from decimal import Decimal
@@ -21,6 +21,7 @@ from django.db import transaction
 from apps.comunicados.models import Comunicado
 from apps.condominios.models import Condominio, Edificio, Membresia, Residente, Unidad
 from apps.cuentas.models import Usuario
+from apps.gastos.models import Egreso, PeriodoGasto
 from apps.incidentes.models import Incidente
 from apps.reservas.models import EspacioComun, Reserva
 
@@ -59,6 +60,8 @@ class Command(BaseCommand):
         u = self._crear_usuarios()
         vista_verde = self._crear_vista_verde(u)
         self._crear_los_aromos(u)
+        # Datos de cada módulo nuevo: un método _demo_<modulo>() por app (ver docs/equipo/PLAN_DE_TRABAJO.md).
+        self._demo_gastos(vista_verde, u)
 
         self.stdout.write(self.style.SUCCESS("Datos demo cargados."))
         self.stdout.write(f"Clave de todos los usuarios demo: {CLAVE_DEMO}")
@@ -146,6 +149,28 @@ class Command(BaseCommand):
             fecha=date.today() + timedelta(days=3), hora_inicio=time(13), hora_fin=time(17),
         ).confirmar()
         return condominio
+
+    def _demo_gastos(self, condominio, u):
+        """Gastos comunes (Issue #1): período del mes actual, abierto, con egresos típicos."""
+        hoy = date.today()
+        periodo = PeriodoGasto.objects.create(condominio=condominio, anio=hoy.year, mes=hoy.month)
+        C = Egreso.Categoria
+        egresos = [
+            (C.REMUNERACIONES, "Sueldo conserje (jornada completa)", 650000),
+            (C.REMUNERACIONES, "Sueldo personal de aseo", 520000),
+            (C.CONSUMOS, "Electricidad áreas comunes", 185430),
+            (C.CONSUMOS, "Agua áreas comunes y riego", 96780),
+            (C.MANTENCION, "Mantención mensual de ascensores", 240000),
+            (C.ASEO, "Artículos de aseo", 48990),
+            (C.SEGURIDAD, "Monitoreo de cámaras", 75000),
+            (C.ADMINISTRACION, "Honorarios de administración", 350000),
+        ]
+        for dia, (categoria, descripcion, monto) in enumerate(egresos, start=1):
+            Egreso.objects.create(
+                periodo=periodo, categoria=categoria, descripcion=descripcion, monto=monto,
+                fecha=hoy.replace(day=min(dia, hoy.day)), creado_por=u["administrador"],
+            )
+        return periodo
 
     def _crear_los_aromos(self, u):
         condominio = Condominio.objects.create(nombre="Edificio Los Aromos", direccion="Calle Los Aromos 456", comuna="Ñuñoa")
