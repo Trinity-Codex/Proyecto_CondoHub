@@ -1,0 +1,11 @@
+{% autoescape off %}Hola {{ user.first_name|default:user.email }}:
+
+Recibimos una solicitud para crear una nueva contraseña para tu cuenta de CondoHub ({{ user.email }}).
+
+Para hacerlo, abre este enlace:
+{{ protocol }}://{{ domain }}{% url 'cuentas:nueva_clave' uidb64=uid token=token %}
+
+Si no fuiste tú, ignora este correo: tu contraseña actual sigue funcionando.
+
+CondoHub
+{% endautoescape %}

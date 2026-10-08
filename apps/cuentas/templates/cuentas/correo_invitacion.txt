@@ -1,0 +1,12 @@
+{% autoescape off %}Hola {{ user.first_name|default:user.email }}:
+
+La administración de {{ condominio.nombre }} te registró en CondoHub, la plataforma de la comunidad, con el rol de {{ rol }}.
+
+Para empezar, crea tu contraseña con este enlace:
+{{ protocol }}://{{ domain }}{% url 'cuentas:nueva_clave' uidb64=uid token=token %}
+
+Después entra con tu correo ({{ user.email }}) y la contraseña que elegiste.
+Si el enlace venció, usa "¿Olvidaste tu contraseña?" en la página de inicio de sesión.
+
+CondoHub
+{% endautoescape %}
