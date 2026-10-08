@@ -58,7 +58,7 @@ class PeriodoTest(TestCase):
         self.client.force_login(self.e.administrador)
 
     def test_abrir_periodo(self):
-        respuesta = self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "5"})
+        respuesta = self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "5", "criterio_prorrateo": "ALICUOTA"})
         periodo = PeriodoGasto.objects.get()
         self.assertRedirects(respuesta, periodo.get_absolute_url())
         self.assertEqual(periodo.condominio, self.e.condominio)
@@ -67,18 +67,18 @@ class PeriodoTest(TestCase):
 
     def test_no_se_repite_el_mes(self):
         crear_periodo(self.e.condominio)
-        respuesta = self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "5"})
+        respuesta = self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "5", "criterio_prorrateo": "ALICUOTA"})
         self.assertEqual(respuesta.status_code, 200)
         self.assertTrue(respuesta.context["form"].non_field_errors())
         self.assertEqual(PeriodoGasto.objects.count(), 1)
 
     def test_el_mismo_mes_en_otro_condominio_si_se_puede(self):
         crear_periodo(self.e.ajeno)
-        self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "5"})
+        self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "5", "criterio_prorrateo": "ALICUOTA"})
         self.assertEqual(PeriodoGasto.objects.filter(condominio=self.e.condominio).count(), 1)
 
     def test_fondo_de_reserva_minimo_5(self):
-        respuesta = self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "4"})
+        respuesta = self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "4", "criterio_prorrateo": "ALICUOTA"})
         self.assertIn("porcentaje_fondo_reserva", respuesta.context["form"].errors)
 
     def test_total_y_resumen_por_categoria(self):

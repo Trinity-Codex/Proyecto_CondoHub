@@ -25,6 +25,8 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
 
+from apps.notificaciones.observador import Sujeto
+
 # Monto máximo de un egreso: 999.999.999 pesos. Evita errores de tipeo con
 # demasiados ceros y cabe holgado en la columna de MySQL.
 MONTO_MAXIMO = 999_999_999
@@ -35,12 +37,25 @@ MESES = [
 ]
 
 
-class PeriodoGasto(models.Model):
-    """Mes de gastos comunes de un condominio."""
+class PeriodoGasto(Sujeto, models.Model):
+    """
+    Mes de gastos comunes de un condominio.
+
+    Es un "Sujeto" del patrón Observer: al emitirse avisa a los residentes
+    (ver apps/notificaciones/observador.py y servicios.emitir_periodo()).
+    """
 
     class Estado(models.TextChoices):
         ABIERTO = "ABIERTO", "Abierto"
         EMITIDO = "EMITIDO", "Emitido"
+
+    class Criterio(models.TextChoices):
+        """
+        Cómo se reparte el total entre las unidades. Cada valor corresponde a una
+        estrategia de apps/gastos/prorrateo.py (patrón Strategy).
+        """
+        ALICUOTA = "ALICUOTA", "Según la alícuota de cada unidad (Ley 21.442)"
+        PARTES_IGUALES = "PARTES_IGUALES", "En partes iguales"
 
     condominio = models.ForeignKey(
         "condominios.Condominio", on_delete=models.CASCADE, related_name="periodos_gasto"
@@ -60,6 +75,14 @@ class PeriodoGasto(models.Model):
         validators=[MinValueValidator(Decimal("5")), MaxValueValidator(Decimal("100"))],
         help_text="Mínimo 5 % (Ley 21.442).",
     )
+    criterio_prorrateo = models.CharField(
+        "criterio de prorrateo",
+        max_length=20,
+        choices=Criterio.choices,
+        default=Criterio.ALICUOTA,
+        help_text="Por defecto, según la alícuota. Usa otro solo si el reglamento del condominio lo indica.",
+    )
+    fecha_emision = models.DateTimeField("fecha de emisión", null=True, blank=True)
     creado = models.DateTimeField(auto_now_add=True)
 
     class Meta:
