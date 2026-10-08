@@ -138,8 +138,8 @@ python manage.py test apps
 ```
 
 Sube tu rama y abre el Pull Request en GitHub (botón **Compare & pull request**). En la
-descripción escribe `Closes #10` y cómo probarlo. **Walther** revisa tus PR; tú revisas los de
-**Winderson**.
+descripción escribe `Closes #10` y cómo probarlo. En **Reviewers** elige a **Winderson**: él revisa
+tus PR; tú revisas los de **Walther**.
 
 Si cambias un modelo: `python manage.py makemigrations` y sube también el archivo de migración.
 
@@ -240,7 +240,7 @@ aparece un conflicto ahí, basta con conservar las dos líneas.
 - [ ] `git checkout main` y `git pull` al empezar el día.
 - [ ] `python manage.py migrate` (por si un compañero agregó tablas).
 - [ ] Reunión diaria de 15 minutos: qué hice, qué haré, qué me bloquea.
-- [ ] Revisar los PR de **Winderson** el mismo día.
+- [ ] Revisar los PR de **Walther** el mismo día.
 - [ ] Antes de terminar el día: tu trabajo subido (aunque sea en tu rama) y el Issue movido en el tablero.
 
 ## ¿Te bloqueaste?
