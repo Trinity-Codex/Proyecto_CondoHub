@@ -56,6 +56,7 @@
         {% if es_admin or es_comite %}
         <li class="nav-item"><a class="nav-link {% if seccion == 'condominios' %}active{% endif %}" href="{% url 'condominios:unidades' %}"><i class="bi bi-buildings"></i> Unidades</a></li>
         <li class="nav-item"><a class="nav-link {% if seccion == 'gastos' %}active{% endif %}" href="{% url 'gastos:periodos' %}"><i class="bi bi-cash-coin"></i> Gastos comunes</a></li>
+                <li class="nav-item"><a class="nav-link {% if seccion == 'proveedores' %}active{% endif %}" href="{% url 'proveedores:lista' %}"><i class="bi bi-truck"></i> Proveedores</a></li>
         {% endif %}
       </ul>
       {% endwith %}
