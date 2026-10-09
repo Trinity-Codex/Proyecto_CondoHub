@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block titulo %}Contraseña guardada{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center mt-md-5">
+  <div class="col-sm-10 col-md-7 col-lg-5">
+    <div class="card shadow-sm"><div class="card-body p-4 text-center">
+      <h1 class="h5"><i class="bi bi-check-circle text-success"></i> Contraseña guardada</h1>
+      <p>Ya puedes entrar a CondoHub con tu correo y tu nueva contraseña.</p>
+      <a class="btn btn-primary" href="{% url 'cuentas:iniciar_sesion' %}">Iniciar sesión</a>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

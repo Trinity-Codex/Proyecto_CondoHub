@@ -29,7 +29,7 @@ como Issues para repartir.
 
 | Incluido en la base | En el backlog (Issues) |
 |---|---|
-| Inicio de sesión con correo, RUT validado | Gastos comunes con prorrateo y fondo de reserva |
+| Inicio de sesión con correo, RUT validado, recuperar contraseña | Gastos comunes con prorrateo y fondo de reserva |
 | Condominios, edificios, unidades (alícuota), residentes (administrables desde el sitio) | Estado de cuenta y registro de pagos |
 | Roles por condominio y condominio activo | Reportes de morosidad, aviso de cobro en PDF |
 | Comunicados generales o por edificio | Proveedores, remuneraciones y Previred |
@@ -227,6 +227,7 @@ administrador en todos y es el único que entra a `/admin/`.
 | Cambiar estado de incidentes | ✅ | | ✅ | |
 | Ver unidades y residentes | ✅ | ✅ | | |
 | Administrar edificios, unidades y residentes | ✅ | | | |
+| Ver usuarios y darlos de alta con su rol | ✅ | | | |
 
 Se implementa en `apps/core/permisos.py` (`RolRequeridoMixin`, `CondominioQuerysetMixin`,
 `tiene_rol`). Sin permiso, el sitio responde **403** ("sin permisos"); un registro de otro usuario
@@ -327,7 +328,7 @@ intercambiables (por alícuota, partes iguales, por consumo), como propone la se
 | RF09 Publicar comunicados | ✅ Base | `apps/comunicados` |
 | RF10 Notificación automática | ✅ Base (en el sitio) + Issue (correo) | `apps/notificaciones` |
 | RF11 Reportes de gastos y morosidad | Issue | — |
-| RF12 Datos de acceso del administrador y comité | Base (inicio de sesión, roles) + Issue (alta de usuarios) | `apps/cuentas`, `Membresia` |
+| RF12 Datos de acceso del administrador y comité | Hecho (inicio de sesión, roles, alta de usuarios y recuperar contraseña, #11) | `apps/cuentas`, `Membresia` |
 | RNF02 Seguridad por roles | ✅ Base | `apps/core/permisos.py` |
 | RNF03 / RNF06 Usable en celular y navegadores | ✅ Base | Bootstrap 5 responsive, PWA |
 | RNF07 Mantenibilidad | ✅ Base | Apps independientes, guía de nuevos módulos, pruebas y CI |

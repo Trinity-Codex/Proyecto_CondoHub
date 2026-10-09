@@ -128,6 +128,14 @@ LOGIN_URL = "cuentas:iniciar_sesion"
 LOGIN_REDIRECT_URL = "core:inicio"
 LOGOUT_REDIRECT_URL = "cuentas:iniciar_sesion"
 
+# Correo (alta de usuarios y recuperación de contraseña). En desarrollo los
+# correos NO se envían: se imprimen en la consola donde corre el servidor.
+# En un servidor real se cambia por un backend SMTP desde el .env.
+EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "CondoHub <no-responder@condohub.cl>")
+# Segundos que dura el enlace para definir o recuperar la contraseña.
+PASSWORD_RESET_TIMEOUT = 60 * 60 * 72  # 3 días: da tiempo a quien recibe la invitación
+
 import sys  # noqa: E402
 
 # Durante las pruebas automáticas ("manage.py test") las claves se cifran con un

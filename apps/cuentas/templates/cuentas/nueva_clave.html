@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titulo %}Nueva contraseña{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center mt-md-5">
+  <div class="col-sm-10 col-md-7 col-lg-5">
+    <div class="card shadow-sm"><div class="card-body p-4">
+      {# validlink: Django lo pone en False si el enlace ya se usó o venció. #}
+      {% if validlink %}
+      <h1 class="h5 mb-3">Crea tu contraseña</h1>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% include "_formulario.html" with form=form %}
+        <button class="btn btn-primary w-100" type="submit">Guardar contraseña</button>
+      </form>
+      {% else %}
+      <h1 class="h5">El enlace ya no es válido</h1>
+      <p>Puede que ya lo hayas usado o que haya vencido. Pide uno nuevo.</p>
+      <a class="btn btn-primary" href="{% url 'cuentas:recuperar_clave' %}">Pedir un enlace nuevo</a>
+      {% endif %}
+    </div></div>
+  </div>
+</div>
+{% endblock %}
