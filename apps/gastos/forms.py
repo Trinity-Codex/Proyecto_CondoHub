@@ -7,11 +7,11 @@ from .models import MESES, Egreso, PeriodoGasto
 
 
 class PeriodoForm(ModeloFormularioBootstrap):
-    """Abrir (o corregir) un período de gastos: mes, año y % del fondo de reserva."""
+    """Abrir (o corregir) un período de gastos: mes, año, % del fondo de reserva y criterio de prorrateo."""
 
     class Meta:
         model = PeriodoGasto
-        fields = ["mes", "anio", "porcentaje_fondo_reserva"]
+        fields = ["mes", "anio", "porcentaje_fondo_reserva", "criterio_prorrateo"]
         # El mes se elige de una lista con su nombre en vez de escribir un número.
         widgets = {"mes": forms.Select(choices=[(i, m.capitalize()) for i, m in enumerate(MESES, start=1)])}
 

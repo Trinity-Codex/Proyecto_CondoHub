@@ -10,7 +10,7 @@ Crea:
     para mostrar que la plataforma es multi-condominio.
   - 1 usuario por rol (todos con la clave CLAVE_DEMO, ver tabla en README.md).
   - Edificios y unidades con alícuotas que suman 1, espacios comunes,
-    comunicados, incidentes, reservas y un período de gastos comunes con egresos.
+    comunicados, incidentes, reservas y gastos comunes (mes anterior emitido y mes actual abierto).
 """
 from datetime import date, time, timedelta
 from decimal import Decimal
@@ -22,6 +22,7 @@ from apps.comunicados.models import Comunicado
 from apps.condominios.models import Condominio, Edificio, Membresia, Residente, Unidad
 from apps.cuentas.models import Usuario
 from apps.gastos.models import Egreso, PeriodoGasto
+from apps.gastos.servicios import emitir_periodo
 from apps.incidentes.models import Incidente
 from apps.reservas.models import EspacioComun, Reserva
 
@@ -151,9 +152,21 @@ class Command(BaseCommand):
         return condominio
 
     def _demo_gastos(self, condominio, u):
-        """Gastos comunes (Issue #1): período del mes actual, abierto, con egresos típicos."""
+        """
+        Gastos comunes (Issues #1 y #2):
+          - mes ANTERIOR: emitido, con un cobro por unidad (sirve para el estado de
+            cuenta y los pagos);
+          - mes ACTUAL: abierto, con egresos, listo para probar la emisión.
+        """
         hoy = date.today()
-        periodo = PeriodoGasto.objects.create(condominio=condominio, anio=hoy.year, mes=hoy.month)
+        mes_anterior = hoy.replace(day=1) - timedelta(days=1)  # último día del mes anterior
+        anterior = self._periodo_con_egresos(condominio, u, mes_anterior, ajuste=0.97)
+        emitir_periodo(anterior)
+        return self._periodo_con_egresos(condominio, u, hoy)
+
+    def _periodo_con_egresos(self, condominio, u, fecha, ajuste=1.0):
+        """Crea el período del mes de "fecha" con egresos típicos (ajuste: para variar los montos)."""
+        periodo = PeriodoGasto.objects.create(condominio=condominio, anio=fecha.year, mes=fecha.month)
         C = Egreso.Categoria
         egresos = [
             (C.REMUNERACIONES, "Sueldo conserje (jornada completa)", 650000),
@@ -167,8 +180,8 @@ class Command(BaseCommand):
         ]
         for dia, (categoria, descripcion, monto) in enumerate(egresos, start=1):
             Egreso.objects.create(
-                periodo=periodo, categoria=categoria, descripcion=descripcion, monto=monto,
-                fecha=hoy.replace(day=min(dia, hoy.day)), creado_por=u["administrador"],
+                periodo=periodo, categoria=categoria, descripcion=descripcion, monto=round(monto * ajuste),
+                fecha=fecha.replace(day=min(dia, fecha.day)), creado_por=u["administrador"],
             )
         return periodo
 

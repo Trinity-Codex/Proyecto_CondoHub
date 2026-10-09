@@ -80,7 +80,7 @@ class DetalleGastoComun(models.Model):
         MOROSO = "MOROSO", "Moroso"
 
     periodo = models.ForeignKey("gastos.PeriodoGasto", on_delete=models.CASCADE, related_name="detalles")
-    unidad = models.ForeignKey("condominios.Unidad", on_delete=models.CASCADE, related_name="cobros")
+    unidad = models.ForeignKey("condominios.Unidad", on_delete=models.RESTRICT, related_name="cobros")  # no se borra una unidad con cobros
     monto = models.PositiveIntegerField()               # parte de los gastos del período (pesos)
     monto_fondo_reserva = models.PositiveIntegerField() # aporte al fondo de reserva (pesos)
     estado = models.CharField(max_length=10, choices=Estado.choices, default=Estado.PENDIENTE)
