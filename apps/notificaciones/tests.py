@@ -83,6 +83,13 @@ class NotificacionVistasTest(TestCase):
         self.client.force_login(self.e.residente)
         self.assertEqual(self.client.get(reverse("core:inicio")).context["notificaciones_sin_leer"], 1)
 
+    def test_campana_en_celular_muestra_texto_y_cantidad(self):
+        """En el menú del celular: ícono + "Notificaciones" + número; el lector de pantalla oye la cantidad."""
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(reverse("core:inicio"))
+        self.assertContains(respuesta, 'aria-label="Notificaciones, 1 sin leer"')
+        self.assertContains(respuesta, '<span class="badge rounded-pill bg-danger ms-1">1</span>', html=True)
+
     def test_marcar_todas_leidas(self):
         self.client.force_login(self.e.residente)
         self.client.post(reverse("notificaciones:marcar_todas_leidas"))
