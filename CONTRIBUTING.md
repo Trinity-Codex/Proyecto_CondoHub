@@ -51,6 +51,15 @@ En GitHub aparecerá el botón **Compare & pull request**. En la descripción:
 ## 5. Revisión
 
 - Cada PR necesita la **aprobación de un compañero** y las **pruebas automáticas (CI) en verde**.
+- **Quién revisa a quién** (al abrir el PR, elígelo en *Reviewers*):
+
+  | Quien abre el PR | Lo revisa |
+  |---|---|
+  | Walther | Maximiliano |
+  | Maximiliano | Winderson |
+  | Winderson | Walther |
+
+  GitHub no permite aprobar el PR propio. Si el revisor asignado no está disponible, puede aprobar el otro compañero.
 - Quien revisa: descarga la rama, la prueba y comenta con respeto y de forma concreta.
 - Quien recibe comentarios: corrige en la misma rama y vuelve a hacer push (el PR se actualiza solo).
 

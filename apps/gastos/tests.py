@@ -5,13 +5,16 @@ Cada clase corresponde a un criterio de aceptación del Issue.
 """
 from datetime import date
 
+from django.db import IntegrityError, transaction
+from django.db.models import RestrictedError
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
+from apps.condominios.models import Unidad
 from apps.core.pruebas import crear_escenario
 from apps.core.templatetags.condohub import pesos
 
-from .models import Egreso, PeriodoGasto
+from .models import DetalleGastoComun, Egreso, PeriodoGasto
 
 
 def crear_periodo(condominio, mes=10, anio=2026, **campos):
@@ -57,7 +60,7 @@ class PeriodoTest(TestCase):
         self.client.force_login(self.e.administrador)
 
     def test_abrir_periodo(self):
-        respuesta = self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "5"})
+        respuesta = self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "5", "criterio_prorrateo": "ALICUOTA"})
         periodo = PeriodoGasto.objects.get()
         self.assertRedirects(respuesta, periodo.get_absolute_url())
         self.assertEqual(periodo.condominio, self.e.condominio)
@@ -66,18 +69,18 @@ class PeriodoTest(TestCase):
 
     def test_no_se_repite_el_mes(self):
         crear_periodo(self.e.condominio)
-        respuesta = self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "5"})
+        respuesta = self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "5", "criterio_prorrateo": "ALICUOTA"})
         self.assertEqual(respuesta.status_code, 200)
         self.assertTrue(respuesta.context["form"].non_field_errors())
         self.assertEqual(PeriodoGasto.objects.count(), 1)
 
     def test_el_mismo_mes_en_otro_condominio_si_se_puede(self):
         crear_periodo(self.e.ajeno)
-        self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "5"})
+        self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "5", "criterio_prorrateo": "ALICUOTA"})
         self.assertEqual(PeriodoGasto.objects.filter(condominio=self.e.condominio).count(), 1)
 
     def test_fondo_de_reserva_minimo_5(self):
-        respuesta = self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "4"})
+        respuesta = self.client.post(reverse("gastos:periodo_nuevo"), {"mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "4", "criterio_prorrateo": "ALICUOTA"})
         self.assertIn("porcentaje_fondo_reserva", respuesta.context["form"].errors)
 
     def test_total_y_resumen_por_categoria(self):
@@ -178,6 +181,59 @@ class MultiCondominioTest(TestCase):
             reverse("gastos:egreso_eliminar", args=[self.egreso_ajeno.pk]),
         ]:
             self.assertEqual(self.client.get(ruta).status_code, 404, ruta)
+
+
+class DetalleGastoComunTest(TestCase):
+    """Modelo acordado con Winderson para el estado de cuenta (#3) y los pagos (#4)."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.periodo = crear_periodo(self.e.condominio)
+
+    def crear_detalle(self, unidad, monto=40000, fondo=2000):
+        return DetalleGastoComun.objects.create(periodo=self.periodo, unidad=unidad, monto=monto, monto_fondo_reserva=fondo)
+
+    def test_total_y_estado_inicial(self):
+        detalle = self.crear_detalle(self.e.a101)
+        self.assertEqual(detalle.total, 42000)
+        self.assertEqual(detalle.estado, DetalleGastoComun.Estado.PENDIENTE)
+
+    def test_nombres_acordados_para_navegar(self):
+        """periodo.detalles y unidad.cobros: los nombres que usará Winderson."""
+        detalle = self.crear_detalle(self.e.a101)
+        self.assertEqual(list(self.periodo.detalles.all()), [detalle])
+        self.assertEqual(list(self.e.a101.cobros.all()), [detalle])
+
+    def test_un_solo_cobro_por_unidad_y_periodo(self):
+        self.crear_detalle(self.e.a101)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.crear_detalle(self.e.a101)
+
+    def test_borrar_el_periodo_borra_sus_cobros(self):
+        self.crear_detalle(self.e.a101)
+        self.periodo.delete()
+        self.assertFalse(DetalleGastoComun.objects.exists())
+
+    def test_no_se_borra_una_unidad_con_cobros(self):
+        """Sugerencia de Maximiliano en #34: no perder las deudas ni el historial de una unidad."""
+        self.crear_detalle(self.e.a101)
+        with self.assertRaises(RestrictedError):
+            self.e.a101.delete()
+        self.assertEqual(DetalleGastoComun.objects.count(), 1)
+
+    def test_una_unidad_sin_cobros_si_se_borra(self):
+        self.crear_detalle(self.e.a101)
+        self.e.a102.delete()  # A102 no tiene cobros
+        self.assertFalse(Unidad.objects.filter(pk=self.e.a102.pk).exists())
+
+    def test_borrar_todo_el_condominio_si_se_puede(self):
+        """
+        RESTRICT (y no PROTECT): si los cobros también se borran en la misma
+        operación (por su período), se permite. Lo usa "cargar_demo --reiniciar".
+        """
+        self.crear_detalle(self.e.a101)
+        self.e.condominio.delete()
+        self.assertFalse(DetalleGastoComun.objects.exists())
 
 
 class FiltroPesosTest(SimpleTestCase):

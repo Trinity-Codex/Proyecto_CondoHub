@@ -11,8 +11,11 @@ Estados del período:
     EMITIDO  -> ya se calcularon y cobraron los gastos comunes: los egresos
                 quedan bloqueados (cambiarlos descuadraría lo ya cobrado)
 
-Basado en la tabla "gasto_comun" del modelo ER del Informe 2 (que guardaba solo
-el monto total); aquí además se guarda el detalle de cada egreso.
+Al EMITIR, se crea un DetalleGastoComun por unidad: lo que esa unidad debe pagar
+ese mes. Sobre él se construyen el estado de cuenta (#3) y los pagos (#4).
+
+Basado en las tablas "gasto_comun" y "detalle_gasto_comun" del modelo ER del
+Informe 2; aquí además se guarda el detalle de cada egreso.
 """
 from datetime import date
 from decimal import Decimal
@@ -21,6 +24,8 @@ from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
+
+from apps.notificaciones.observador import Sujeto
 
 # Monto máximo de un egreso: 999.999.999 pesos. Evita errores de tipeo con
 # demasiados ceros y cabe holgado en la columna de MySQL.
@@ -32,12 +37,25 @@ MESES = [
 ]
 
 
-class PeriodoGasto(models.Model):
-    """Mes de gastos comunes de un condominio."""
+class PeriodoGasto(Sujeto, models.Model):
+    """
+    Mes de gastos comunes de un condominio.
+
+    Es un "Sujeto" del patrón Observer: al emitirse avisa a los residentes
+    (ver apps/notificaciones/observador.py y servicios.emitir_periodo()).
+    """
 
     class Estado(models.TextChoices):
         ABIERTO = "ABIERTO", "Abierto"
         EMITIDO = "EMITIDO", "Emitido"
+
+    class Criterio(models.TextChoices):
+        """
+        Cómo se reparte el total entre las unidades. Cada valor corresponde a una
+        estrategia de apps/gastos/prorrateo.py (patrón Strategy).
+        """
+        ALICUOTA = "ALICUOTA", "Según la alícuota de cada unidad (Ley 21.442)"
+        PARTES_IGUALES = "PARTES_IGUALES", "En partes iguales"
 
     condominio = models.ForeignKey(
         "condominios.Condominio", on_delete=models.CASCADE, related_name="periodos_gasto"
@@ -57,6 +75,14 @@ class PeriodoGasto(models.Model):
         validators=[MinValueValidator(Decimal("5")), MaxValueValidator(Decimal("100"))],
         help_text="Mínimo 5 % (Ley 21.442).",
     )
+    criterio_prorrateo = models.CharField(
+        "criterio de prorrateo",
+        max_length=20,
+        choices=Criterio.choices,
+        default=Criterio.ALICUOTA,
+        help_text="Por defecto, según la alícuota. Usa otro solo si el reglamento del condominio lo indica.",
+    )
+    fecha_emision = models.DateTimeField("fecha de emisión", null=True, blank=True)
     creado = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -117,3 +143,48 @@ class Egreso(models.Model):
 
     def __str__(self):
         return f"{self.descripcion} (${self.monto})"
+
+
+class DetalleGastoComun(models.Model):
+    """
+    Cobro de gastos comunes de UNA unidad en UN período (tabla "detalle_gasto_comun"
+    del Informe 2). Se crea uno por unidad al emitir el período (Issue #2).
+
+    CONTRATO DEL EQUIPO: Winderson construye sobre este modelo el estado de
+    cuenta (#3) y los pagos (#4). Sus nombres están acordados en
+    docs/equipo/PLAN_DE_TRABAJO.md; si hay que cambiarlos, se conversa antes.
+    """
+
+    class Estado(models.TextChoices):
+        PENDIENTE = "PENDIENTE", "Pendiente"
+        PAGADO = "PAGADO", "Pagado"
+        MOROSO = "MOROSO", "Moroso"
+
+    periodo = models.ForeignKey(PeriodoGasto, on_delete=models.CASCADE, related_name="detalles")
+    # RESTRICT (sugerencia de Maximiliano en #34): no se puede borrar una unidad
+    # que tiene cobros, para no perder sus deudas ni su historial. A diferencia de
+    # PROTECT, sí permite borrar el condominio completo, porque en esa misma
+    # operación los cobros se borran a través de su período (cargar_demo --reiniciar).
+    unidad = models.ForeignKey("condominios.Unidad", on_delete=models.RESTRICT, related_name="cobros")
+    # Parte de los egresos del período que le toca a la unidad (según su alícuota), en pesos.
+    monto = models.PositiveIntegerField()
+    # Aporte de la unidad al fondo común de reserva (porcentaje del período sobre su monto), en pesos.
+    monto_fondo_reserva = models.PositiveIntegerField()
+    estado = models.CharField(max_length=10, choices=Estado.choices, default=Estado.PENDIENTE)
+
+    class Meta:
+        verbose_name = "detalle de gasto común"
+        verbose_name_plural = "detalles de gastos comunes"
+        ordering = ["periodo", "unidad"]
+        constraints = [
+            # Una unidad recibe un solo cobro por período.
+            models.UniqueConstraint(fields=["periodo", "unidad"], name="uq_detalle_periodo_unidad"),
+        ]
+
+    def __str__(self):
+        return f"{self.unidad} - {self.periodo}: ${self.total}"
+
+    @property
+    def total(self):
+        """Lo que la unidad debe pagar en el período (gastos + fondo de reserva)."""
+        return self.monto + self.monto_fondo_reserva

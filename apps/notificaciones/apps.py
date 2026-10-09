@@ -16,6 +16,7 @@ class NotificacionesConfig(AppConfig):
         Para un canal nuevo (ej. correo), basta con agregar otra línea aquí.
         """
         from apps.comunicados.models import Comunicado
+        from apps.gastos.models import PeriodoGasto
         from apps.incidentes.models import Incidente
 
         from .observador import NotificadorEnSitio
@@ -23,3 +24,4 @@ class NotificacionesConfig(AppConfig):
         notificador = NotificadorEnSitio()
         Comunicado.suscribir(notificador)
         Incidente.suscribir(notificador)
+        PeriodoGasto.suscribir(notificador)  # gastos comunes emitidos (Issue #2)

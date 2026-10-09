@@ -64,6 +64,19 @@ class Edificio(models.Model):
     def __str__(self):
         return f"{self.nombre} ({self.condominio})"
 
+    def motivos_para_no_eliminar(self):
+        """
+        Razones que impiden borrar el edificio. Borrarlo eliminaría EN CASCADA
+        sus unidades (con residentes y reservas) y sus comunicados, así que
+        primero hay que vaciarlo. Lista vacía = se puede eliminar.
+        """
+        motivos = []
+        if self.unidades.exists():
+            motivos.append("tiene unidades registradas (elimínalas primero)")
+        if self.comunicados.exists():
+            motivos.append("tiene comunicados dirigidos a él")
+        return motivos
+
 
 class Unidad(models.Model):
     """Departamento, casa, local, estacionamiento o bodega."""
@@ -103,6 +116,22 @@ class Unidad(models.Model):
     @property
     def condominio(self):
         return self.edificio.condominio
+
+    def motivos_para_no_eliminar(self):
+        """
+        Razones que impiden borrar la unidad (se perderían residentes, reservas
+        o su historial de cobros). Los cobros además los protege la base de
+        datos (on_delete=RESTRICT en DetalleGastoComun): sin este aviso, el
+        intento terminaría en un error en vez de un mensaje claro.
+        """
+        motivos = []
+        if self.residentes.filter(activo=True).exists():
+            motivos.append("tiene residentes activos (dalos de baja primero)")
+        if self.reservas.exists():
+            motivos.append("tiene reservas registradas")
+        if self.cobros.exists():
+            motivos.append("tiene cobros de gastos comunes (su historial de deudas y pagos)")
+        return motivos
 
 
 class Membresia(models.Model):
@@ -159,13 +188,34 @@ class Residente(models.Model):
 
     def save(self, *args, **kwargs):
         """
-        Al registrar a alguien como residente de una unidad, se le da también
-        el rol RESIDENTE en ese condominio (si no lo tenía), para que pueda
-        entrar al sitio con los permisos correspondientes.
+        Al registrar a alguien como residente activo de una unidad, se le da
+        también el rol RESIDENTE en ese condominio (o se reactiva si estaba
+        dado de baja), para que pueda entrar al sitio con esos permisos.
         """
         super().save(*args, **kwargs)
-        Membresia.objects.get_or_create(
-            usuario=self.usuario,
-            condominio=self.unidad.edificio.condominio,
-            rol=Membresia.Rol.RESIDENTE,
-        )
+        if self.activo:
+            membresia, _ = Membresia.objects.get_or_create(
+                usuario=self.usuario,
+                condominio=self.unidad.edificio.condominio,
+                rol=Membresia.Rol.RESIDENTE,
+            )
+            if not membresia.activo:
+                membresia.activo = True
+                membresia.save(update_fields=["activo"])
+
+    def dar_de_baja(self):
+        """
+        Deja de ser residente de la unidad. No se borra (queda el historial).
+        Si ya no vive en ninguna otra unidad del condominio, pierde también el
+        rol RESIDENTE allí (sus otros roles, como comité, se mantienen).
+        """
+        self.activo = False
+        self.save(update_fields=["activo"])
+        condominio = self.unidad.edificio.condominio
+        sigue_viviendo = Residente.objects.filter(
+            usuario=self.usuario, unidad__edificio__condominio=condominio, activo=True
+        ).exists()
+        if not sigue_viviendo:
+            Membresia.objects.filter(
+                usuario=self.usuario, condominio=condominio, rol=Membresia.Rol.RESIDENTE
+            ).update(activo=False)
