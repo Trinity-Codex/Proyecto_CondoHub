@@ -216,3 +216,91 @@ class AltaUsuarioTest(TestCase):
         usuarios = list(self.client.get(reverse("cuentas:usuarios")).context["usuarios"])
         self.assertIn(self.e.residente, usuarios)
         self.assertNotIn(self.e.residente_ajeno, usuarios)
+
+
+class PerfilTest(TestCase):
+    """Issue #12: cada persona edita sus datos y cambia su contraseña."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.usuario = self.e.residente
+        self.client.force_login(self.usuario)
+
+    def guardar(self, **campos):
+        datos = {"first_name": "Valentina", "last_name": "Soto", "rut": "15.975.346-8", "telefono": "+56 9 1234 5678", **campos}
+        return self.client.post(reverse("cuentas:perfil"), datos)
+
+    def test_pide_iniciar_sesion(self):
+        self.client.logout()
+        respuesta = self.client.get(reverse("cuentas:perfil"))
+        self.assertRedirects(respuesta, f"{reverse('cuentas:iniciar_sesion')}?next={reverse('cuentas:perfil')}")
+
+    def test_el_menu_enlaza_a_mi_perfil(self):
+        self.assertContains(self.client.get(reverse("core:inicio")), reverse("cuentas:perfil"))
+
+    def test_actualiza_sus_datos(self):
+        respuesta = self.guardar()
+        self.assertRedirects(respuesta, reverse("cuentas:perfil"))
+        self.usuario.refresh_from_db()
+        self.assertEqual(
+            (self.usuario.first_name, self.usuario.last_name, self.usuario.rut, self.usuario.telefono),
+            ("Valentina", "Soto", "15975346-8", "+56 9 1234 5678"),
+        )
+
+    def test_el_correo_no_se_puede_cambiar(self):
+        self.assertNotIn("email", self.client.get(reverse("cuentas:perfil")).context["form"].fields)
+        self.guardar(email="otro@prueba.cl")  # aunque alguien lo envíe a mano, se ignora
+        self.usuario.refresh_from_db()
+        self.assertEqual(self.usuario.email, "residente@prueba.cl")
+
+    def test_rut_invalido(self):
+        respuesta = self.guardar(rut="15.975.346-1")
+        self.assertIn("rut", respuesta.context["form"].errors)
+
+    def test_rut_de_otra_persona(self):
+        self.e.administrador.rut = "12.345.678-5"
+        self.e.administrador.save()
+        respuesta = self.guardar(rut="12345678-5")
+        self.assertEqual(respuesta.context["form"].errors["rut"], ["Ya existe otra cuenta con ese RUT."])
+
+    def test_conserva_su_propio_rut(self):
+        self.guardar()
+        respuesta = self.guardar(first_name="Vale")  # vuelve a guardar con el mismo RUT
+        self.assertRedirects(respuesta, reverse("cuentas:perfil"))
+
+    def test_telefono_invalido(self):
+        respuesta = self.guardar(telefono="llámame")
+        self.assertIn("telefono", respuesta.context["form"].errors)
+
+    def test_solo_edita_su_propia_cuenta(self):
+        self.guardar(first_name="Cambiado")
+        self.e.administrador.refresh_from_db()
+        self.assertNotEqual(self.e.administrador.first_name, "Cambiado")
+
+
+class CambiarClaveTest(TestCase):
+    def setUp(self):
+        self.usuario = crear_usuario("persona@prueba.cl")
+        self.client.force_login(self.usuario)
+        self.nueva = "Clave-nueva-segura-2026"
+
+    def cambiar(self, actual=CLAVE):
+        datos = {"old_password": actual, "new_password1": self.nueva, "new_password2": self.nueva}
+        return self.client.post(reverse("cuentas:cambiar_clave"), datos)
+
+    def test_cambia_la_clave_y_sigue_con_la_sesion_abierta(self):
+        respuesta = self.cambiar()
+        self.assertRedirects(respuesta, reverse("cuentas:perfil"))
+        self.usuario.refresh_from_db()
+        self.assertTrue(self.usuario.check_password(self.nueva))
+        self.assertTrue(self.client.get(reverse("cuentas:perfil")).wsgi_request.user.is_authenticated)
+
+    def test_pide_la_clave_actual(self):
+        respuesta = self.cambiar(actual="no-es-esta")
+        self.assertIn("old_password", respuesta.context["form"].errors)
+        self.usuario.refresh_from_db()
+        self.assertTrue(self.usuario.check_password(CLAVE))
+
+    def test_pide_iniciar_sesion(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("cuentas:cambiar_clave")).status_code, 302)

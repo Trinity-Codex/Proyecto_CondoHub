@@ -107,7 +107,7 @@ class PeriodoDetailView(RolRequeridoMixin, CondominioQuerysetMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         contexto = super().get_context_data(**kwargs)
-        egresos = self.object.egresos.select_related("creado_por")
+        egresos = self.object.egresos.select_related("creado_por", "proveedor")
         total = self.object.total_egresos()
         contexto["egresos"] = egresos
         contexto["total"] = total
@@ -200,6 +200,11 @@ class EgresoCreateView(RolRequeridoMixin, PeriodoAbiertoMixin, CreateView):
             self._periodo = get_object_or_404(PeriodoGasto, pk=self.kwargs["periodo_pk"], condominio=self.request.condominio)
         return self._periodo
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["condominio"] = self.request.condominio  # para ofrecer solo sus proveedores
+        return kwargs
+
     def get_context_data(self, **kwargs):
         contexto = super().get_context_data(**kwargs)
         contexto["periodo"] = self.get_periodo()
@@ -232,6 +237,11 @@ class EgresoUpdateView(RolRequeridoMixin, EgresoDelPeriodoMixin, PeriodoAbiertoM
     roles_permitidos = [ADMINISTRADOR]
     form_class = EgresoForm
     template_name = "gastos/egreso_formulario.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["condominio"] = self.request.condominio  # para ofrecer solo sus proveedores
+        return kwargs
 
     def get_context_data(self, **kwargs):
         contexto = super().get_context_data(**kwargs)

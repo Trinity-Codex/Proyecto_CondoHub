@@ -70,7 +70,7 @@
             {% for e in egresos %}
             <tr>
               <td class="text-nowrap">{{ e.fecha|date:"d-m-Y" }}</td>
-              <td>{{ e.descripcion }}</td>
+              <td>{{ e.descripcion }}{% if e.proveedor %}<div class="small text-muted"><i class="bi bi-truck"></i> {{ e.proveedor.razon_social }}</div>{% endif %}</td>
               <td class="small">{{ e.get_categoria_display }}</td>
               <td class="text-end text-nowrap">{{ e.monto|pesos }}</td>
               {% if es_admin and periodo.esta_abierto %}

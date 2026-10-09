@@ -10,8 +10,8 @@ Crea:
     para mostrar que la plataforma es multi-condominio.
   - 1 usuario por rol (todos con la clave CLAVE_DEMO, ver tabla en README.md).
   - Edificios y unidades con alícuotas que suman 1, espacios comunes,
-    comunicados, incidentes, reservas y gastos comunes (dos meses emitidos, con pagos y
-    unidades morosas, y el mes actual abierto).
+    comunicados, incidentes, reservas y gastos comunes (dos meses emitidos, con pagos totales
+    y parciales y unidades morosas, y el mes actual abierto).
 """
 from datetime import date, time, timedelta
 from decimal import Decimal
@@ -25,6 +25,7 @@ from apps.cuentas.models import Usuario
 from apps.gastos.models import Egreso, PeriodoGasto
 from apps.gastos.servicios import emitir_periodo
 from apps.incidentes.models import Incidente
+from apps.pagos.models import Pago
 from apps.reservas.models import EspacioComun, Reserva
 
 CLAVE_DEMO = "condohub2026"
@@ -154,10 +155,10 @@ class Command(BaseCommand):
 
     def _demo_gastos(self, condominio, u):
         """
-        Gastos comunes (Issues #1, #2 y #5):
+        Gastos comunes y pagos (Issues #1, #2, #4 y #5):
           - hace DOS meses: emitido; pagaron todos menos A-102 y B-202 (quedan morosas);
-          - mes ANTERIOR: emitido, con la mitad de las unidades al día (sirve para el
-            estado de cuenta, los pagos y el reporte de morosidad);
+          - mes ANTERIOR: emitido; la mitad pagó, B-201 hizo un abono PARCIAL y el
+            resto debe (sirve para el estado de cuenta, la cobranza y el reporte);
           - mes ACTUAL: abierto, con egresos, listo para probar la emisión.
         """
         hoy = date.today()
@@ -166,23 +167,30 @@ class Command(BaseCommand):
 
         antiguo = self._periodo_con_egresos(condominio, u, hace_dos_meses, ajuste=1.02)
         emitir_periodo(antiguo)
-        self._marcar_pagados(antiguo, excepto=["A-102", "B-202"])
+        self._registrar_pagos(antiguo, u, hace_dos_meses, excepto=["A-102", "B-202"])
 
         anterior = self._periodo_con_egresos(condominio, u, mes_anterior, ajuste=0.97)
         emitir_periodo(anterior)
-        self._marcar_pagados(anterior, solo=["A-201", "A-202", "A-301", "B-101", "B-301"])
+        self._registrar_pagos(anterior, u, mes_anterior, solo=["A-201", "A-202", "A-301", "B-101", "B-301"])
+        self._registrar_pagos(anterior, u, mes_anterior, solo=["B-201"], monto=100000)  # abono parcial
         return self._periodo_con_egresos(condominio, u, hoy)
 
-    def _marcar_pagados(self, periodo, solo=None, excepto=()):
+    def _registrar_pagos(self, periodo, u, fecha, solo=None, excepto=(), monto=None):
         """
-        Marca cobros como PAGADOS (unidades por "Torre-número", ej. "A-102").
-        Cuando esté el modelo Pago (Issue #4), aquí se registrarán los pagos.
+        Registra pagos de los cobros del período con Pago.registrar() (Issue #4), igual
+        que lo haría el administrador: así el cobro pasa a PAGADO solo y el residente
+        recibe su notificación. Unidades por "Torre-número", ej. "A-102".
+        monto=None paga el total; un número registra un abono parcial.
         """
-        for cobro in periodo.detalles.select_related("unidad__edificio"):
+        medios = [Pago.Medio.TRANSFERENCIA, Pago.Medio.EFECTIVO, Pago.Medio.CHEQUE]  # para variar
+        cobros = periodo.detalles.select_related("unidad__edificio").order_by("unidad__edificio__nombre", "unidad__numero")
+        for i, cobro in enumerate(cobros):
             clave = f"{cobro.unidad.edificio.nombre[-1]}-{cobro.unidad.numero}"
             if (solo is None or clave in solo) and clave not in excepto:
-                cobro.estado = cobro.Estado.PAGADO
-                cobro.save(update_fields=["estado"])
+                Pago.registrar(
+                    cobro, monto=monto or cobro.total, fecha=fecha, medio=medios[i % len(medios)],
+                    registrado_por=u["administrador"],
+                )
 
     def _periodo_con_egresos(self, condominio, u, fecha, ajuste=1.0):
         """Crea el período del mes de "fecha" con egresos típicos (ajuste: para variar los montos)."""

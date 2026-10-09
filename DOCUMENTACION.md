@@ -228,6 +228,7 @@ administrador en todos y es el único que entra a `/admin/`.
 | Ver unidades y residentes | ✅ | ✅ | | |
 | Administrar edificios, unidades y residentes | ✅ | | | |
 | Ver usuarios y darlos de alta con su rol | ✅ | | | |
+| Editar su perfil y cambiar su contraseña | ✅ | ✅ | ✅ | ✅ |
 
 Se implementa en `apps/core/permisos.py` (`RolRequeridoMixin`, `CondominioQuerysetMixin`,
 `tiene_rol`). Sin permiso, el sitio responde **403** ("sin permisos"); un registro de otro usuario

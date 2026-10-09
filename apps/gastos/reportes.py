@@ -22,7 +22,8 @@ Uso (ver views.py):
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from django.db.models import Case, F, IntegerField, Q, Value, When
+from django.db.models import Case, F, IntegerField, Q, Sum, When
+from django.db.models.functions import Coalesce
 
 from .models import DetalleGastoComun, PeriodoGasto
 
@@ -33,22 +34,24 @@ def anotar_pagado(cobros):
       - total_cobro: gastos + fondo de reserva
       - pagado:      cuánto se ha pagado de ese cobro
 
-    Es el ÚNICO lugar donde se decide cuánto se pagó de un cobro. Hoy, sin el
-    modelo Pago (Issue #4), un cobro está pagado completo o nada, según su
-    estado. Cuando #4 esté en main, basta con cambiar "pagado" por
+    Es el ÚNICO lugar del reporte donde se decide cuánto se pagó. Sigue la misma
+    regla que el estado de cuenta (apps/pagos/consultas.py, Issue #4), para que
+    el reporte, la cobranza y "Mi cuenta" muestren siempre los mismos números:
+      - cobro PAGADO -> se pagó el total;
+      - si no        -> la suma de sus pagos (Pago, related_name="pagos"), que
+                        cuenta también los pagos PARCIALES.
 
-        Coalesce(Sum("pagos__monto"), 0)
-
-    para contar también los pagos parciales: el resto del reporte no cambia.
+    Coalesce(..., 0): un cobro sin pagos da SUM = NULL en SQL; Coalesce lo cambia por 0.
     """
+    total = F("monto") + F("monto_fondo_reserva")
     pagado = Case(
-        When(estado=DetalleGastoComun.Estado.PAGADO, then=F("monto") + F("monto_fondo_reserva")),
-        default=Value(0),
+        When(estado=DetalleGastoComun.Estado.PAGADO, then=total),
+        default=Coalesce(Sum("pagos__monto"), 0),
         output_field=IntegerField(),
     )
     # Ojo: la anotación no puede llamarse "total" porque el modelo ya tiene una
     # propiedad con ese nombre (y Django no puede escribir sobre una propiedad).
-    return cobros.annotate(total_cobro=F("monto") + F("monto_fondo_reserva"), pagado=pagado)
+    return cobros.annotate(total_cobro=total, pagado=pagado)
 
 
 @dataclass

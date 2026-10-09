@@ -5,7 +5,7 @@ Criterios de aceptación del Issue:
   - visible para administrador y comité
   - los totales cuadran con los cobros (y con lo emitido en el Issue #2)
   - el CSV se abre bien en Excel (";" y UTF-8 con BOM)
-  - pruebas de los cálculos
+  - pruebas de los cálculos (incluidos los pagos parciales del Issue #4)
 
 Escenario de las pruebas (cada cobro es de $42.000: 40.000 de gastos + 2.000 de fondo):
 
@@ -24,6 +24,8 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from apps.core.pruebas import crear_escenario
+from apps.pagos.consultas import cobros_del_residente, con_saldos, total_adeudado
+from apps.pagos.models import Pago
 
 from .models import DetalleGastoComun, Egreso, PeriodoGasto
 from .reportes import anotar_pagado, generar_reporte
@@ -115,6 +117,35 @@ class CalculosTest(EscenarioReporte):
 
     def test_sin_cobros_el_porcentaje_es_cero(self):
         self.assertEqual(generar_reporte(self.nov).porcentaje_recaudacion, 0)
+
+
+class PagosParcialesTest(EscenarioReporte):
+    """Con el modelo Pago (Issue #4) el reporte cuenta los abonos parciales."""
+
+    def cobro(self, periodo, unidad):
+        return periodo.detalles.get(unidad=unidad)
+
+    def test_un_abono_parcial_se_cuenta_como_recaudado(self):
+        Pago.registrar(self.cobro(self.sep, self.e.b101), monto=10000)
+        r = generar_reporte(self.sep)
+        b101 = self.fila_de(r, self.e.b101)
+        self.assertEqual((b101.pagado, b101.saldo, b101.situacion), (10000, 32000, "Pendiente"))
+        self.assertEqual(r.total_recaudado, 52000)   # 42.000 de A101 + el abono
+
+    def test_pagar_el_mes_no_borra_la_deuda_anterior(self):
+        # A102 paga septiembre completo, pero sigue debiendo agosto: sigue morosa.
+        Pago.registrar(self.cobro(self.sep, self.e.a102), monto=42000)
+        a102 = self.fila_de(generar_reporte(self.sep), self.e.a102)
+        self.assertEqual((a102.saldo, a102.deuda_anterior), (0, 42000))
+        self.assertTrue(a102.es_morosa)
+
+    def test_el_reporte_cuadra_con_el_estado_de_cuenta_del_residente(self):
+        # El residente vive en A101: debe octubre (42.000) y abona 15.000.
+        Pago.registrar(self.cobro(self.oct, self.e.a101), monto=15000)
+        a101 = self.fila_de(generar_reporte(self.oct), self.e.a101)
+        cuenta = con_saldos(cobros_del_residente(self.e.residente, self.e.condominio))
+        self.assertEqual(a101.deuda_total, total_adeudado(cuenta))
+        self.assertEqual(a101.deuda_total, 27000)
 
 
 class CuadraConLaEmisionTest(TestCase):

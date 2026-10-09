@@ -1,6 +1,6 @@
 """
 Rutas de cuentas: iniciar y cerrar sesión, recuperar la contraseña (vistas que
-ya trae Django) y los usuarios del condominio (vistas propias, en views.py).
+ya trae Django), mi perfil y los usuarios del condominio (vistas propias, en views.py).
 
 Ojo: las vistas de Django buscan por defecto rutas SIN prefijo (por ejemplo
 "password_reset_done"), pero las nuestras tienen el prefijo "cuentas:". Por eso
@@ -58,6 +58,9 @@ urlpatterns = [
         vistas_auth.PasswordResetCompleteView.as_view(template_name="cuentas/nueva_clave_lista.html"),
         name="nueva_clave_lista",
     ),
+    # --- Mi perfil (cualquier usuario con sesión iniciada)
+    path("perfil/", views.PerfilView.as_view(), name="perfil"),
+    path("perfil/cambiar-clave/", views.CambiarClaveView.as_view(), name="cambiar_clave"),
     # --- Usuarios del condominio (administrador)
     path("usuarios/", views.UsuarioListView.as_view(), name="usuarios"),
     path("usuarios/nuevo/", views.UsuarioCreateView.as_view(), name="usuario_nuevo"),
