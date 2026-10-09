@@ -23,7 +23,20 @@
         <li class="list-group-item d-flex justify-content-between"><span>Fondo de reserva ({{ cobro.periodo.porcentaje_fondo_reserva|floatformat:"-2" }} %)</span><span>{{ cobro.monto_fondo_reserva|pesos }}</span></li>
         <li class="list-group-item d-flex justify-content-between fw-semibold"><span>Total a pagar</span><span>{{ cobro.total|pesos }}</span></li>
         <li class="list-group-item d-flex justify-content-between"><span>Estado</span><span>{{ cobro.get_estado_display }}</span></li>
+        <li class="list-group-item d-flex justify-content-between"><span>Pagado</span><span>{{ pagado|pesos }}</span></li>
+        <li class="list-group-item d-flex justify-content-between fw-semibold"><span>Saldo pendiente</span><span>{{ saldo|pesos }}</span></li>
       </ul>
+      {% if pagos %}
+      <div class="card-header border-top">Pagos registrados</div>
+      <ul class="list-group list-group-flush">
+        {% for p in pagos %}
+        <li class="list-group-item d-flex justify-content-between">
+          <span>{{ p.fecha|date:"d-m-Y" }} <span class="small text-muted">· {{ p.get_medio_display }}</span></span>
+          <span class="text-nowrap">{{ p.monto|pesos }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
     </div>
   </div>
 
