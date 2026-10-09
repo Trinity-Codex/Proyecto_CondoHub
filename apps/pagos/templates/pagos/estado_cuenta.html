@@ -17,30 +17,37 @@
   </div>
 </div>
 
+{% comment %}
+  En el celular (RNF03) se ocultan "Gastos" y "Fondo reserva" (están en el detalle del
+  cobro) y la unidad pasa debajo del período, para que el total, el estado y el botón
+  se vean sin deslizar la tabla.
+{% endcomment %}
+<div class="card">
 <div class="table-responsive">
-  <table class="table table-hover align-middle">
+  <table class="table table-hover align-middle mb-0">
     <thead>
-      <tr><th>Período</th><th>Unidad</th><th class="text-end">Gastos</th><th class="text-end">Fondo reserva</th><th class="text-end">Total</th><th>Estado</th><th></th></tr>
+      <tr><th>Período</th><th class="d-none d-md-table-cell">Unidad</th><th class="text-end d-none d-md-table-cell">Gastos</th><th class="text-end d-none d-md-table-cell">Fondo reserva</th><th class="text-end">Total</th><th>Estado</th><th></th></tr>
     </thead>
     <tbody>
       {% for c in cobros %}
       <tr>
-        <td>{{ c.periodo }}</td>
-        <td>{{ c.unidad }}</td>
-        <td class="text-end text-nowrap">{{ c.monto|pesos }}</td>
-        <td class="text-end text-nowrap">{{ c.monto_fondo_reserva|pesos }}</td>
+        <td>{{ c.periodo }}<div class="small text-muted d-md-none">{{ c.unidad }}</div></td>
+        <td class="d-none d-md-table-cell">{{ c.unidad }}</td>
+        <td class="text-end text-nowrap d-none d-md-table-cell">{{ c.monto|pesos }}</td>
+        <td class="text-end text-nowrap d-none d-md-table-cell">{{ c.monto_fondo_reserva|pesos }}</td>
         <td class="text-end text-nowrap fw-semibold">{{ c.total|pesos }}</td>
         <td>
           {% if c.estado == "PAGADO" %}<span class="badge text-bg-success">Pagado</span>
           {% elif c.estado == "MOROSO" %}<span class="badge text-bg-danger">Moroso</span>
           {% else %}<span class="badge text-bg-warning">Pendiente</span>{% endif %}
         </td>
-        <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'pagos:cobro_detalle' c.pk %}">Ver detalle</a></td>
+        <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'pagos:cobro_detalle' c.pk %}" aria-label="Ver detalle"><i class="bi bi-eye"></i><span class="d-none d-md-inline"> Ver detalle</span></a></td>
       </tr>
       {% empty %}
-      <tr><td colspan="7" class="text-muted">Aún no tienes cobros emitidos.</td></tr>
+      <tr><td colspan="7" class="text-center text-muted py-4">Aún no tienes cobros emitidos.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+</div>
 </div>
 {% endblock %}

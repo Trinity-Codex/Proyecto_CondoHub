@@ -14,7 +14,11 @@
       <div class="card-header">Cómo se calculó tu cobro</div>
       <ul class="list-group list-group-flush">
         <li class="list-group-item d-flex justify-content-between"><span>Total de egresos del período</span><span>{{ total_egresos|pesos }}</span></li>
+        {# Criterio con que se repartió el período (patrón Strategy, apps/gastos/prorrateo.py) #}
+        <li class="list-group-item d-flex justify-content-between gap-3"><span>Reparto</span><span class="text-end">{{ cobro.periodo.get_criterio_prorrateo_display }}</span></li>
+        {% if cobro.periodo.criterio_prorrateo == "ALICUOTA" %}
         <li class="list-group-item d-flex justify-content-between"><span>Alícuota de {{ cobro.unidad }}</span><span>{{ cobro.unidad.alicuota|floatformat:"-4" }}</span></li>
+        {% endif %}
         <li class="list-group-item d-flex justify-content-between"><span>Tu parte de los gastos</span><span>{{ cobro.monto|pesos }}</span></li>
         <li class="list-group-item d-flex justify-content-between"><span>Fondo de reserva ({{ cobro.periodo.porcentaje_fondo_reserva|floatformat:"-2" }} %)</span><span>{{ cobro.monto_fondo_reserva|pesos }}</span></li>
         <li class="list-group-item d-flex justify-content-between fw-semibold"><span>Total a pagar</span><span>{{ cobro.total|pesos }}</span></li>

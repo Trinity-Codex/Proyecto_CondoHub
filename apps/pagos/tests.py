@@ -4,6 +4,8 @@ from django.urls import reverse
 
 from apps.core.pruebas import crear_escenario
 from apps.gastos.models import DetalleGastoComun, Egreso, PeriodoGasto
+from apps.gastos.servicios import emitir_periodo
+from apps.notificaciones.models import Notificacion
 
 Estado = DetalleGastoComun.Estado
 
@@ -78,6 +80,22 @@ class EstadoCuentaTest(TestCase):
         for usuario in (self.e.administrador, self.e.comite, self.e.conserje):
             self.client.force_login(usuario)
             self.assertEqual(self.client.get(reverse("pagos:estado_cuenta")).status_code, 403)
+
+    def test_la_notificacion_de_emision_lleva_al_estado_de_cuenta(self):
+        """Ajuste de la revisión: antes la campana llevaba al panel de inicio."""
+        Egreso.objects.create(
+            periodo=self.nov, categoria="ASEO", descripcion="Aseo de noviembre", monto=100000,
+            creado_por=self.e.administrador,
+        )
+        emitir_periodo(self.nov)
+        notificacion = Notificacion.objects.filter(usuario=self.e.residente, titulo="Gastos comunes emitidos").get()
+        self.assertEqual(notificacion.url, reverse("pagos:estado_cuenta"))
+
+    def test_el_detalle_muestra_el_criterio_de_reparto(self):
+        cobro = self.cobro(self.oct, self.e.a101)
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(reverse("pagos:cobro_detalle", args=[cobro.pk]))
+        self.assertContains(respuesta, "Según la alícuota de cada unidad")
 
     def test_tarjeta_mi_deuda_en_el_inicio(self):
         self.cobro(self.oct, self.e.a101)  # 42.000
