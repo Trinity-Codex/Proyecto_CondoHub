@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "apps.notificaciones",  # notificaciones dentro del sitio (RF10, patrón Observer)
     "apps.gastos",          # gastos comunes: períodos y egresos (RF02)
     "apps.proveedores",     # proveedores del condominio (RF: gestión de proveedores)
+    "apps.pagos",           # estado de cuenta y pagos de los residentes (RF03, RF04)
 ]
 
 MIDDLEWARE = [

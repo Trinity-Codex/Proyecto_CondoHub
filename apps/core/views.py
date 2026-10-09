@@ -9,16 +9,17 @@ from django.views.generic import TemplateView
 from apps.comunicados.models import Comunicado
 from apps.condominios.models import Residente, Unidad
 from apps.incidentes.models import Incidente
+from apps.pagos.consultas import cobros_del_residente, total_adeudado
 from apps.reservas.models import Reserva
 
-from .permisos import ADMINISTRADOR, COMITE, CONSERJE, RolRequeridoMixin, condominios_del_usuario, tiene_rol
+from .permisos import ADMINISTRADOR, COMITE, CONSERJE, RESIDENTE, RolRequeridoMixin, condominios_del_usuario, tiene_rol
 
 
 class InicioView(RolRequeridoMixin, TemplateView):
     """
     Panel de inicio. Cada rol ve tarjetas distintas:
       - todos:        últimos comunicados
-      - residente:    sus próximas reservas y sus incidentes abiertos
+      - residente:    su deuda, sus próximas reservas y sus incidentes abiertos
       - admin/comité/conserje: resumen del condominio (unidades, incidentes, reservas de hoy)
     """
 
@@ -40,6 +41,10 @@ class InicioView(RolRequeridoMixin, TemplateView):
         contexto["mis_incidentes"] = Incidente.objects.filter(
             reportado_por=usuario, condominio=condominio
         ).exclude(estado=Incidente.Estado.RESUELTO)[:5]
+
+        # Tarjeta "Mi deuda": solo la calculamos si el usuario es residente.
+        if RESIDENTE in self.request.roles:
+            contexto["mi_deuda"] = total_adeudado(cobros_del_residente(usuario, condominio))
 
         if tiene_rol(self.request, ADMINISTRADOR, COMITE, CONSERJE):
             unidades = Unidad.objects.filter(edificio__condominio=condominio)

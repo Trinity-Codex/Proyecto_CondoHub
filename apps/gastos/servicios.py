@@ -129,8 +129,8 @@ def emitir_periodo(periodo):
             titulo="Gastos comunes emitidos",
             mensaje=f"Ya están disponibles los gastos comunes de {periodo}.",
             destinatarios=[r.usuario for r in residentes.select_related("usuario")],
-            # El estado de cuenta del residente llega con el Issue #3; mientras, el panel de inicio.
-            url=reverse("core:inicio"),
+            # Lleva al estado de cuenta del residente (Issue #3).
+            url=reverse("pagos:estado_cuenta"),
         )
     )
     return emision

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load condohub %}
 {% block titulo %}Inicio{% endblock %}
 
 {% block contenido %}
@@ -87,8 +88,23 @@
     </div>
     {% endif %}
 
-    {# ---- Residentes: sus reservas e incidentes ---- #}
+    {# ---- Residentes: su deuda, sus reservas e incidentes ---- #}
     {% if es_residente %}
+    {# NUEVO (Issue #3): tarjeta "Mi deuda" con el total pendiente + moroso #}
+    <div class="card mb-4 {% if mi_deuda %}border-danger{% else %}border-success{% endif %}">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-wallet2"></i> Mi deuda</span>
+        <a href="{% url 'pagos:estado_cuenta' %}" class="small">Ver estado de cuenta</a>
+      </div>
+      <div class="card-body">
+        {% if mi_deuda %}
+        <div class="fs-3 fw-semibold">{{ mi_deuda|pesos }}</div>
+        <div class="small text-muted">Pendiente de pago</div>
+        {% else %}
+        <div class="text-success"><i class="bi bi-check-circle"></i> Estás al día.</div>
+        {% endif %}
+      </div>
+    </div>
     <div class="card mb-4">
       <div class="card-header d-flex justify-content-between align-items-center">
         <span><i class="bi bi-calendar-check"></i> Mis próximas reservas</span>
