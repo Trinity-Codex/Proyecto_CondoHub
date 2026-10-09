@@ -132,7 +132,13 @@ class Egreso(models.Model):
     # Pesos chilenos: enteros, sin decimales, y al menos $1.
     monto = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(MONTO_MAXIMO)])
     fecha = models.DateField(default=date.today, help_text="Fecha de la boleta o factura.")
-    # El proveedor se agrega en el Issue #9 (Winderson) y el comprobante adjunto, en la fase 2.
+    # Proveedor al que se pagó (Issue #9). Es opcional: hay egresos sin proveedor
+    # (sueldos, cuentas de luz y agua...). SET_NULL: si un proveedor se eliminara,
+    # el egreso se conserva (solo pierde el vínculo), así no se altera el total del período.
+    # El comprobante adjunto llega en la fase 2.
+    proveedor = models.ForeignKey(
+        "proveedores.Proveedor", on_delete=models.SET_NULL, null=True, blank=True, related_name="egresos"
+    )
     creado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="egresos_registrados"
     )
