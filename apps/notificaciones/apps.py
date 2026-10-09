@@ -18,6 +18,7 @@ class NotificacionesConfig(AppConfig):
         from apps.comunicados.models import Comunicado
         from apps.gastos.models import PeriodoGasto
         from apps.incidentes.models import Incidente
+        from apps.pagos.models import Pago
 
         from .observador import NotificadorEnSitio
 
@@ -25,3 +26,4 @@ class NotificacionesConfig(AppConfig):
         Comunicado.suscribir(notificador)
         Incidente.suscribir(notificador)
         PeriodoGasto.suscribir(notificador)  # gastos comunes emitidos (Issue #2)
+        Pago.suscribir(notificador)  # pago registrado (Issue #4)

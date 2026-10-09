@@ -35,7 +35,7 @@
         <td class="d-none d-md-table-cell">{{ c.unidad }}</td>
         <td class="text-end text-nowrap d-none d-md-table-cell">{{ c.monto|pesos }}</td>
         <td class="text-end text-nowrap d-none d-md-table-cell">{{ c.monto_fondo_reserva|pesos }}</td>
-        <td class="text-end text-nowrap fw-semibold">{{ c.total|pesos }}</td>
+        <td class="text-end text-nowrap fw-semibold">{{ c.total|pesos }}{% if c.pagado and c.estado != "PAGADO" %}<div class="small fw-normal text-muted">Abonado {{ c.pagado|pesos }} · Saldo {{ c.saldo|pesos }}</div>{% endif %}</td>
         <td>
           {% if c.estado == "PAGADO" %}<span class="badge text-bg-success">Pagado</span>
           {% elif c.estado == "MOROSO" %}<span class="badge text-bg-danger">Moroso</span>
@@ -50,4 +50,4 @@
   </table>
 </div>
 </div>
-{% endblock %}
+{% endblock %}
