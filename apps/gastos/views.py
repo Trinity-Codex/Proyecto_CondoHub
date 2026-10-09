@@ -8,17 +8,23 @@ Permisos:
 
 Los egresos solo se modifican mientras el período está ABIERTO. Una vez
 EMITIDO (Issue #2) quedan bloqueados: cambiarlos descuadraría lo ya cobrado.
+
+Emitir (solo administrador): EmitirPeriodoView muestra una vista previa con
+lo que pagará cada unidad y, al confirmar, usa servicios.emitir_periodo().
 """
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db.models import Count, Sum
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, RolRequeridoMixin
+from apps.core.templatetags.condohub import pesos
 
 from .forms import EgresoForm, PeriodoForm
 from .models import Egreso, PeriodoGasto
+from .servicios import calcular_emision, emitir_periodo
 
 
 # --------------------------------------------------------------------------
@@ -102,7 +108,51 @@ class PeriodoDetailView(RolRequeridoMixin, CondominioQuerysetMixin, DetailView):
             }
             for fila in egresos.values("categoria").annotate(subtotal=Sum("monto")).order_by("-subtotal")
         ]
+        # Si ya se emitió: lo que paga cada unidad (DetalleGastoComun).
+        if not self.object.esta_abierto:
+            cobros = self.object.detalles.select_related("unidad__edificio").order_by(
+                "unidad__edificio__nombre", "unidad__piso", "unidad__numero"
+            )
+            contexto["cobros"] = cobros
+            contexto["totales_cobros"] = cobros.aggregate(
+                gastos=Sum("monto"), fondo=Sum("monto_fondo_reserva")
+            )
         return contexto
+
+
+class EmitirPeriodoView(RolRequeridoMixin, CondominioQuerysetMixin, DetailView):
+    """
+    Emisión de los gastos comunes del período (Issue #2).
+
+    GET  -> vista previa: cuánto pagará cada unidad, o por qué no se puede emitir.
+    POST -> emite: crea los cobros, cierra el período y avisa a los residentes.
+    """
+
+    roles_permitidos = [ADMINISTRADOR]
+    model = PeriodoGasto
+    template_name = "gastos/emitir.html"
+    context_object_name = "periodo"
+
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+        contexto["emision"] = calcular_emision(self.object)
+        contexto["estrategia"] = self.object.get_criterio_prorrateo_display()
+        return contexto
+
+    def post(self, request, *args, **kwargs):
+        periodo = self.get_object()
+        try:
+            emision = emitir_periodo(periodo)
+        except ValidationError as error:
+            for mensaje in error.messages:
+                messages.error(request, mensaje)
+            return redirect("gastos:periodo_emitir", pk=periodo.pk)
+        messages.success(
+            request,
+            f"Gastos comunes de {periodo} emitidos: {len(emision.filas)} unidades, "
+            f"total a cobrar {pesos(emision.total_a_cobrar)}. Se avisó a los residentes.",
+        )
+        return redirect(periodo)
 
 
 # --------------------------------------------------------------------------

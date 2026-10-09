@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load condohub %}
+{% block titulo %}Emitir {{ periodo }}{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'gastos:periodos' %}">Gastos comunes</a></li>
+  <li class="breadcrumb-item"><a href="{{ periodo.get_absolute_url }}">{{ periodo }}</a></li>
+  <li class="breadcrumb-item active" aria-current="page">Emitir</li>
+</ol></nav>
+
+<h1 class="h3 mb-3">Emitir gastos comunes de {{ periodo }}</h1>
+
+{% if not emision.puede_emitir %}
+{# ---- No se puede emitir: se explica por qué ---- #}
+<div class="alert alert-danger">
+  <strong>Todavía no se puede emitir este período:</strong>
+  <ul class="mb-0 mt-2">{% for error in emision.errores %}<li>{{ error }}</li>{% endfor %}</ul>
+</div>
+<a class="btn btn-outline-secondary" href="{{ periodo.get_absolute_url }}">Volver al período</a>
+
+{% else %}
+{# ---- Vista previa: aún no se guarda nada ---- #}
+<p class="text-muted">
+  <i class="bi bi-eye"></i> Vista previa: revisa los montos antes de confirmar. Al emitir, el período se cierra
+  (sus egresos ya no se podrán modificar) y se avisa a los residentes.
+</p>
+
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
+    <div class="text-muted small">Total de egresos</div><div class="fs-4 fw-semibold">{{ emision.total_egresos|pesos }}</div>
+  </div></div></div>
+  <div class="col-sm-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
+    <div class="text-muted small">Fondo de reserva ({{ periodo.porcentaje_fondo_reserva|floatformat:"-2" }} %)</div><div class="fs-4 fw-semibold">{{ emision.total_fondo|pesos }}</div>
+  </div></div></div>
+  <div class="col-sm-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
+    <div class="text-muted small">Total a cobrar</div><div class="fs-4 fw-semibold">{{ emision.total_a_cobrar|pesos }}</div>
+  </div></div></div>
+  <div class="col-sm-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
+    <div class="text-muted small">Criterio de prorrateo</div><div class="fw-semibold">{{ estrategia }}</div>
+  </div></div></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">Cobro por unidad ({{ emision.filas|length }} unidades)</div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Unidad</th><th class="text-end">Alícuota</th><th class="text-end">Gastos</th><th class="text-end">Fondo de reserva</th><th class="text-end">Total</th></tr></thead>
+      <tbody>
+        {% for fila in emision.filas %}
+        <tr>
+          <td>{{ fila.unidad }}</td>
+          <td class="text-end">{{ fila.unidad.alicuota|floatformat:6 }}</td>
+          <td class="text-end">{{ fila.monto|pesos }}</td>
+          <td class="text-end">{{ fila.fondo|pesos }}</td>
+          <td class="text-end fw-semibold">{{ fila.total|pesos }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr class="fw-semibold"><td colspan="2">Total</td><td class="text-end">{{ emision.total_egresos|pesos }}</td><td class="text-end">{{ emision.total_fondo|pesos }}</td><td class="text-end">{{ emision.total_a_cobrar|pesos }}</td></tr></tfoot>
+    </table>
+  </div>
+</div>
+
+<form method="post" class="d-flex gap-2" onsubmit="return confirm('¿Emitir los gastos comunes de {{ periodo }}? El período quedará cerrado.');">
+  {% csrf_token %}
+  <button class="btn btn-primary" type="submit"><i class="bi bi-send-check"></i> Emitir gastos comunes</button>
+  <a class="btn btn-outline-secondary" href="{{ periodo.get_absolute_url }}">Cancelar</a>
+</form>
+{% endif %}
+{% endblock %}
