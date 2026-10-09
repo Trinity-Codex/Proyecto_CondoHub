@@ -161,7 +161,11 @@ class DetalleGastoComun(models.Model):
         MOROSO = "MOROSO", "Moroso"
 
     periodo = models.ForeignKey(PeriodoGasto, on_delete=models.CASCADE, related_name="detalles")
-    unidad = models.ForeignKey("condominios.Unidad", on_delete=models.CASCADE, related_name="cobros")
+    # RESTRICT (sugerencia de Maximiliano en #34): no se puede borrar una unidad
+    # que tiene cobros, para no perder sus deudas ni su historial. A diferencia de
+    # PROTECT, sí permite borrar el condominio completo, porque en esa misma
+    # operación los cobros se borran a través de su período (cargar_demo --reiniciar).
+    unidad = models.ForeignKey("condominios.Unidad", on_delete=models.RESTRICT, related_name="cobros")
     # Parte de los egresos del período que le toca a la unidad (según su alícuota), en pesos.
     monto = models.PositiveIntegerField()
     # Aporte de la unidad al fondo común de reserva (porcentaje del período sobre su monto), en pesos.

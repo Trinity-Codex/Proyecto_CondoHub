@@ -6,9 +6,11 @@ Cada clase corresponde a un criterio de aceptación del Issue.
 from datetime import date
 
 from django.db import IntegrityError, transaction
+from django.db.models import RestrictedError
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
+from apps.condominios.models import Unidad
 from apps.core.pruebas import crear_escenario
 from apps.core.templatetags.condohub import pesos
 
@@ -210,6 +212,27 @@ class DetalleGastoComunTest(TestCase):
     def test_borrar_el_periodo_borra_sus_cobros(self):
         self.crear_detalle(self.e.a101)
         self.periodo.delete()
+        self.assertFalse(DetalleGastoComun.objects.exists())
+
+    def test_no_se_borra_una_unidad_con_cobros(self):
+        """Sugerencia de Maximiliano en #34: no perder las deudas ni el historial de una unidad."""
+        self.crear_detalle(self.e.a101)
+        with self.assertRaises(RestrictedError):
+            self.e.a101.delete()
+        self.assertEqual(DetalleGastoComun.objects.count(), 1)
+
+    def test_una_unidad_sin_cobros_si_se_borra(self):
+        self.crear_detalle(self.e.a101)
+        self.e.a102.delete()  # A102 no tiene cobros
+        self.assertFalse(Unidad.objects.filter(pk=self.e.a102.pk).exists())
+
+    def test_borrar_todo_el_condominio_si_se_puede(self):
+        """
+        RESTRICT (y no PROTECT): si los cobros también se borran en la misma
+        operación (por su período), se permite. Lo usa "cargar_demo --reiniciar".
+        """
+        self.crear_detalle(self.e.a101)
+        self.e.condominio.delete()
         self.assertFalse(DetalleGastoComun.objects.exists())
 
 
