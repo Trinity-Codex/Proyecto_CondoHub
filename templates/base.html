@@ -63,7 +63,7 @@
         <li class="nav-item"><a class="nav-link {% if seccion == 'proveedores' %}active{% endif %}" href="{% url 'proveedores:lista' %}"><i class="bi bi-truck"></i> Proveedores</a></li>
         {% endif %}
         {% if es_admin %}
-        <li class="nav-item"><a class="nav-link {% if seccion == 'cuentas' %}active{% endif %}" href="{% url 'cuentas:usuarios' %}"><i class="bi bi-people"></i> Usuarios</a></li>
+        <li class="nav-item"><a class="nav-link {% if seccion == 'cuentas' and 'usuario' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'cuentas:usuarios' %}"><i class="bi bi-people"></i> Usuarios</a></li>
         {% endif %}
       </ul>
       {% endwith %}
@@ -112,6 +112,7 @@
             {% if roles_texto %}
             <li><span class="dropdown-item-text small text-muted">Rol: {{ roles_texto }}</span></li>
             {% endif %}
+            <li><a class="dropdown-item" href="{% url 'cuentas:perfil' %}"><i class="bi bi-person-gear"></i> Mi perfil</a></li>
             {% if user.is_superuser %}
             <li><a class="dropdown-item" href="{% url 'admin:index' %}"><i class="bi bi-gear"></i> Admin de la plataforma</a></li>
             {% endif %}

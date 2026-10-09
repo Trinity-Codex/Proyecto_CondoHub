@@ -4,6 +4,7 @@ import secrets
 from django import forms
 from django.contrib.auth.forms import (
     AuthenticationForm,
+    PasswordChangeForm,
     PasswordResetForm,
     SetPasswordForm,
     UserChangeForm,
@@ -12,7 +13,7 @@ from django.contrib.auth.forms import (
 from django.db import transaction
 
 from apps.condominios.models import Membresia
-from apps.core.formularios import BootstrapMixin, FormularioBootstrap
+from apps.core.formularios import BootstrapMixin, FormularioBootstrap, ModeloFormularioBootstrap
 
 from .models import Usuario
 from .validadores import normalizar_rut, validar_rut
@@ -140,3 +141,37 @@ class FormularioAltaUsuario(FormularioBootstrap):
             membresia.activo = True
             membresia.save(update_fields=["activo"])
         return usuario, creado
+
+
+# --------------------------------------------------------------------------
+# Perfil de usuario (Issue #12)
+# --------------------------------------------------------------------------
+class FormularioPerfil(ModeloFormularioBootstrap):
+    """
+    Datos que cada persona puede cambiar de sí misma. El correo NO está: es con
+    lo que inicia sesión y lo que identifica su cuenta (se muestra, no se edita).
+    """
+
+    class Meta:
+        model = Usuario
+        fields = ["first_name", "last_name", "rut", "telefono"]
+        labels = {"first_name": "Nombre", "last_name": "Apellido"}
+        help_texts = {"rut": "Ejemplo: 12.345.678-5", "telefono": "Ejemplo: +56 9 1234 5678"}
+
+    def clean_rut(self):
+        """El formato y el dígito verificador los revisa el modelo; aquí, que no sea de otra persona."""
+        rut = self.cleaned_data["rut"]
+        if not rut:
+            return rut
+        return validar_rut_disponible(rut, usuario=self.instance)
+
+    def clean_telefono(self):
+        telefono = self.cleaned_data["telefono"].strip()
+        digitos = sum(caracter.isdigit() for caracter in telefono)
+        if telefono and (not all(c.isdigit() or c in "+ -()" for c in telefono) or not 8 <= digitos <= 15):
+            raise forms.ValidationError("Escribe un teléfono válido, por ejemplo +56 9 1234 5678.")
+        return telefono
+
+
+class FormularioCambiarClave(BootstrapMixin, PasswordChangeForm):
+    """Clave actual + clave nueva (dos veces), con el estilo de Bootstrap."""
