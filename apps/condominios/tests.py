@@ -7,6 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.pruebas import crear_escenario, crear_usuario
+from apps.gastos.models import DetalleGastoComun, PeriodoGasto
 from apps.reservas.models import Reserva
 
 from .models import Edificio, Membresia, Residente, Unidad
@@ -137,6 +138,17 @@ class UnidadTest(TestCase):
             fecha=manana, hora_inicio="10:00", hora_fin="12:00",
         )
         self.client.post(reverse("condominios:unidad_eliminar", args=[self.e.a102.pk]))
+        self.assertTrue(Unidad.objects.filter(pk=self.e.a102.pk).exists())
+
+    def test_no_se_elimina_una_unidad_con_cobros(self):
+        # Sin este control, la base de datos lo impediría con un error (on_delete=RESTRICT).
+        periodo = PeriodoGasto.objects.create(condominio=self.e.condominio, anio=2026, mes=9)
+        DetalleGastoComun.objects.create(periodo=periodo, unidad=self.e.a102, monto=40000, monto_fondo_reserva=2000)
+        url = reverse("condominios:unidad_eliminar", args=[self.e.a102.pk])
+        self.assertContains(self.client.get(url), "tiene cobros de gastos comunes")
+        respuesta = self.client.post(url, follow=True)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, "No se puede eliminar")
         self.assertTrue(Unidad.objects.filter(pk=self.e.a102.pk).exists())
 
     def test_se_elimina_una_unidad_sin_residentes(self):

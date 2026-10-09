@@ -118,12 +118,19 @@ class Unidad(models.Model):
         return self.edificio.condominio
 
     def motivos_para_no_eliminar(self):
-        """Razones que impiden borrar la unidad (se perderían residentes o reservas)."""
+        """
+        Razones que impiden borrar la unidad (se perderían residentes, reservas
+        o su historial de cobros). Los cobros además los protege la base de
+        datos (on_delete=RESTRICT en DetalleGastoComun): sin este aviso, el
+        intento terminaría en un error en vez de un mensaje claro.
+        """
         motivos = []
         if self.residentes.filter(activo=True).exists():
             motivos.append("tiene residentes activos (dalos de baja primero)")
         if self.reservas.exists():
             motivos.append("tiene reservas registradas")
+        if self.cobros.exists():
+            motivos.append("tiene cobros de gastos comunes (su historial de deudas y pagos)")
         return motivos
 
 
