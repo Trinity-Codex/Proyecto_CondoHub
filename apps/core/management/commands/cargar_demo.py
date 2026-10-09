@@ -10,7 +10,8 @@ Crea:
     para mostrar que la plataforma es multi-condominio.
   - 1 usuario por rol (todos con la clave CLAVE_DEMO, ver tabla en README.md).
   - Edificios y unidades con alícuotas que suman 1, espacios comunes,
-    comunicados, incidentes, reservas y gastos comunes (mes anterior emitido y mes actual abierto).
+    comunicados, incidentes, reservas y gastos comunes (dos meses emitidos, con pagos y
+    unidades morosas, y el mes actual abierto).
 """
 from datetime import date, time, timedelta
 from decimal import Decimal
@@ -153,16 +154,35 @@ class Command(BaseCommand):
 
     def _demo_gastos(self, condominio, u):
         """
-        Gastos comunes (Issues #1 y #2):
-          - mes ANTERIOR: emitido, con un cobro por unidad (sirve para el estado de
-            cuenta y los pagos);
+        Gastos comunes (Issues #1, #2 y #5):
+          - hace DOS meses: emitido; pagaron todos menos A-102 y B-202 (quedan morosas);
+          - mes ANTERIOR: emitido, con la mitad de las unidades al día (sirve para el
+            estado de cuenta, los pagos y el reporte de morosidad);
           - mes ACTUAL: abierto, con egresos, listo para probar la emisión.
         """
         hoy = date.today()
         mes_anterior = hoy.replace(day=1) - timedelta(days=1)  # último día del mes anterior
+        hace_dos_meses = mes_anterior.replace(day=1) - timedelta(days=1)
+
+        antiguo = self._periodo_con_egresos(condominio, u, hace_dos_meses, ajuste=1.02)
+        emitir_periodo(antiguo)
+        self._marcar_pagados(antiguo, excepto=["A-102", "B-202"])
+
         anterior = self._periodo_con_egresos(condominio, u, mes_anterior, ajuste=0.97)
         emitir_periodo(anterior)
+        self._marcar_pagados(anterior, solo=["A-201", "A-202", "A-301", "B-101", "B-301"])
         return self._periodo_con_egresos(condominio, u, hoy)
+
+    def _marcar_pagados(self, periodo, solo=None, excepto=()):
+        """
+        Marca cobros como PAGADOS (unidades por "Torre-número", ej. "A-102").
+        Cuando esté el modelo Pago (Issue #4), aquí se registrarán los pagos.
+        """
+        for cobro in periodo.detalles.select_related("unidad__edificio"):
+            clave = f"{cobro.unidad.edificio.nombre[-1]}-{cobro.unidad.numero}"
+            if (solo is None or clave in solo) and clave not in excepto:
+                cobro.estado = cobro.Estado.PAGADO
+                cobro.save(update_fields=["estado"])
 
     def _periodo_con_egresos(self, condominio, u, fecha, ajuste=1.0):
         """Crea el período del mes de "fecha" con egresos típicos (ajuste: para variar los montos)."""

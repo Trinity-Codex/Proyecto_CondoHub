@@ -22,7 +22,8 @@
 {% if not periodo.esta_abierto %}
 <div class="alert alert-info">
   <i class="bi bi-lock"></i> Este período ya fue emitido{% if periodo.fecha_emision %} el {{ periodo.fecha_emision|date:"d-m-Y \a \l\a\s H:i" }}{% endif %}: sus egresos ya no se pueden modificar.
-  <span class="d-block small mt-1">Prorrateo: {{ periodo.get_criterio_prorrateo_display }}.</span>
+  <span class="d-block small mt-1">Prorrateo: {{ periodo.get_criterio_prorrateo_display }}.
+    <a href="{% url 'gastos:reporte' %}?periodo={{ periodo.pk }}" class="alert-link">Ver recaudación y morosidad</a></span>
 </div>
 
 {# ---- Cobro de cada unidad (DetalleGastoComun) ---- #}
