@@ -1,7 +1,9 @@
 """Formularios de gastos comunes."""
 from django import forms
+from django.db.models import Q
 
 from apps.core.formularios import CampoFecha, ModeloFormularioBootstrap
+from apps.proveedores.models import Proveedor
 
 from .models import MESES, Egreso, PeriodoGasto
 
@@ -43,9 +45,21 @@ class EgresoForm(ModeloFormularioBootstrap):
     class Meta:
         model = Egreso
         # periodo y creado_por los asigna la vista.
-        fields = ["categoria", "descripcion", "monto", "fecha"]
+        fields = ["categoria", "descripcion", "monto", "fecha", "proveedor"]
         widgets = {
             "fecha": CampoFecha(),
             "monto": forms.NumberInput(attrs={"min": 1, "step": 1, "placeholder": "Ej: 450000"}),
         }
         help_texts = {"monto": "En pesos, sin puntos ni signo $."}
+
+    def __init__(self, *args, condominio, **kwargs):
+        super().__init__(*args, **kwargs)
+        # REGLA MULTI-CONDOMINIO: solo se ofrecen proveedores de ESTE condominio, y solo
+        # los activos (los desactivados ya no se contratan). Como el <select> se arma con
+        # este queryset, un proveedor ajeno enviado a mano se rechaza como opción inválida.
+        # Al editar, el proveedor que el egreso ya tenía se mantiene aunque ahora esté inactivo.
+        visibles = Q(activo=True)
+        if self.instance.proveedor_id:
+            visibles |= Q(pk=self.instance.proveedor_id)
+        self.fields["proveedor"].queryset = Proveedor.objects.filter(condominio=condominio).filter(visibles)
+        self.fields["proveedor"].empty_label = "Sin proveedor"
