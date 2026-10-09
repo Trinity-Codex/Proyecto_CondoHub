@@ -15,7 +15,7 @@ from apps.condominios.models import Membresia
 from apps.core.formularios import BootstrapMixin, FormularioBootstrap
 
 from .models import Usuario
-from .validadores import validar_rut
+from .validadores import normalizar_rut, validar_rut
 
 
 class FormularioInicioSesion(BootstrapMixin, AuthenticationForm):
@@ -52,6 +52,23 @@ class FormularioNuevaClave(BootstrapMixin, SetPasswordForm):
 # --------------------------------------------------------------------------
 # Alta de usuarios por el administrador (Issue #11, RF12)
 # --------------------------------------------------------------------------
+def validar_rut_disponible(rut, usuario=None):
+    """
+    Un RUT identifica a UNA persona: no puede estar en dos cuentas. Devuelve el
+    RUT normalizado o lanza ValidationError si ya lo tiene otro usuario.
+
+    usuario: la cuenta que se está editando (su propio RUT no cuenta como
+    repetido). Pensado para reutilizarse en el perfil de usuario (#12).
+    """
+    rut = normalizar_rut(rut)
+    otros = Usuario.objects.filter(rut=rut)
+    if usuario is not None:
+        otros = otros.exclude(pk=usuario.pk)
+    if otros.exists():
+        raise forms.ValidationError("Ya existe otra cuenta con ese RUT.")
+    return rut
+
+
 class FormularioAltaUsuario(FormularioBootstrap):
     """
     El administrador registra a una persona y le da un rol en el condominio activo.
@@ -80,6 +97,17 @@ class FormularioAltaUsuario(FormularioBootstrap):
         email = Usuario.objects.normalize_email(self.cleaned_data["email"]).lower()
         self.usuario_existente = Usuario.objects.filter(email__iexact=email).first()
         return email
+
+    def clean_rut(self):
+        """
+        Si se va a crear una cuenta nueva, el RUT no puede ser de otra persona.
+        Si el correo ya tenía cuenta, el RUT del formulario no se usa (no se
+        modifican sus datos), así que no se valida.
+        """
+        rut = self.cleaned_data["rut"]
+        if self.usuario_existente is not None:
+            return rut
+        return validar_rut_disponible(rut)
 
     def clean(self):
         datos = super().clean()

@@ -168,6 +168,32 @@ class AltaUsuarioTest(TestCase):
         self.assertIn("rut", respuesta.context["form"].errors)
         self.assertFalse(Usuario.objects.filter(email="nuevo@prueba.cl").exists())
 
+    def test_no_repite_el_rut_de_otra_persona(self):
+        # Caso encontrado por Winderson en la revisión: se podía crear otra cuenta con el RUT de la administradora.
+        self.e.administrador.rut = "12.345.678-5"
+        self.e.administrador.save()
+        respuesta = self.alta(rut="12345678-5")  # mismo RUT escrito sin puntos
+        self.assertEqual(respuesta.context["form"].errors["rut"], ["Ya existe otra cuenta con ese RUT."])
+        self.assertFalse(Usuario.objects.filter(email="nuevo@prueba.cl").exists())
+
+    def test_correo_existente_no_valida_el_rut_del_formulario(self):
+        # Si la cuenta ya existe, sus datos no se tocan: el RUT escrito no importa.
+        self.e.administrador.rut = "12.345.678-5"
+        self.e.administrador.save()
+        respuesta = self.alta(email="ajeno@prueba.cl", rut="12.345.678-5")
+        self.assertRedirects(respuesta, reverse("cuentas:usuarios"))
+        self.assertTrue(self.tiene_rol(self.e.residente_ajeno, self.e.condominio))
+
+    def test_validar_rut_disponible_ignora_el_propio(self):
+        # Para el perfil (#12): al editar su cuenta, la persona puede conservar su propio RUT.
+        from .forms import validar_rut_disponible
+
+        self.e.administrador.rut = "12.345.678-5"
+        self.e.administrador.save()
+        self.assertEqual(validar_rut_disponible("12.345.678-5", usuario=self.e.administrador), "12345678-5")
+        with self.assertRaises(ValidationError):
+            validar_rut_disponible("12.345.678-5", usuario=self.e.comite)
+
     def test_solo_el_administrador(self):
         for usuario in (self.e.comite, self.e.conserje, self.e.residente):
             self.client.force_login(usuario)
