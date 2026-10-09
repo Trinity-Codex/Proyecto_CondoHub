@@ -30,12 +30,12 @@ como Issues para repartir.
 | Incluido en la base | En el backlog (Issues) |
 |---|---|
 | Inicio de sesión con correo, RUT validado | Gastos comunes con prorrateo y fondo de reserva |
-| Condominios, edificios, unidades (alícuota), residentes | Estado de cuenta y registro de pagos |
+| Condominios, edificios, unidades (alícuota), residentes (administrables desde el sitio) | Estado de cuenta y registro de pagos |
 | Roles por condominio y condominio activo | Reportes de morosidad, aviso de cobro en PDF |
 | Comunicados generales o por edificio | Proveedores, remuneraciones y Previred |
 | Reservas sin superposición de horarios | Visitas, encomiendas, asambleas |
 | Incidentes con estados | Correo, pasarela de pago, API REST, Docker, despliegue |
-| Notificaciones en el sitio (patrón Observer) | Administrar unidades y usuarios desde el sitio |
+| Notificaciones en el sitio (patrón Observer) | Alta de usuarios desde el sitio |
 
 ---
 
@@ -226,6 +226,7 @@ administrador en todos y es el único que entra a `/admin/`.
 | Ver incidentes | Todos | Todos | Todos | Solo los suyos |
 | Cambiar estado de incidentes | ✅ | | ✅ | |
 | Ver unidades y residentes | ✅ | ✅ | | |
+| Administrar edificios, unidades y residentes | ✅ | | | |
 
 Se implementa en `apps/core/permisos.py` (`RolRequeridoMixin`, `CondominioQuerysetMixin`,
 `tiene_rol`). Sin permiso, el sitio responde **403** ("sin permisos"); un registro de otro usuario
@@ -315,7 +316,7 @@ intercambiables (por alícuota, partes iguales, por consumo), como propone la se
 
 | Requerimiento | Estado | Dónde |
 |---|---|---|
-| RF01 Datos de edificios, unidades y residentes | Base (consulta) + Issue (administrar desde el sitio) | `apps/condominios` |
+| RF01 Datos de edificios, unidades y residentes | Hecho (consulta y administración desde el sitio, #10) | `apps/condominios` |
 | RF02 Generar gastos comunes prorrateados | Issue | — |
 | RF03 Residente ve su estado de pago | Issue | — |
 | RF04 Registrar pagos | Issue | — |

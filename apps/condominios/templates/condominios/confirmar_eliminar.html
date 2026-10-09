@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{# Confirmación para eliminar un edificio o una unidad. "motivos" = lo que impide borrarlo. #}
+{% block titulo %}Eliminar {{ object }}{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    {% if motivos %}
+    <div class="card border-warning"><div class="card-body">
+      <h1 class="h4">No se puede eliminar {{ object }}</h1>
+      <p>Porque:</p>
+      <ul>{% for motivo in motivos %}<li>{{ motivo }}</li>{% endfor %}</ul>
+      <a class="btn btn-outline-secondary" href="{% url 'condominios:unidades' %}">Volver</a>
+    </div></div>
+    {% else %}
+    <div class="card border-danger"><div class="card-body">
+      <h1 class="h4">¿Eliminar {{ object }}?</h1>
+      <p>Esta acción no se puede deshacer.</p>
+      <form method="post" class="d-flex gap-2">
+        {% csrf_token %}
+        <button class="btn btn-danger" type="submit">Sí, eliminar</button>
+        <a class="btn btn-outline-secondary" href="{% url 'condominios:unidades' %}">Cancelar</a>
+      </form>
+    </div></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
