@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block titulo %}Mi perfil{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <h1 class="h3 mb-3"><i class="bi bi-person-gear"></i> Mi perfil</h1>
+
+    <div class="card mb-3"><div class="card-body">
+      {# El correo se muestra pero no se edita: es con lo que se inicia sesión. #}
+      <div class="mb-3">
+        <label class="form-label" for="correo">Correo electrónico</label>
+        <input class="form-control" id="correo" type="email" value="{{ user.email }}" disabled>
+        <div class="form-text">Es con el que inicias sesión. Si necesitas cambiarlo, pídeselo a la administración.</div>
+      </div>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% include "_formulario.html" with form=form %}
+        <button class="btn btn-primary" type="submit">Guardar cambios</button>
+      </form>
+    </div></div>
+
+    <div class="card"><div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <div class="fw-semibold">Contraseña</div>
+        <div class="text-muted small">Te pediremos la actual para cambiarla.</div>
+      </div>
+      <a class="btn btn-outline-primary" href="{% url 'cuentas:cambiar_clave' %}"><i class="bi bi-key"></i> Cambiar contraseña</a>
+    </div></div>
+
+    {% if roles_texto %}
+    <p class="text-muted small mt-3 mb-0"><i class="bi bi-building"></i> En {{ condominio_activo.nombre }} tienes el rol: {{ roles_texto }}.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

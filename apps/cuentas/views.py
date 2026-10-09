@@ -5,19 +5,26 @@ Iniciar/cerrar sesión y recuperar la contraseña usan las vistas que ya trae
 Django (ver urls.py); aquí están solo las propias de CondoHub.
 
 Permisos:
+  - Mi perfil y cambiar la contraseña: cualquier usuario con sesión iniciada
+    (es SU cuenta, no datos de un condominio: por eso usa LoginRequiredMixin y no
+    RolRequeridoMixin; así también funciona para quien aún no tiene condominio)
   - Ver los usuarios del condominio y dar de alta usuarios: administrador
   - El rol se asigna SIEMPRE en el condominio activo, donde el administrador
     ya fue verificado por RolRequeridoMixin: no puede dar roles en condominios ajenos.
 """
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.views import PasswordChangeView
+from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Prefetch
 from django.shortcuts import redirect
-from django.views.generic import FormView, ListView
+from django.urls import reverse_lazy
+from django.views.generic import FormView, ListView, UpdateView
 
 from apps.condominios.models import Membresia
 from apps.core.permisos import ADMINISTRADOR, RolRequeridoMixin
 
-from .forms import FormularioAltaUsuario, FormularioRecuperarClave
+from .forms import FormularioAltaUsuario, FormularioCambiarClave, FormularioPerfil, FormularioRecuperarClave
 from .models import Usuario
 
 
@@ -83,3 +90,32 @@ class UsuarioCreateView(RolRequeridoMixin, FormView):
                 "(sus datos personales no se modificaron).",
             )
         return redirect("cuentas:usuarios")
+
+
+# --------------------------------------------------------------------------
+# Mi perfil (Issue #12)
+# --------------------------------------------------------------------------
+class PerfilView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+    """La persona edita sus propios datos: nombre, apellido, RUT y teléfono (no el correo)."""
+
+    form_class = FormularioPerfil
+    template_name = "cuentas/perfil.html"
+    success_url = reverse_lazy("cuentas:perfil")
+    success_message = "Tus datos se guardaron."
+
+    def get_object(self, queryset=None):
+        # Siempre el usuario de la sesión: no hay un <pk> en la URL, así que
+        # nadie puede abrir ni editar el perfil de otra persona.
+        return self.request.user
+
+
+class CambiarClaveView(LoginRequiredMixin, SuccessMessageMixin, PasswordChangeView):
+    """
+    Cambiar la contraseña (pide la actual). PasswordChangeView de Django además
+    mantiene la sesión abierta después del cambio.
+    """
+
+    form_class = FormularioCambiarClave
+    template_name = "cuentas/cambiar_clave.html"
+    success_url = reverse_lazy("cuentas:perfil")  # con prefijo "cuentas:" (ver urls.py)
+    success_message = "Tu contraseña se cambió. La próxima vez entra con la nueva."
