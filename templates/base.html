@@ -125,12 +125,13 @@
         {% endcomment %}
         {% if condominio_activo %}
         <li class="nav-item">
-          <a class="nav-link position-relative" href="{% url 'notificaciones:lista' %}"
+          <a class="nav-link" href="{% url 'notificaciones:lista' %}"
              aria-label="Notificaciones{% if notificaciones_sin_leer %}, {{ notificaciones_sin_leer }} sin leer{% endif %}">
-            <span class="d-none d-lg-inline">
+            {# El contador se ubica sobre la CAMPANA (su contenedor), no sobre todo el enlace: ver .campana en condohub.css #}
+            <span class="campana d-none d-lg-inline-block">
               <i class="bi bi-bell fs-5"></i>
               {% if notificaciones_sin_leer %}
-              <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ notificaciones_sin_leer }}</span>
+              <span class="campana-contador badge rounded-pill bg-danger">{{ notificaciones_sin_leer }}</span>
               {% endif %}
             </span>
             <span class="d-lg-none">

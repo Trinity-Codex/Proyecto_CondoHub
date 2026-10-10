@@ -67,6 +67,24 @@ h1, h2, h3, .h1, .h2, .h3, .h4, .h5, .marca {
   box-shadow: inset 0 -3px 0 var(--condohub-teal);  /* subrayado de la sección actual */
 }
 
+/* Campana de notificaciones en escritorio: el número rojo se apoya en la esquina
+   superior derecha del ícono y lo tapa solo un poco. .campana es el elemento con
+   position: relative, así el contador (absolute) se mide desde la campana y no
+   desde todo el enlace, que tiene relleno a los lados. */
+.campana {
+  position: relative;
+  line-height: 1;
+}
+.campana-contador {
+  position: absolute;
+  top: -0.3rem;
+  left: 0.7rem;         /* empieza a la mitad de la campana: se superpone un poco */
+  font-size: 0.6rem;
+  padding: 0.25em 0.45em;
+  min-width: 1.1rem;    /* un solo dígito queda redondo */
+  box-shadow: 0 0 0 2px #fff;  /* borde blanco: separa el número del ícono */
+}
+
 /* Menús desplegables (Administración, condominio, usuario): la página actual se
    marca con el azul de la marca en vez del azul por defecto de Bootstrap. */
 .barra-principal .dropdown-menu {
