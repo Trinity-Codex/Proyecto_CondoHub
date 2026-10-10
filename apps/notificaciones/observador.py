@@ -10,17 +10,27 @@ Solución Observer:
   - SUJETO (Subject): el que "avisa" que pasó algo. Aquí: Comunicado e
     Incidente (heredan de Sujeto). No sabe quién lo escucha.
   - OBSERVADOR (Observer): el que reacciona al aviso. Aquí:
-    NotificadorEnSitio (crea notificaciones en la campana del sitio).
+    NotificadorEnSitio (crea notificaciones en la campana del sitio) y
+    NotificadorCorreo (envía un correo, Issue #14).
   - Los observadores se SUSCRIBEN al sujeto (en apps.py, al iniciar Django).
 
-Para agregar un canal nuevo (por ejemplo correo electrónico, issue del
-backlog) basta con crear otra clase Observador y suscribirla: no se toca el
-código de comunicados ni de incidentes.
+Para agregar un canal nuevo basta con crear otra clase Observador y
+suscribirla: no se toca el código de comunicados ni de incidentes. Así se
+agregó el correo (Issue #14): NotificadorCorreo + una línea por sujeto en apps.py.
 
     Comunicado ──notificar(evento)──> [NotificadorEnSitio, NotificadorCorreo, ...]
 """
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+
+from django.conf import settings
+from django.core.mail import get_connection, send_mail
+from django.db import transaction
+from django.template.loader import render_to_string
+from django.urls import reverse
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -90,3 +100,56 @@ class NotificadorEnSitio(Observador):
                 for usuario in set(evento.destinatarios)  # set(): sin duplicados
             ]
         )
+
+
+class NotificadorCorreo(Observador):
+    """
+    Observador concreto (Issue #14): envía un correo a cada destinatario que
+    acepta recibirlos (Usuario.recibir_correos, se cambia en "Mi perfil").
+
+    En desarrollo los correos se imprimen en la consola del servidor
+    (EMAIL_BACKEND de consola en settings.py); en las pruebas quedan en
+    django.core.mail.outbox.
+    """
+
+    def actualizar(self, evento: Evento):
+        # Sin duplicados (por pk) y solo quien quiere correos y tiene la cuenta activa.
+        usuarios = {
+            usuario.pk: usuario
+            for usuario in evento.destinatarios
+            if usuario.email and usuario.is_active and usuario.recibir_correos
+        }
+        if not usuarios:
+            return
+        # on_commit: el correo sale DESPUÉS de que los datos se guardan de verdad.
+        # Emitir gastos o registrar un pago ocurre en una transacción; si al final
+        # falla y se deshace, no queremos haber avisado de algo que no pasó.
+        # (Fuera de una transacción, on_commit ejecuta la función de inmediato.)
+        transaction.on_commit(lambda: self.enviar(evento, list(usuarios.values())))
+
+    def enviar(self, evento, usuarios):
+        """Un correo por persona (con su nombre), todos por la misma conexión al servidor de correo."""
+        enlace = f"{settings.SITIO_URL}{evento.url}" if evento.url else settings.SITIO_URL
+        try:
+            with get_connection() as conexion:
+                for usuario in usuarios:
+                    cuerpo = render_to_string(
+                        "notificaciones/correo_aviso.txt",
+                        {
+                            "usuario": usuario,
+                            "evento": evento,
+                            "enlace": enlace,
+                            "perfil": f"{settings.SITIO_URL}{reverse('cuentas:perfil')}",
+                        },
+                    )
+                    send_mail(
+                        subject=f"[CondoHub] {evento.titulo}",
+                        message=cuerpo,
+                        from_email=None,  # usa DEFAULT_FROM_EMAIL
+                        recipient_list=[usuario.email],
+                        connection=conexion,
+                    )
+        except Exception:
+            # Si el servidor de correo falla, lo demás sigue funcionando: el
+            # comunicado ya se publicó y la campana ya avisó. Solo queda en el log.
+            logger.exception("No se pudieron enviar los avisos por correo de «%s».", evento.titulo)

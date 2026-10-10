@@ -53,6 +53,13 @@ class Usuario(AbstractUser):
     email = models.EmailField("correo electrónico", unique=True)
     rut = models.CharField("RUT", max_length=12, blank=True, validators=[validar_rut])
     telefono = models.CharField("teléfono", max_length=20, blank=True)
+    # Preferencia para los avisos por correo (Issue #14, patrón Observer). Cada
+    # persona la cambia en "Mi perfil"; la campana del sitio se muestra siempre.
+    recibir_correos = models.BooleanField(
+        "recibir avisos por correo",
+        default=True,
+        help_text="Comunicados, incidentes, gastos comunes emitidos y pagos registrados.",
+    )
 
     USERNAME_FIELD = "email"                     # campo con el que se inicia sesión
     REQUIRED_FIELDS = ["first_name", "last_name"]  # se piden al crear un superusuario
