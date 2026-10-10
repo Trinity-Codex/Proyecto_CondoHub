@@ -92,14 +92,28 @@
         <li class="nav-item"><span class="navbar-text me-lg-3"><i class="bi bi-building"></i> {{ condominio_activo.nombre }}</span></li>
         {% endif %}
 
-        {# Campana de notificaciones (RF10) #}
+        {% comment %}
+          Campana de notificaciones (RF10). Se ve distinta según el tamaño de pantalla:
+            - Escritorio (lg o más): solo la campana, con el número en su esquina superior derecha.
+            - Celular (menú desplegable): igual que los demás enlaces del menú, es decir,
+              ícono + "Notificaciones" + el número en rojo a la derecha. En el menú desplegado
+              el enlace ocupa todo el ancho y el número "flotante" quedaba en el borde de la pantalla.
+          aria-label incluye la cantidad para que los lectores de pantalla la anuncien.
+        {% endcomment %}
         {% if condominio_activo %}
         <li class="nav-item">
-          <a class="nav-link position-relative" href="{% url 'notificaciones:lista' %}" aria-label="Notificaciones">
-            <i class="bi bi-bell fs-5"></i>
-            {% if notificaciones_sin_leer %}
-            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ notificaciones_sin_leer }}</span>
-            {% endif %}
+          <a class="nav-link position-relative" href="{% url 'notificaciones:lista' %}"
+             aria-label="Notificaciones{% if notificaciones_sin_leer %}, {{ notificaciones_sin_leer }} sin leer{% endif %}">
+            <span class="d-none d-lg-inline">
+              <i class="bi bi-bell fs-5"></i>
+              {% if notificaciones_sin_leer %}
+              <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ notificaciones_sin_leer }}</span>
+              {% endif %}
+            </span>
+            <span class="d-lg-none">
+              <i class="bi bi-bell"></i> Notificaciones
+              {% if notificaciones_sin_leer %}<span class="badge rounded-pill bg-danger ms-1">{{ notificaciones_sin_leer }}</span>{% endif %}
+            </span>
           </a>
         </li>
         {% endif %}
