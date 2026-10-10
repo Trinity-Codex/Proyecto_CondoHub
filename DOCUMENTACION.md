@@ -5,7 +5,7 @@ Plataforma web de gestión de condominios del equipo **Trinity Codex**
 
 ## Índice
 
-1. [Alcance de la base](#1-alcance-de-la-base)
+1. [Alcance del proyecto](#1-alcance-del-proyecto)
 2. [Instalación paso a paso](#2-instalación-paso-a-paso)
 3. [Arquitectura](#3-arquitectura)
 4. [Roles y permisos](#4-roles-y-permisos)
@@ -18,24 +18,28 @@ Plataforma web de gestión de condominios del equipo **Trinity Codex**
 
 ---
 
-## 1. Alcance de la base
+## 1. Alcance del proyecto
 
 CondoHub implementa el diseño del *Informe 2 de Ingeniería de Software — Sistema de
 Administración Comunitaria (Condominio Vista Verde)*, adaptado a **varios condominios**, a
-**Django** y a **MySQL**. Esta base deja funcionando la estructura completa (usuarios, roles,
-condominios, permisos, diseño, pruebas y CI) y tres módulos de ejemplo; el resto de las
-funcionalidades están en el [tablero del proyecto](https://github.com/orgs/Trinity-Codex/projects/1)
-como Issues para repartir.
+**Django** y a **MySQL**. La entrega del 10 de octubre cubre los **12 requerimientos funcionales**
+del informe (ver la [sección 7](#7-trazabilidad-con-el-informe-2)); lo demás queda como fase 2 en
+el [tablero del proyecto](https://github.com/orgs/Trinity-Codex/projects/1).
 
-| Incluido en la base | En el backlog (Issues) |
+| Implementado (entrega 10-oct) | Fase 2 (Issues del tablero) |
 |---|---|
-| Inicio de sesión con correo, RUT validado, recuperar contraseña | Gastos comunes con prorrateo y fondo de reserva |
-| Condominios, edificios, unidades (alícuota), residentes (administrables desde el sitio) | Estado de cuenta y registro de pagos |
-| Roles por condominio y condominio activo | Reportes de morosidad, aviso de cobro en PDF |
-| Comunicados generales o por edificio | Proveedores, remuneraciones y Previred |
-| Reservas sin superposición de horarios | Visitas, encomiendas, asambleas |
-| Incidentes con estados | Pasarela de pago, API REST, Docker, despliegue |
-| Notificaciones en el sitio y por correo (patrón Observer) | Alta de usuarios desde el sitio |
+| Inicio de sesión con correo, RUT validado, recuperar contraseña y perfil | Aviso de cobro en PDF e intereses por mora |
+| Alta de usuarios por el administrador, con su rol | Fechas de residencia: cada residente ve solo sus cobros (#46) |
+| Condominios, edificios, unidades (alícuota) y residentes, administrables desde el sitio | Remuneraciones y Previred |
+| Roles por condominio y condominio activo | Visitas, encomiendas y asambleas |
+| Comunicados generales o por edificio | Pasarela de pago en línea |
+| Reservas sin superposición de horarios | API REST y app móvil nativa |
+| Incidentes con estados | Docker y despliegue en un servidor |
+| Notificaciones en el sitio y por correo (patrón Observer) | |
+| Gastos comunes: egresos, prorrateo (patrón Strategy) y fondo de reserva | |
+| Estado de cuenta del residente y registro de pagos totales o parciales | |
+| Reporte de recaudación y morosidad, con descarga en CSV | |
+| Proveedores con RUT validado, vinculados a los egresos | |
 
 ---
 
@@ -137,12 +141,23 @@ Cada integrante tiene su propio `.env` (no se sube a GitHub). Si usaste el scrip
 | `DB_HOST` / `DB_PORT` | `127.0.0.1` / `3306` | Servidor MySQL |
 | `DJANGO_DEBUG` | `1` | `0` en un servidor real |
 | `DJANGO_ALLOWED_HOSTS` | `127.0.0.1,localhost` | Direcciones permitidas |
+| `EMAIL_BACKEND` | consola | Dónde salen los correos. Por defecto se **imprimen en la consola** del servidor (no se envían) |
+| `SITIO_URL` | `http://127.0.0.1:8000` | Dirección del sitio para los enlaces de los avisos por correo |
 | `USE_SQLITE` | `0` | `1` = probar sin MySQL |
 
 ### 2.7 Usuarios de demostración
 
 `python manage.py cargar_demo` crea dos condominios y un usuario por rol, todos con la clave
 **`condohub2026`**. La tabla completa está en el [README](README.md#usuarios-de-demostración).
+
+En *Condominio Vista Verde* también deja datos para recorrer todos los módulos:
+
+- **Gastos comunes:** los dos meses anteriores **emitidos** y el mes actual **abierto**, con egresos
+  listos para probar la emisión.
+- **Pagos:** casi todas las unidades pagaron; **B-201** hizo un abono parcial de $100.000, y
+  **A-102** y **B-202** deben desde hace dos meses (aparecen como **morosas** en el reporte).
+- **Proveedores:** tres activos (vinculados a los egresos de ascensores, aseo y cámaras) y uno inactivo.
+
 Para volver a los datos originales: `python manage.py cargar_demo --reiniciar`.
 
 ### 2.8 Trabajar otro día
@@ -173,7 +188,10 @@ Proyecto_CondoHub/
 │   ├── comunicados/          # MÓDULO DE REFERENCIA para construir los demás
 │   ├── reservas/             # espacios comunes y reservas
 │   ├── incidentes/           # incidentes de los residentes
-│   └── notificaciones/       # notificaciones + patrón Observer
+│   ├── notificaciones/       # notificaciones en el sitio y por correo (patrón Observer)
+│   ├── gastos/               # períodos, egresos, emisión (patrón Strategy) y reporte de morosidad
+│   ├── pagos/                # estado de cuenta del residente, cobranza y registro de pagos
+│   └── proveedores/          # proveedores del condominio (RUT validado)
 ├── templates/                # base.html (diseño común), formularios, paginación, errores
 ├── static/                   # CSS propio, ícono y manifest de la PWA
 ├── docs/                     # script SQL y guías
@@ -228,10 +246,19 @@ administrador en todos y es el único que entra a `/admin/`.
 | Ver unidades y residentes | ✅ | ✅ | | |
 | Administrar edificios, unidades y residentes | ✅ | | | |
 | Ver usuarios y darlos de alta con su rol | ✅ | | | |
+| Ver gastos comunes (períodos, egresos y cobro por unidad) | ✅ | ✅ | | |
+| Abrir períodos, registrar egresos y emitir los gastos comunes | ✅ | | | |
+| Ver su estado de cuenta y sus pagos (**Mi cuenta**) | | | | ✅ |
+| Ver la cobranza y la cuenta de cada unidad | ✅ | ✅ | | |
+| Registrar pagos | ✅ | | | |
+| Reporte de morosidad y descarga en CSV | ✅ | ✅ | | |
+| Ver proveedores | ✅ | ✅ | | |
+| Crear, editar y desactivar proveedores | ✅ | | | |
 | Editar su perfil y cambiar su contraseña | ✅ | ✅ | ✅ | ✅ |
 
 Se implementa en `apps/core/permisos.py` (`RolRequeridoMixin`, `CondominioQuerysetMixin`,
-`tiene_rol`). Sin permiso, el sitio responde **403** ("sin permisos"); un registro de otro usuario
+`tiene_rol`). En el menú, las páginas de gestión del administrador y del comité están agrupadas
+en el desplegable **Administración**. Sin permiso, el sitio responde **403** ("sin permisos"); un registro de otro usuario
 o de otro condominio responde **404** (ni siquiera se revela que existe).
 
 ---
@@ -254,6 +281,13 @@ erDiagram
     CONDOMINIO ||--o{ INCIDENTE : registra
     USUARIO ||--o{ INCIDENTE : reporta
     USUARIO ||--o{ NOTIFICACION : recibe
+    CONDOMINIO ||--o{ PERIODO_GASTO : "un período por mes"
+    PERIODO_GASTO ||--o{ EGRESO : incluye
+    PROVEEDOR |o--o{ EGRESO : "pagado a"
+    CONDOMINIO ||--o{ PROVEEDOR : contrata
+    PERIODO_GASTO ||--o{ DETALLE_GASTO_COMUN : "al emitir"
+    UNIDAD ||--o{ DETALLE_GASTO_COMUN : "se le cobra"
+    DETALLE_GASTO_COMUN ||--o{ PAGO : "se abona con"
 
     UNIDAD {
         string numero
@@ -274,6 +308,23 @@ erDiagram
         string categoria
         string estado "RECIBIDO, EN_PROCESO, RESUELTO"
     }
+    PERIODO_GASTO {
+        int anio
+        int mes
+        string estado "ABIERTO, EMITIDO"
+        decimal porcentaje_fondo_reserva "mínimo 5"
+        string criterio_prorrateo "ALICUOTA, PARTES_IGUALES"
+    }
+    DETALLE_GASTO_COMUN {
+        int monto "parte de los egresos"
+        int monto_fondo_reserva
+        string estado "PENDIENTE, PAGADO, MOROSO"
+    }
+    PAGO {
+        date fecha
+        int monto "total o parcial"
+        string medio "TRANSFERENCIA, EFECTIVO, CHEQUE, WEBPAY"
+    }
 ```
 
 Cambios respecto del modelo ER del Informe 2:
@@ -283,7 +334,10 @@ Cambios respecto del modelo ER del Informe 2:
 | — | `Condominio` | Multi-condominio: todo cuelga de un condominio |
 | `residente` y `administrador` con nombre, RUT y correo | `Usuario` (datos personales) + `Residente` (unidad) + `Membresia` (rol) | Una persona puede tener varios roles y unidades sin duplicar sus datos |
 | Índice único `(espacio, fecha, hora_inicio)` | Validación de **superposición real** de horarios + bloqueo de fila al confirmar | El índice no detectaba topes con distinta hora de inicio (10–12 vs 11–13) |
-| `gasto_comun`, `detalle_gasto_comun`, `pago` | En el backlog | Se implementan en los Issues de gastos comunes y pagos |
+| `gasto_comun` | `PeriodoGasto` (un mes) + `Egreso` (cada gasto, con proveedor opcional) | Se registran los egresos reales y el total se calcula; un período emitido ya no se modifica |
+| `detalle_gasto_comun` | `DetalleGastoComun` (lo que paga cada unidad) | Separa la parte de los gastos y la del fondo de reserva; una unidad con cobros no se puede borrar (`RESTRICT`) |
+| `pago` | `Pago`, varios por cobro | Permite **abonos parciales**; el cobro pasa a PAGADO solo cuando los pagos cubren el total |
+| — | `Proveedor` | Empresas que prestan servicios, con RUT validado; se desactivan en vez de borrarse |
 
 ---
 
@@ -311,32 +365,52 @@ classDiagram
     Sujeto o-- Observador : observadores
 ```
 
-### Strategy (backlog) — cálculo del prorrateo
+### Strategy (implementado) — `apps/gastos/prorrateo.py`
 
-El Issue de cálculo de gastos comunes define `EstrategiaProrrateo` con estrategias
-intercambiables (por alícuota, partes iguales, por consumo), como propone la sección 5.3 del Informe 2.
+Cómo se reparte el total del mes entre las unidades depende del **criterio** que se elige al abrir
+el período, como propone la sección 5.3 del Informe 2. Cada criterio es una **estrategia**
+intercambiable: `PorAlicuota` (según la alícuota de cada unidad) y `PartesIguales`. La emisión
+(`apps/gastos/servicios.py`) no sabe cuál usa: busca la estrategia en `ESTRATEGIAS` y le pide
+`calcular()`. Agregar un criterio nuevo (por ejemplo, por consumo) es escribir una clase y
+registrarla, **sin tocar** la emisión ni las vistas.
+
+El redondeo usa el método del **resto mayor**: cada unidad recibe la parte entera y los pesos que
+sobran van a las unidades con mayor decimal, así la suma de los cobros es **exactamente** el total.
+
+```mermaid
+classDiagram
+    class EstrategiaProrrateo { <<abstract>> +calcular(total, unidades) }
+    EstrategiaProrrateo <|-- PorAlicuota
+    EstrategiaProrrateo <|-- PartesIguales
+    class servicios { +calcular_emision(periodo) +emitir_periodo(periodo) }
+    servicios ..> EstrategiaProrrateo : ESTRATEGIAS[criterio]
+```
 
 ---
 
 ## 7. Trazabilidad con el Informe 2
 
+Los **12 requerimientos funcionales** del Informe 2 están implementados y probados.
+
 | Requerimiento | Estado | Dónde |
 |---|---|---|
-| RF01 Datos de edificios, unidades y residentes | Hecho (consulta y administración desde el sitio, #10) | `apps/condominios` |
-| RF02 Generar gastos comunes prorrateados | Issue | — |
-| RF03 Residente ve su estado de pago | Issue | — |
-| RF04 Registrar pagos | Issue | — |
-| RF05 Disponibilidad y reserva | ✅ Base | `apps/reservas` |
-| RF06 Sin reservas superpuestas | ✅ Base | `Reserva.clean()` y `Reserva.confirmar()` |
-| RF07 Reportar incidentes | ✅ Base | `apps/incidentes` |
-| RF08 Cambiar estado de incidentes | ✅ Base | `IncidenteDetailView.post()` |
-| RF09 Publicar comunicados | ✅ Base | `apps/comunicados` |
-| RF10 Notificación automática | Hecho (en el sitio y por correo, #14) | `apps/notificaciones` |
-| RF11 Reportes de gastos y morosidad | Issue | — |
-| RF12 Datos de acceso del administrador y comité | Hecho (inicio de sesión, roles, alta de usuarios y recuperar contraseña, #11) | `apps/cuentas`, `Membresia` |
-| RNF02 Seguridad por roles | ✅ Base | `apps/core/permisos.py` |
-| RNF03 / RNF06 Usable en celular y navegadores | ✅ Base | Bootstrap 5 responsive, PWA |
-| RNF07 Mantenibilidad | ✅ Base | Apps independientes, guía de nuevos módulos, pruebas y CI |
+| RF01 Datos de edificios, unidades y residentes | ✅ Consulta y administración desde el sitio (#10) | `apps/condominios` |
+| RF02 Generar gastos comunes prorrateados | ✅ Egresos del mes (#1) y emisión con prorrateo y fondo de reserva (#2) | `apps/gastos` (`prorrateo.py`, `servicios.py`) |
+| RF03 Residente ve su estado de pago | ✅ **Mi cuenta** y detalle de cada cobro (#3) | `apps/pagos` (`consultas.py`) |
+| RF04 Registrar pagos | ✅ Pagos totales o parciales, con aviso al residente (#4) | `Pago.registrar()` |
+| RF05 Disponibilidad y reserva | ✅ | `apps/reservas` |
+| RF06 Sin reservas superpuestas | ✅ | `Reserva.clean()` y `Reserva.confirmar()` |
+| RF07 Reportar incidentes | ✅ | `apps/incidentes` |
+| RF08 Cambiar estado de incidentes | ✅ | `IncidenteDetailView.post()` |
+| RF09 Publicar comunicados | ✅ | `apps/comunicados` |
+| RF10 Notificación automática | ✅ En el sitio y por correo (#14) | `apps/notificaciones` |
+| RF11 Reportes de gastos y morosidad | ✅ Recaudación, morosidad y CSV para Excel (#5) | `apps/gastos/reportes.py` |
+| RF12 Datos de acceso del administrador y comité | ✅ Inicio de sesión, roles, alta de usuarios, recuperar contraseña y perfil (#11, #12) | `apps/cuentas`, `Membresia` |
+| RNF02 Seguridad por roles | ✅ | `apps/core/permisos.py` |
+| RNF03 / RNF06 Usable en celular y navegadores | ✅ | Bootstrap 5 responsive (tablas adaptadas al celular), PWA |
+| RNF07 Mantenibilidad | ✅ | Apps independientes, patrones Observer y Strategy, guía de nuevos módulos, pruebas y CI |
+
+Además del informe: gestión de **proveedores** vinculados a los egresos (#9).
 
 ---
 
@@ -346,9 +420,11 @@ intercambiables (por alícuota, partes iguales, por consumo), como propone la se
 python manage.py test apps
 ```
 
-50 pruebas (todas deben pasar antes de abrir un Pull Request) que cubren: RUT, inicio de sesión,
-condominio activo, permisos por rol, aislamiento entre condominios, comunicados por edificio,
-reglas de reserva y superposición, incidentes, patrón Observer y redirecciones seguras.
+241 pruebas (todas deben pasar antes de abrir un Pull Request) que cubren: RUT, inicio de sesión,
+perfil, alta de usuarios, condominio activo, permisos por rol, aislamiento entre condominios,
+comunicados por edificio, reglas de reserva y superposición, incidentes, patrón Observer (sitio y
+correo), prorrateo y redondeo exacto (patrón Strategy), emisión, estado de cuenta, pagos totales,
+parciales y en exceso, reporte de morosidad y CSV, proveedores y redirecciones seguras.
 `apps/core/pruebas.py` tiene `crear_escenario()` para escribir pruebas nuevas rápido.
 
 En cada push y Pull Request, GitHub Actions ([`ci.yml`](.github/workflows/ci.yml)) levanta un
@@ -382,6 +458,10 @@ La rama `main` está protegida: solo acepta cambios por Pull Request con **1 apr
 - Contraseñas cifradas por Django; protección CSRF en todos los formularios.
 - Permisos por rol y aislamiento por condominio en todas las vistas, con pruebas que lo verifican.
 - Las redirecciones (`volver`, enlaces de notificaciones) solo aceptan direcciones del propio sitio.
-- Las reservas se confirman con bloqueo de fila (`select_for_update`) para evitar dobles reservas simultáneas.
+- Las reservas, la emisión de gastos comunes y el registro de pagos usan bloqueo de fila
+  (`select_for_update`): dos clics simultáneos no generan reservas dobles, cobros duplicados ni
+  pagos por más de lo adeudado.
+- El CSV del reporte neutraliza los textos que Excel ejecutaría como fórmula (`=`, `+`, `-`, `@`,
+  tabulación y retorno de carro).
 - Antes de publicar en internet: `DJANGO_DEBUG=0`, `DJANGO_SECRET_KEY` secreta, HTTPS y
   `python manage.py check --deploy` (Issue de despliegue).
