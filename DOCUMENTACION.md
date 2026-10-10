@@ -34,8 +34,8 @@ como Issues para repartir.
 | Roles por condominio y condominio activo | Reportes de morosidad, aviso de cobro en PDF |
 | Comunicados generales o por edificio | Proveedores, remuneraciones y Previred |
 | Reservas sin superposición de horarios | Visitas, encomiendas, asambleas |
-| Incidentes con estados | Correo, pasarela de pago, API REST, Docker, despliegue |
-| Notificaciones en el sitio (patrón Observer) | Alta de usuarios desde el sitio |
+| Incidentes con estados | Pasarela de pago, API REST, Docker, despliegue |
+| Notificaciones en el sitio y por correo (patrón Observer) | Alta de usuarios desde el sitio |
 
 ---
 
@@ -291,10 +291,12 @@ Cambios respecto del modelo ER del Informe 2:
 
 ### Observer (implementado) — `apps/notificaciones/observador.py`
 
-Comunicados e incidentes (**sujetos**) avisan cuando ocurre algo; los **observadores** suscritos
-reaccionan. Hoy hay uno, `NotificadorEnSitio` (campana del menú). Agregar el correo es crear
-`NotificadorCorreo` y suscribirlo en `apps/notificaciones/apps.py`, **sin tocar** comunicados ni
-incidentes (Issue de notificaciones por correo).
+Comunicados, incidentes, la emisión de gastos comunes y los pagos (**sujetos**) avisan cuando
+ocurre algo; los **observadores** suscritos reaccionan. Hay dos: `NotificadorEnSitio` (campana del
+menú) y `NotificadorCorreo` (correo electrónico, #14). El correo se agregó creando esa clase y
+suscribiéndola en `apps/notificaciones/apps.py`, **sin tocar** comunicados, incidentes, gastos ni
+pagos. Cada persona decide si recibe correos en **Mi perfil** (`Usuario.recibir_correos`); en
+desarrollo se ven en la consola y los enlaces usan `SITIO_URL` (`.env`).
 
 ```mermaid
 classDiagram
@@ -302,8 +304,10 @@ classDiagram
     class Observador { <<interface>> +actualizar(evento) }
     Sujeto <|-- Comunicado
     Sujeto <|-- Incidente
+    Sujeto <|-- PeriodoGasto
+    Sujeto <|-- Pago
     Observador <|.. NotificadorEnSitio
-    Observador <|.. NotificadorCorreo : backlog
+    Observador <|.. NotificadorCorreo
     Sujeto o-- Observador : observadores
 ```
 
@@ -327,7 +331,7 @@ intercambiables (por alícuota, partes iguales, por consumo), como propone la se
 | RF07 Reportar incidentes | ✅ Base | `apps/incidentes` |
 | RF08 Cambiar estado de incidentes | ✅ Base | `IncidenteDetailView.post()` |
 | RF09 Publicar comunicados | ✅ Base | `apps/comunicados` |
-| RF10 Notificación automática | ✅ Base (en el sitio) + Issue (correo) | `apps/notificaciones` |
+| RF10 Notificación automática | Hecho (en el sitio y por correo, #14) | `apps/notificaciones` |
 | RF11 Reportes de gastos y morosidad | Issue | — |
 | RF12 Datos de acceso del administrador y comité | Hecho (inicio de sesión, roles, alta de usuarios y recuperar contraseña, #11) | `apps/cuentas`, `Membresia` |
 | RNF02 Seguridad por roles | ✅ Base | `apps/core/permisos.py` |

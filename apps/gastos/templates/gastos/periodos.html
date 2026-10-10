@@ -5,9 +5,13 @@
 {% block contenido %}
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
   <h1 class="h3 mb-0"><i class="bi bi-cash-coin"></i> Gastos comunes</h1>
-  {% if es_admin %}
-  <a class="btn btn-primary" href="{% url 'gastos:periodo_nuevo' %}"><i class="bi bi-plus-lg"></i> Abrir período</a>
-  {% endif %}
+  <div class="d-flex flex-wrap gap-2">
+    {# Reporte de morosidad (Issue #5): administrador y comité #}
+    <a class="btn btn-outline-primary" href="{% url 'gastos:reporte' %}"><i class="bi bi-graph-up"></i> Reporte de morosidad</a>
+    {% if es_admin %}
+    <a class="btn btn-primary" href="{% url 'gastos:periodo_nuevo' %}"><i class="bi bi-plus-lg"></i> Abrir período</a>
+    {% endif %}
+  </div>
 </div>
 <p class="text-muted">Cada período es un mes: se registran sus egresos y luego se emiten los gastos comunes de cada unidad.</p>
 

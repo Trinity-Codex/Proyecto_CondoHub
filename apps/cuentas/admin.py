@@ -17,6 +17,7 @@ class UsuarioAdmin(UserAdmin):
     fieldsets = (
         (None, {"fields": ("email", "password")}),
         ("Datos personales", {"fields": ("first_name", "last_name", "rut", "telefono")}),
+        ("Preferencias", {"fields": ("recibir_correos",)}),
         ("Permisos", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
         ("Fechas", {"fields": ("last_login", "date_joined")}),
     )

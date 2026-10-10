@@ -10,7 +10,8 @@ Crea:
     para mostrar que la plataforma es multi-condominio.
   - 1 usuario por rol (todos con la clave CLAVE_DEMO, ver tabla en README.md).
   - Edificios y unidades con alícuotas que suman 1, espacios comunes,
-    comunicados, incidentes, reservas y gastos comunes (mes anterior emitido y mes actual abierto).
+    comunicados, incidentes, reservas y gastos comunes (dos meses emitidos, con pagos totales
+    y parciales y unidades morosas, y el mes actual abierto).
 """
 from datetime import date, time, timedelta
 from decimal import Decimal
@@ -64,9 +65,8 @@ class Command(BaseCommand):
         vista_verde = self._crear_vista_verde(u)
         self._crear_los_aromos(u)
         # Datos de cada módulo nuevo: un método _demo_<modulo>() por app (ver docs/equipo/PLAN_DE_TRABAJO.md).
-        proveedores = self._demo_proveedores(vista_verde)
+        proveedores = self._demo_proveedores(vista_verde)  # primero: los egresos los usan
         self._demo_gastos(vista_verde, u, proveedores)
-        self._demo_pagos(vista_verde, u)
 
         self.stdout.write(self.style.SUCCESS("Datos demo cargados."))
         self.stdout.write(f"Clave de todos los usuarios demo: {CLAVE_DEMO}")
@@ -182,16 +182,42 @@ class Command(BaseCommand):
 
     def _demo_gastos(self, condominio, u, proveedores=None):
         """
-        Gastos comunes (Issues #1 y #2):
-          - mes ANTERIOR: emitido, con un cobro por unidad (sirve para el estado de
-            cuenta y los pagos);
+        Gastos comunes y pagos (Issues #1, #2, #4 y #5):
+          - hace DOS meses: emitido; pagaron todos menos A-102 y B-202 (quedan morosas);
+          - mes ANTERIOR: emitido; la mitad pagó, B-201 hizo un abono PARCIAL y el
+            resto debe (sirve para el estado de cuenta, la cobranza y el reporte);
           - mes ACTUAL: abierto, con egresos, listo para probar la emisión.
         """
         hoy = date.today()
         mes_anterior = hoy.replace(day=1) - timedelta(days=1)  # último día del mes anterior
+        hace_dos_meses = mes_anterior.replace(day=1) - timedelta(days=1)
+
+        antiguo = self._periodo_con_egresos(condominio, u, hace_dos_meses, ajuste=1.02, proveedores=proveedores)
+        emitir_periodo(antiguo)
+        self._registrar_pagos(antiguo, u, hace_dos_meses, excepto=["A-102", "B-202"])
+
         anterior = self._periodo_con_egresos(condominio, u, mes_anterior, ajuste=0.97, proveedores=proveedores)
         emitir_periodo(anterior)
+        self._registrar_pagos(anterior, u, mes_anterior, solo=["A-201", "A-202", "A-301", "B-101", "B-301"])
+        self._registrar_pagos(anterior, u, mes_anterior, solo=["B-201"], monto=100000)  # abono parcial
         return self._periodo_con_egresos(condominio, u, hoy, proveedores=proveedores)
+
+    def _registrar_pagos(self, periodo, u, fecha, solo=None, excepto=(), monto=None):
+        """
+        Registra pagos de los cobros del período con Pago.registrar() (Issue #4), igual
+        que lo haría el administrador: así el cobro pasa a PAGADO solo y el residente
+        recibe su notificación. Unidades por "Torre-número", ej. "A-102".
+        monto=None paga el total; un número registra un abono parcial.
+        """
+        medios = [Pago.Medio.TRANSFERENCIA, Pago.Medio.EFECTIVO, Pago.Medio.CHEQUE]  # para variar
+        cobros = periodo.detalles.select_related("unidad__edificio").order_by("unidad__edificio__nombre", "unidad__numero")
+        for i, cobro in enumerate(cobros):
+            clave = f"{cobro.unidad.edificio.nombre[-1]}-{cobro.unidad.numero}"
+            if (solo is None or clave in solo) and clave not in excepto:
+                Pago.registrar(
+                    cobro, monto=monto or cobro.total, fecha=fecha, medio=medios[i % len(medios)],
+                    registrado_por=u["administrador"],
+                )
 
     def _periodo_con_egresos(self, condominio, u, fecha, ajuste=1.0, proveedores=None):
         """Crea el período del mes de "fecha" con egresos típicos (ajuste: para variar los montos)."""
@@ -216,29 +242,6 @@ class Command(BaseCommand):
                 proveedor=proveedores.get(clave_proveedor),
             )
         return periodo
-
-    def _demo_pagos(self, condominio, u):
-        """
-        Pagos (Issue #4), sobre los cobros del período ya emitido:
-          - B-102 (Diego): paga el cobro completo -> queda PAGADO;
-          - A-101 (Valentina): paga solo $10.000 -> queda con saldo pendiente;
-          - las demás unidades quedan sin pagar (para ver la cobranza).
-        """
-        emitido = PeriodoGasto.objects.get(condominio=condominio, estado=PeriodoGasto.Estado.EMITIDO)
-        cobros = {
-            f"{d.unidad.edificio.nombre[-1]}-{d.unidad.numero}": d
-            for d in emitido.detalles.select_related("unidad__edificio")
-        }
-        hoy = date.today()
-        completo = cobros["B-102"]
-        Pago.registrar(
-            completo, completo.total, fecha=hoy - timedelta(days=5),
-            medio=Pago.Medio.TRANSFERENCIA, observacion="Transferencia del mes", registrado_por=u["administrador"],
-        )
-        Pago.registrar(
-            cobros["A-101"], 10000, fecha=hoy - timedelta(days=2),
-            medio=Pago.Medio.EFECTIVO, observacion="Abono en administración", registrado_por=u["administrador"],
-        )
 
     def _crear_los_aromos(self, u):
         condominio = Condominio.objects.create(nombre="Edificio Los Aromos", direccion="Calle Los Aromos 456", comuna="Ñuñoa")

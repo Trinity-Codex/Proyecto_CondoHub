@@ -1,0 +1,4 @@
+{# Etiqueta de la situación de una unidad en el reporte. Uso: {% include "gastos/_situacion.html" %} (con "fila") #}
+{% if fila.es_morosa %}<span class="badge text-bg-danger">Morosa</span>
+{% elif fila.saldo %}<span class="badge text-bg-warning">Pendiente</span>
+{% else %}<span class="badge text-bg-success">Al día</span>{% endif %}
