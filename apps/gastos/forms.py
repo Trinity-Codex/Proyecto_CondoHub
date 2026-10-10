@@ -2,7 +2,8 @@
 from django import forms
 from django.db.models import Q
 
-from apps.core.formularios import CampoFecha, ModeloFormularioBootstrap
+from apps.condominios.models import Edificio
+from apps.core.formularios import CampoFecha, FormularioBootstrap, ModeloFormularioBootstrap
 from apps.proveedores.models import Proveedor
 
 from .models import MESES, Egreso, PeriodoGasto
@@ -63,3 +64,29 @@ class EgresoForm(ModeloFormularioBootstrap):
             visibles |= Q(pk=self.instance.proveedor_id)
         self.fields["proveedor"].queryset = Proveedor.objects.filter(condominio=condominio).filter(visibles)
         self.fields["proveedor"].empty_label = "Sin proveedor"
+
+
+class FiltroReporteForm(FormularioBootstrap):
+    """
+    Filtros del reporte de morosidad (Issue #5). Se envía por GET, así la URL
+    del reporte se puede guardar o compartir con los filtros puestos.
+
+    Solo ofrece períodos EMITIDOS y edificios del condominio activo: si alguien
+    escribe en la URL el número de un período de otro condominio, el formulario
+    lo rechaza ("opción no válida") y no se muestra nada ajeno.
+    """
+
+    periodo = forms.ModelChoiceField(queryset=PeriodoGasto.objects.none(), label="Período", empty_label=None)
+    edificio = forms.ModelChoiceField(
+        queryset=Edificio.objects.none(), label="Edificio", required=False, empty_label="Todos los edificios"
+    )
+    solo_deuda = forms.BooleanField(label="Solo unidades con deuda", required=False)
+
+    def __init__(self, *args, condominio, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["periodo"].queryset = PeriodoGasto.objects.filter(
+            condominio=condominio, estado=PeriodoGasto.Estado.EMITIDO
+        )
+        self.fields["edificio"].queryset = Edificio.objects.filter(condominio=condominio)
+        # Edificio.__str__ incluye el condominio ("Torre A (Vista Verde)"); aquí basta el nombre.
+        self.fields["edificio"].label_from_instance = lambda edificio: edificio.nombre

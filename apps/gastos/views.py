@@ -11,19 +11,27 @@ EMITIDO (Issue #2) quedan bloqueados: cambiarlos descuadraría lo ya cobrado.
 
 Emitir (solo administrador): EmitirPeriodoView muestra una vista previa con
 lo que pagará cada unidad y, al confirmar, usa servicios.emitir_periodo().
+
+Reporte de morosidad (Issue #5, administrador y comité): ReporteView lo muestra
+y ReporteCsvView lo descarga para Excel. El cálculo está en reportes.py.
 """
+import csv
+
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import Count, Sum
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
 from django.utils import timezone
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
 
 from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, RolRequeridoMixin
 from apps.core.templatetags.condohub import pesos
 
-from .forms import EgresoForm, PeriodoForm
+from .forms import EgresoForm, FiltroReporteForm, PeriodoForm
 from .models import Egreso, PeriodoGasto
+from .reportes import generar_reporte
 from .servicios import calcular_emision, emitir_periodo
 
 
@@ -41,7 +49,12 @@ class PeriodoListView(RolRequeridoMixin, CondominioQuerysetMixin, ListView):
 
     def get_queryset(self):
         # annotate() calcula el total y la cantidad en la misma consulta (no una por período).
-        return super().get_queryset().annotate(total=Sum("egresos__monto"), cantidad=Count("egresos"))
+        # Con annotate() Django ignora el "ordering" del modelo: hay que repetirlo (más reciente primero).
+        return (
+            super().get_queryset()
+            .annotate(total=Sum("egresos__monto"), cantidad=Count("egresos"))
+            .order_by("-anio", "-mes")
+        )
 
 
 class PeriodoFormMixin:
@@ -247,3 +260,90 @@ class EgresoDeleteView(RolRequeridoMixin, EgresoDelPeriodoMixin, PeriodoAbiertoM
     def form_valid(self, form):
         messages.success(self.request, "Egreso eliminado.")
         return super().form_valid(form)
+
+
+# --------------------------------------------------------------------------
+# Reporte de gastos comunes y morosidad (Issue #5, RF11)
+# --------------------------------------------------------------------------
+class ReporteMixin(RolRequeridoMixin):
+    """
+    Lo que comparten la página del reporte y su descarga en CSV: leer los
+    filtros de la URL (?periodo=..&edificio=..&solo_deuda=on) y generar el reporte.
+    """
+
+    roles_permitidos = [ADMINISTRADOR, COMITE]
+
+    def preparar_reporte(self):
+        """Deja en self: form, reporte (o None), filas a mostrar y la consulta para el enlace CSV."""
+        condominio = self.request.condominio
+        datos = self.request.GET.copy()  # copy(): request.GET no se puede modificar
+        # Sin período elegido se muestra el último emitido (ordering del modelo: más reciente primero).
+        if not datos.get("periodo"):
+            ultimo = PeriodoGasto.objects.filter(condominio=condominio, estado=PeriodoGasto.Estado.EMITIDO).first()
+            if ultimo:
+                datos["periodo"] = ultimo.pk
+        self.form = FiltroReporteForm(datos, condominio=condominio)
+        self.reporte, self.filas = None, []
+        if datos.get("periodo") and self.form.is_valid():
+            filtros = self.form.cleaned_data
+            self.reporte = generar_reporte(filtros["periodo"], filtros["edificio"])
+            # "Solo con deuda" filtra la TABLA; los totales siguen siendo de todas las unidades.
+            self.filas = self.reporte.unidades_con_deuda if filtros["solo_deuda"] else self.reporte.filas
+        self.consulta = datos.urlencode()
+
+
+class ReporteView(ReporteMixin, TemplateView):
+    template_name = "gastos/reporte.html"
+
+    def get_context_data(self, **kwargs):
+        self.preparar_reporte()
+        contexto = super().get_context_data(**kwargs)
+        contexto.update(form=self.form, reporte=self.reporte, filas=self.filas, consulta=self.consulta)
+        return contexto
+
+
+def celda_segura(valor):
+    """
+    Evita la "inyección de fórmulas" en Excel: un texto que empieza con = + - @
+    se ejecutaría como fórmula al abrir el archivo. Se le antepone un apóstrofo.
+    Los números se dejan tal cual para que Excel pueda sumarlos.
+    """
+    if isinstance(valor, str) and valor[:1] in ("=", "+", "-", "@"):
+        return "'" + valor
+    return valor
+
+
+class ReporteCsvView(ReporteMixin, View):
+    """Descarga el reporte en CSV para Excel: separador ";" y UTF-8 con BOM (así Excel lee bien las tildes)."""
+
+    def get(self, request, *args, **kwargs):
+        self.preparar_reporte()
+        if self.reporte is None:
+            messages.error(request, "Elige un período emitido para descargar el reporte.")
+            return redirect(f"{reverse('gastos:reporte')}?{self.consulta}")
+
+        periodo = self.reporte.periodo
+        respuesta = HttpResponse(content_type="text/csv; charset=utf-8")
+        respuesta["Content-Disposition"] = f'attachment; filename="morosidad-{periodo.anio}-{periodo.mes:02d}.csv"'
+        respuesta.write("\ufeff")  # BOM: le dice a Excel que el archivo es UTF-8
+        escritor = csv.writer(respuesta, delimiter=";")  # Excel en español usa ";" (la coma es el decimal)
+        escritor.writerow(
+            ["Edificio", "Unidad", "Período", "Total cobrado", "Pagado", "Saldo del período",
+             "Deuda anterior", "Deuda total", "Situación"]
+        )
+        for fila in self.filas:
+            escritor.writerow(
+                [celda_segura(v) for v in (
+                    fila.unidad.edificio.nombre, fila.unidad.numero, str(periodo), fila.total, fila.pagado,
+                    fila.saldo, fila.deuda_anterior, fila.deuda_total, fila.situacion,
+                )]
+            )
+        r = self.reporte
+        # Si se filtró "solo con deuda", la fila Total sigue siendo de todas las unidades: se aclara.
+        etiqueta = "Total" if len(self.filas) == len(r.filas) else "Total (todas las unidades)"
+        porcentaje = str(r.porcentaje_recaudacion).replace(".", ",")  # coma decimal, como en Excel en español
+        escritor.writerow(
+            [etiqueta, "", str(periodo), r.total_emitido, r.total_recaudado, r.saldo_periodo, r.deuda_anterior,
+             r.deuda_total, f"{porcentaje} % recaudado"]
+        )
+        return respuesta

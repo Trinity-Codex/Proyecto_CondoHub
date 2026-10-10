@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% load condohub %}
+{% block titulo %}Reporte de morosidad{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'gastos:periodos' %}">Gastos comunes</a></li>
+  <li class="breadcrumb-item active" aria-current="page">Reporte de morosidad</li>
+</ol></nav>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h3 mb-0"><i class="bi bi-graph-up"></i> Reporte de gastos comunes y morosidad</h1>
+  {% if reporte %}
+  <a class="btn btn-outline-success" href="{% url 'gastos:reporte_csv' %}?{{ consulta }}"><i class="bi bi-filetype-csv"></i> Descargar CSV (Excel)</a>
+  {% endif %}
+</div>
+
+{% if not form.fields.periodo.queryset.exists %}
+{# Aún no hay nada que reportar: el reporte trabaja sobre períodos emitidos. #}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle"></i> Todavía no hay períodos emitidos. El reporte aparece cuando se emiten los gastos comunes de un mes.
+</div>
+{% else %}
+
+{# ---- Filtros (GET: la URL guarda los filtros y se puede compartir) ---- #}
+<form method="get" class="card card-body mb-4">
+  <div class="row g-3 align-items-end">
+    <div class="col-sm-6 col-lg-4">
+      <label class="form-label" for="{{ form.periodo.id_for_label }}">{{ form.periodo.label }}</label>
+      {{ form.periodo }}
+      {% for error in form.periodo.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="col-sm-6 col-lg-4">
+      <label class="form-label" for="{{ form.edificio.id_for_label }}">{{ form.edificio.label }}</label>
+      {{ form.edificio }}
+      {% for error in form.edificio.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="col-sm-6 col-lg-2">
+      <div class="form-check">
+        {{ form.solo_deuda }}
+        <label class="form-check-label" for="{{ form.solo_deuda.id_for_label }}">{{ form.solo_deuda.label }}</label>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-2 d-grid">
+      <button class="btn btn-primary"><i class="bi bi-funnel"></i> Filtrar</button>
+    </div>
+  </div>
+</form>
+
+{% if reporte %}
+{# ---- Resumen del período ---- #}
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="small text-muted">Total emitido</div>
+      <div class="fs-4 fw-semibold">{{ reporte.total_emitido|pesos }}</div>
+      <div class="small text-muted">{{ reporte.filas|length }} unidad{{ reporte.filas|length|pluralize:"es" }}</div>
+    </div></div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="small text-muted">Total recaudado</div>
+      <div class="fs-4 fw-semibold">{{ reporte.total_recaudado|pesos }}</div>
+      {# stringformat:'s' deja el punto decimal: con el idioma es-cl, "87,5" rompería el ancho en CSS #}
+      <div class="progress mt-2" role="progressbar" aria-label="Recaudación"
+           aria-valuenow="{{ reporte.porcentaje_recaudacion|stringformat:'s' }}" aria-valuemin="0" aria-valuemax="100">
+        <div class="progress-bar bg-success" style="width: {{ reporte.porcentaje_recaudacion|stringformat:'s' }}%"></div>
+      </div>
+      <div class="small text-muted mt-1">{{ reporte.porcentaje_recaudacion }} % de recaudación</div>
+    </div></div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="small text-muted">Por cobrar del período</div>
+      <div class="fs-4 fw-semibold">{{ reporte.saldo_periodo|pesos }}</div>
+      <div class="small text-muted">{{ reporte.unidades_con_deuda|length }} unidad{{ reporte.unidades_con_deuda|length|pluralize:"es" }} con deuda</div>
+    </div></div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100 {% if reporte.unidades_morosas %}border-danger{% endif %}"><div class="card-body">
+      <div class="small text-muted">Deuda de períodos anteriores</div>
+      <div class="fs-4 fw-semibold {% if reporte.deuda_anterior %}text-danger{% endif %}">{{ reporte.deuda_anterior|pesos }}</div>
+      <div class="small text-muted">{{ reporte.unidades_morosas|length }} unidad{{ reporte.unidades_morosas|length|pluralize:"es" }} morosa{{ reporte.unidades_morosas|length|pluralize }}</div>
+    </div></div>
+  </div>
+</div>
+
+{# ---- Detalle por unidad ---- #}
+{% comment %}
+  En el celular (RNF03) se ocultan Total, Pagado, Deuda anterior y la columna Situación
+  (d-none d-md-table-cell): la etiqueta de situación pasa bajo la unidad y quedan Saldo y
+  Deuda total, que es lo que se necesita para cobrar.
+{% endcomment %}
+<div class="card">
+  <div class="card-header d-flex flex-wrap justify-content-between gap-2">
+    <span><i class="bi bi-house-door"></i> {{ reporte.periodo }}{% if reporte.edificio %} · {{ reporte.edificio.nombre }}{% endif %}</span>
+    <span class="small text-muted">Morosa = debe gastos de meses anteriores</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead><tr>
+        <th>Unidad</th>
+        <th class="text-end d-none d-md-table-cell">Total</th>
+        <th class="text-end d-none d-md-table-cell">Pagado</th>
+        <th class="text-end">Saldo</th>
+        <th class="text-end d-none d-md-table-cell">Deuda anterior</th>
+        <th class="text-end">Deuda total</th>
+        <th class="d-none d-md-table-cell">Situación</th>
+      </tr></thead>
+      <tbody>
+        {% for fila in filas %}
+        <tr {% if fila.es_morosa %}class="table-danger"{% endif %}>
+          <td>{{ fila.unidad }}<div class="d-md-none">{% include "gastos/_situacion.html" %}</div></td>
+          <td class="text-end d-none d-md-table-cell">{{ fila.total|pesos }}</td>
+          <td class="text-end d-none d-md-table-cell">{{ fila.pagado|pesos }}</td>
+          <td class="text-end">{{ fila.saldo|pesos }}</td>
+          <td class="text-end d-none d-md-table-cell">{{ fila.deuda_anterior|pesos }}</td>
+          <td class="text-end fw-semibold">{{ fila.deuda_total|pesos }}</td>
+          <td class="d-none d-md-table-cell">{% include "gastos/_situacion.html" %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No hay unidades con deuda en este período. ¡Todo al día!</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if filas %}
+      <tfoot class="fw-semibold"><tr>
+        <td>Total{% if filas|length != reporte.filas|length %} (todas las unidades){% endif %}</td>
+        <td class="text-end d-none d-md-table-cell">{{ reporte.total_emitido|pesos }}</td>
+        <td class="text-end d-none d-md-table-cell">{{ reporte.total_recaudado|pesos }}</td>
+        <td class="text-end">{{ reporte.saldo_periodo|pesos }}</td>
+        <td class="text-end d-none d-md-table-cell">{{ reporte.deuda_anterior|pesos }}</td>
+        <td class="text-end">{{ reporte.deuda_total|pesos }}</td>
+        <td class="d-none d-md-table-cell"></td>
+      </tr></tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}
