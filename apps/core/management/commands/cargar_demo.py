@@ -26,6 +26,7 @@ from apps.gastos.models import Egreso, PeriodoGasto
 from apps.gastos.servicios import emitir_periodo
 from apps.incidentes.models import Incidente
 from apps.pagos.models import Pago
+from apps.proveedores.models import Proveedor
 from apps.reservas.models import EspacioComun, Reserva
 
 CLAVE_DEMO = "condohub2026"
@@ -64,7 +65,8 @@ class Command(BaseCommand):
         vista_verde = self._crear_vista_verde(u)
         self._crear_los_aromos(u)
         # Datos de cada módulo nuevo: un método _demo_<modulo>() por app (ver docs/equipo/PLAN_DE_TRABAJO.md).
-        self._demo_gastos(vista_verde, u)
+        proveedores = self._demo_proveedores(vista_verde)  # primero: los egresos los usan
+        self._demo_gastos(vista_verde, u, proveedores)
 
         self.stdout.write(self.style.SUCCESS("Datos demo cargados."))
         self.stdout.write(f"Clave de todos los usuarios demo: {CLAVE_DEMO}")
@@ -153,7 +155,32 @@ class Command(BaseCommand):
         ).confirmar()
         return condominio
 
-    def _demo_gastos(self, condominio, u):
+    def _demo_proveedores(self, condominio):
+        """
+        Proveedores (Issue #9): empresas que prestan servicios al condominio.
+        Devuelve un diccionario {clave: Proveedor} para vincularlos a los egresos.
+        Incluye uno inactivo, para mostrar que se desactiva en vez de borrar.
+        """
+        datos = {
+            # clave: (RUT válido, razón social, rubro, contacto, teléfono, correo)
+            "ascensores": ("76.123.456-0", "Ascensores Sur SpA", "Ascensores", "Marcela Tapia", "+56 2 2345 6789", "contacto@ascensoressur.cl"),
+            "aseo": ("77.234.567-4", "Aseo Limpio Ltda.", "Aseo", "Roberto Díaz", "+56 9 8765 4321", "ventas@aseolimpio.cl"),
+            "seguridad": ("78.345.678-8", "Seguridad Andes S.A.", "Seguridad", "Patricia Vera", "+56 2 2987 6543", "camaras@seguridadandes.cl"),
+        }
+        proveedores = {}
+        for clave, (rut, razon, rubro, contacto, telefono, correo) in datos.items():
+            proveedores[clave] = Proveedor.objects.create(
+                condominio=condominio, rut=rut, razon_social=razon, rubro=rubro,
+                contacto=contacto, telefono=telefono, correo=correo,
+            )
+        # Inactivo: ya no trabaja con el condominio, pero se conserva su historial.
+        Proveedor.objects.create(
+            condominio=condominio, rut="79.456.789-1", razon_social="Jardines del Valle", rubro="Jardinería",
+            contacto="Hugo Reyes", telefono="+56 9 5555 1234", activo=False,
+        )
+        return proveedores
+
+    def _demo_gastos(self, condominio, u, proveedores=None):
         """
         Gastos comunes y pagos (Issues #1, #2, #4 y #5):
           - hace DOS meses: emitido; pagaron todos menos A-102 y B-202 (quedan morosas);
@@ -165,15 +192,15 @@ class Command(BaseCommand):
         mes_anterior = hoy.replace(day=1) - timedelta(days=1)  # último día del mes anterior
         hace_dos_meses = mes_anterior.replace(day=1) - timedelta(days=1)
 
-        antiguo = self._periodo_con_egresos(condominio, u, hace_dos_meses, ajuste=1.02)
+        antiguo = self._periodo_con_egresos(condominio, u, hace_dos_meses, ajuste=1.02, proveedores=proveedores)
         emitir_periodo(antiguo)
         self._registrar_pagos(antiguo, u, hace_dos_meses, excepto=["A-102", "B-202"])
 
-        anterior = self._periodo_con_egresos(condominio, u, mes_anterior, ajuste=0.97)
+        anterior = self._periodo_con_egresos(condominio, u, mes_anterior, ajuste=0.97, proveedores=proveedores)
         emitir_periodo(anterior)
         self._registrar_pagos(anterior, u, mes_anterior, solo=["A-201", "A-202", "A-301", "B-101", "B-301"])
         self._registrar_pagos(anterior, u, mes_anterior, solo=["B-201"], monto=100000)  # abono parcial
-        return self._periodo_con_egresos(condominio, u, hoy)
+        return self._periodo_con_egresos(condominio, u, hoy, proveedores=proveedores)
 
     def _registrar_pagos(self, periodo, u, fecha, solo=None, excepto=(), monto=None):
         """
@@ -192,24 +219,27 @@ class Command(BaseCommand):
                     registrado_por=u["administrador"],
                 )
 
-    def _periodo_con_egresos(self, condominio, u, fecha, ajuste=1.0):
+    def _periodo_con_egresos(self, condominio, u, fecha, ajuste=1.0, proveedores=None):
         """Crea el período del mes de "fecha" con egresos típicos (ajuste: para variar los montos)."""
+        proveedores = proveedores or {}
         periodo = PeriodoGasto.objects.create(condominio=condominio, anio=fecha.year, mes=fecha.month)
         C = Egreso.Categoria
+        # El 4.º dato es el proveedor (clave del diccionario) o None si no corresponde (sueldos, cuentas básicas).
         egresos = [
-            (C.REMUNERACIONES, "Sueldo conserje (jornada completa)", 650000),
-            (C.REMUNERACIONES, "Sueldo personal de aseo", 520000),
-            (C.CONSUMOS, "Electricidad áreas comunes", 185430),
-            (C.CONSUMOS, "Agua áreas comunes y riego", 96780),
-            (C.MANTENCION, "Mantención mensual de ascensores", 240000),
-            (C.ASEO, "Artículos de aseo", 48990),
-            (C.SEGURIDAD, "Monitoreo de cámaras", 75000),
-            (C.ADMINISTRACION, "Honorarios de administración", 350000),
+            (C.REMUNERACIONES, "Sueldo conserje (jornada completa)", 650000, None),
+            (C.REMUNERACIONES, "Sueldo personal de aseo", 520000, None),
+            (C.CONSUMOS, "Electricidad áreas comunes", 185430, None),
+            (C.CONSUMOS, "Agua áreas comunes y riego", 96780, None),
+            (C.MANTENCION, "Mantención mensual de ascensores", 240000, "ascensores"),
+            (C.ASEO, "Artículos de aseo", 48990, "aseo"),
+            (C.SEGURIDAD, "Monitoreo de cámaras", 75000, "seguridad"),
+            (C.ADMINISTRACION, "Honorarios de administración", 350000, None),
         ]
-        for dia, (categoria, descripcion, monto) in enumerate(egresos, start=1):
+        for dia, (categoria, descripcion, monto, clave_proveedor) in enumerate(egresos, start=1):
             Egreso.objects.create(
                 periodo=periodo, categoria=categoria, descripcion=descripcion, monto=round(monto * ajuste),
                 fecha=fecha.replace(day=min(dia, fecha.day)), creado_por=u["administrador"],
+                proveedor=proveedores.get(clave_proveedor),
             )
         return periodo
 
