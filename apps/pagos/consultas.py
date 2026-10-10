@@ -11,13 +11,16 @@ def cobros_del_residente(usuario, condominio):
     return (
         DetalleGastoComun.objects.filter(
             periodo__condominio=condominio,
-            periodo__estado=PeriodoGasto.Estado.EMITIDO,
+            periodo__estado=PeriodoGasto.Estado.EMITIDO,  # lo no emitido aún no se cobra
+            # Las dos condiciones del residente van en el MISMO filter(): así deben
+            # cumplirse en la misma fila de Residente (este usuario Y activo). En dos
+            # filter() separados podría coincidir un residente activo cualquiera de la unidad.
             unidad__residentes__usuario=usuario,
             unidad__residentes__activo=True,
         )
         .select_related("periodo", "unidad__edificio")
         .prefetch_related("pagos")  # una consulta para todos los pagos (evita una por cobro)
-        .distinct()
+        .distinct()  # si la unidad tiene varios residentes, el JOIN repetiría el cobro
         .order_by("-periodo__anio", "-periodo__mes", "unidad__numero")
     )
 

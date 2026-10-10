@@ -255,5 +255,7 @@ class CsvTest(EscenarioReporte):
 class CeldaSeguraTest(SimpleTestCase):
     def test_los_textos_que_parecen_formulas_se_neutralizan(self):
         self.assertEqual(celda_segura("=HYPERLINK(\"x\")"), "'=HYPERLINK(\"x\")")
+        self.assertEqual(celda_segura("\t=1+1"), "'\t=1+1")  # tabulación (OWASP)
+        self.assertEqual(celda_segura("\r=1+1"), "'\r=1+1")  # retorno de carro (OWASP)
         self.assertEqual(celda_segura("Torre A"), "Torre A")
         self.assertEqual(celda_segura(-5), -5)  # los números no se tocan
