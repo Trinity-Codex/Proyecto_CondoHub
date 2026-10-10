@@ -20,10 +20,18 @@ class NotificacionesConfig(AppConfig):
         from apps.incidentes.models import Incidente
         from apps.pagos.models import Pago
 
-        from .observador import NotificadorEnSitio
+        from .observador import NotificadorCorreo, NotificadorEnSitio
 
         notificador = NotificadorEnSitio()
         Comunicado.suscribir(notificador)
         Incidente.suscribir(notificador)
         PeriodoGasto.suscribir(notificador)  # gastos comunes emitidos (Issue #2)
         Pago.suscribir(notificador)  # pago registrado (Issue #4)
+
+        # Canal nuevo: correo electrónico (Issue #14). Solo se agregan estas
+        # líneas; comunicados, incidentes, gastos y pagos no se modifican.
+        correo = NotificadorCorreo()
+        Comunicado.suscribir(correo)
+        Incidente.suscribir(correo)
+        PeriodoGasto.suscribir(correo)
+        Pago.suscribir(correo)

@@ -154,7 +154,8 @@ class FormularioPerfil(ModeloFormularioBootstrap):
 
     class Meta:
         model = Usuario
-        fields = ["first_name", "last_name", "rut", "telefono"]
+        # recibir_correos: avisos por correo (Issue #14).
+        fields = ["first_name", "last_name", "rut", "telefono", "recibir_correos"]
         labels = {"first_name": "Nombre", "last_name": "Apellido"}
         help_texts = {"rut": "Ejemplo: 12.345.678-5", "telefono": "Ejemplo: +56 9 1234 5678"}
 

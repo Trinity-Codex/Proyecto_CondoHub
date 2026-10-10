@@ -1,0 +1,13 @@
+{% autoescape off %}Hola {{ usuario.first_name|default:usuario.email }}:
+
+{{ evento.titulo }}{% if evento.condominio %} · {{ evento.condominio.nombre }}{% endif %}
+
+{{ evento.mensaje }}
+
+Ver en CondoHub:
+{{ enlace }}
+
+--
+Recibes este aviso porque tienes activados los avisos por correo.
+Puedes desactivarlos en Mi perfil: {{ perfil }}
+{% endautoescape %}
