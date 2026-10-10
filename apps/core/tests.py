@@ -64,3 +64,40 @@ class ResidenteTest(TestCase):
         for usuario, esperado in [(e.administrador, 200), (e.comite, 200), (e.residente, 403), (e.conserje, 403)]:
             self.client.force_login(usuario)
             self.assertEqual(self.client.get(reverse("condominios:unidades")).status_code, esperado, usuario)
+
+
+class MenuAdministracionTest(TestCase):
+    """
+    Menú principal: los enlaces de gestión van en el desplegable "Administración"
+    (así la barra cabe en una línea) y cada página marca solo su propio enlace.
+    """
+
+    def setUp(self):
+        self.e = crear_escenario()
+
+    def menu(self, usuario, url_name="core:inicio"):
+        self.client.force_login(usuario)
+        return self.client.get(reverse(url_name))
+
+    def test_el_administrador_ve_todo_dentro_de_administracion(self):
+        respuesta = self.menu(self.e.administrador)
+        self.assertContains(respuesta, "Administración")
+        for ruta in ("condominios:unidades", "cuentas:usuarios", "gastos:periodos", "pagos:cobranza",
+                     "gastos:reporte", "proveedores:lista"):
+            self.assertContains(respuesta, f'class="dropdown-item " href="{reverse(ruta)}"')
+
+    def test_el_comite_no_ve_usuarios(self):
+        respuesta = self.menu(self.e.comite)
+        self.assertContains(respuesta, "Administración")
+        self.assertNotContains(respuesta, reverse("cuentas:usuarios"))
+
+    def test_residentes_y_conserje_no_ven_administracion(self):
+        for usuario in (self.e.residente, self.e.conserje):
+            self.assertNotContains(self.menu(usuario), "Administración")
+
+    def test_cobranza_no_marca_mi_cuenta(self):
+        # El comité de prueba también es residente: ve "Mi cuenta" y "Administración".
+        Membresia.objects.create(usuario=self.e.residente, condominio=self.e.condominio, rol=Membresia.Rol.COMITE)
+        respuesta = self.menu(self.e.residente, "pagos:cobranza")
+        self.assertContains(respuesta, f'class="nav-link " href="{reverse("pagos:estado_cuenta")}"')
+        self.assertContains(respuesta, f'class="dropdown-item active" href="{reverse("pagos:cobranza")}"')

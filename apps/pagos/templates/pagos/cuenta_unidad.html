@@ -21,16 +21,21 @@
   </div>
 </div>
 
+{% comment %}
+  En el celular (RNF03) se ocultan Total y Pagado (d-none d-md-table-cell) y el botón
+  queda solo con el ícono: así Saldo, Estado y "Registrar pago" siempre se ven.
+  Cada pago va en una fila propia que ocupa todo el ancho, con su monto al final.
+{% endcomment %}
 <div class="card">
 <div class="table-responsive">
   <table class="table align-middle mb-0">
-    <thead><tr><th>Período</th><th class="text-end">Total</th><th class="text-end">Pagado</th><th class="text-end">Saldo</th><th>Estado</th><th></th></tr></thead>
+    <thead><tr><th>Período</th><th class="text-end d-none d-md-table-cell">Total</th><th class="text-end d-none d-md-table-cell">Pagado</th><th class="text-end">Saldo</th><th>Estado</th><th></th></tr></thead>
     <tbody>
       {% for c in cobros %}
       <tr>
         <td>{{ c.periodo }}</td>
-        <td class="text-end text-nowrap">{{ c.total|pesos }}</td>
-        <td class="text-end text-nowrap">{{ c.pagado|pesos }}</td>
+        <td class="text-end text-nowrap d-none d-md-table-cell">{{ c.total|pesos }}</td>
+        <td class="text-end text-nowrap d-none d-md-table-cell">{{ c.pagado|pesos }}</td>
         <td class="text-end text-nowrap fw-semibold">{{ c.saldo|pesos }}</td>
         <td>
           {% if c.estado == "PAGADO" %}<span class="badge text-bg-success">Pagado</span>
@@ -40,15 +45,18 @@
         <td class="text-end">
           {# Solo el administrador registra pagos; el comité solo consulta. #}
           {% if es_admin and c.saldo %}
-          <a class="btn btn-sm btn-primary" href="{% url 'pagos:registrar_pago' c.pk %}"><i class="bi bi-plus-circle"></i> Registrar pago</a>
+          <a class="btn btn-sm btn-primary text-nowrap" href="{% url 'pagos:registrar_pago' c.pk %}" aria-label="Registrar pago de {{ c.periodo }}"><i class="bi bi-plus-circle"></i><span class="d-none d-md-inline"> Registrar pago</span></a>
           {% endif %}
         </td>
       </tr>
       {% for p in c.pagos.all %}
       <tr class="table-light small">
-        <td class="ps-4 text-muted" colspan="2"><i class="bi bi-arrow-return-right"></i> {{ p.fecha|date:"d-m-Y" }} · {{ p.get_medio_display }}{% if p.observacion %} · {{ p.observacion }}{% endif %}</td>
-        <td class="text-end text-nowrap">{{ p.monto|pesos }}</td>
-        <td colspan="3"></td>
+        <td class="ps-4 text-muted" colspan="6">
+          <div class="d-flex justify-content-between gap-3">
+            <span><i class="bi bi-arrow-return-right"></i> {{ p.fecha|date:"d-m-Y" }} · {{ p.get_medio_display }}{% if p.observacion %} · {{ p.observacion }}{% endif %}</span>
+            <span class="text-nowrap text-body">Pago {{ p.monto|pesos }}</span>
+          </div>
+        </td>
       </tr>
       {% endfor %}
       {% empty %}

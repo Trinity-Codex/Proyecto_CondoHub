@@ -305,10 +305,11 @@ class ReporteView(ReporteMixin, TemplateView):
 def celda_segura(valor):
     """
     Evita la "inyección de fórmulas" en Excel: un texto que empieza con = + - @
-    se ejecutaría como fórmula al abrir el archivo. Se le antepone un apóstrofo.
+    (o con tabulación o retorno de carro, según OWASP) se ejecutaría como
+    fórmula al abrir el archivo. Se le antepone un apóstrofo.
     Los números se dejan tal cual para que Excel pueda sumarlos.
     """
-    if isinstance(valor, str) and valor[:1] in ("=", "+", "-", "@"):
+    if isinstance(valor, str) and valor[:1] in ("=", "+", "-", "@", "\t", "\r"):
         return "'" + valor
     return valor
 
