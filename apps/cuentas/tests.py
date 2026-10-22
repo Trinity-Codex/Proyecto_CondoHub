@@ -10,13 +10,15 @@ from apps.condominios.models import Membresia
 from apps.core.pruebas import CLAVE, crear_escenario, crear_usuario
 
 from .models import Usuario
-from .validadores import calcular_dv, validar_rut
+from .validadores import calcular_dv, normalizar_rut, validar_rut
 
 
 class RutTest(SimpleTestCase):
     def test_ruts_validos(self):
         for rut in ["12.345.678-5", "12345678-5", "11111111-1", "7.654.321-6", "15.975.346-8"]:
             validar_rut(rut)  # no debe lanzar error
+            numero, dv = normalizar_rut(rut).split("-")
+            self.assertEqual(calcular_dv(numero), dv, msg=rut)
 
     def test_digito_verificador_k(self):
         self.assertEqual(calcular_dv("10000013"), "K")

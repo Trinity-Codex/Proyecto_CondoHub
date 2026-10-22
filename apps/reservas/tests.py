@@ -40,10 +40,13 @@ class ReglasReservaTest(TestCase):
 
     def test_otro_dia_no_se_topa(self):
         self.reservar(time(10), time(12), fecha=MANANA + timedelta(days=1))
+        self.assertEqual(Reserva.objects.count(), 2)
 
     def test_cancelada_libera_el_horario(self):
         Reserva.objects.get().cancelar()
         self.reservar(time(10), time(12))
+        self.assertEqual(Reserva.objects.count(), 2)
+        self.assertEqual(Reserva.objects.filter(estado=Reserva.Estado.CONFIRMADA).count(), 1)
 
     def test_fuera_del_horario_del_espacio(self):
         with self.assertRaises(ValidationError):

@@ -45,7 +45,7 @@
   <div class="card-header">Cobro por unidad ({{ emision.filas|length }} unidades)</div>
   <div class="table-responsive">
     <table class="table table-sm align-middle mb-0">
-      <thead><tr><th>Unidad</th><th class="text-end">Alícuota</th><th class="text-end">Gastos</th><th class="text-end">Fondo de reserva</th><th class="text-end">Total</th></tr></thead>
+      <thead><tr><th scope="col">Unidad</th><th scope="col" class="text-end">Alícuota</th><th scope="col" class="text-end">Gastos</th><th scope="col" class="text-end">Fondo de reserva</th><th scope="col" class="text-end">Total</th></tr></thead>
       <tbody>
         {% for fila in emision.filas %}
         <tr>
@@ -62,7 +62,7 @@
   </div>
 </div>
 
-<form method="post" class="d-flex gap-2" onsubmit="return confirm('¿Emitir los gastos comunes de {{ periodo }}? El período quedará cerrado.');">
+<form method="post" class="d-flex gap-2" onsubmit="return confirm('¿Emitir los gastos comunes de {{ periodo|escapejs }}? El período quedará cerrado.');">
   {% csrf_token %}
   <button class="btn btn-primary" type="submit"><i class="bi bi-send-check"></i> Emitir gastos comunes</button>
   <a class="btn btn-outline-secondary" href="{{ periodo.get_absolute_url }}">Cancelar</a>
