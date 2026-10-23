@@ -101,3 +101,15 @@ class MenuAdministracionTest(TestCase):
         respuesta = self.menu(self.e.residente, "pagos:cobranza")
         self.assertContains(respuesta, f'class="nav-link " href="{reverse("pagos:estado_cuenta")}"')
         self.assertContains(respuesta, f'class="dropdown-item active" href="{reverse("pagos:cobranza")}"')
+
+
+class PlantillaBaseTest(TestCase):
+    """base.html: los comentarios de la plantilla no deben verse en la página."""
+
+    def test_los_comentarios_de_base_no_aparecen_en_la_pagina(self):
+        # En Django {# ... #} sirve solo en una línea; los de varias líneas van
+        # en {% comment %}. Si no, se muestran como texto arriba de cada página.
+        respuesta = self.client.get(reverse("cuentas:iniciar_sesion"))
+        self.assertNotContains(respuesta, "{#")
+        self.assertNotContains(respuesta, "tipografía del logotipo")
+        self.assertContains(respuesta, 'integrity="sha384-', count=3)
