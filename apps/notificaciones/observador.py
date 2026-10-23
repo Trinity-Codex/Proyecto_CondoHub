@@ -152,4 +152,7 @@ class NotificadorCorreo(Observador):
         except Exception:
             # Si el servidor de correo falla, lo demás sigue funcionando: el
             # comunicado ya se publicó y la campana ya avisó. Solo queda en el log.
-            logger.exception("No se pudieron enviar los avisos por correo de «%s».", evento.titulo)
+            # Sin saltos de línea: si algún día el título trae texto de un usuario,
+            # no podrá inventar líneas falsas en el log.
+            titulo = evento.titulo.replace("\r", " ").replace("\n", " ")
+            logger.exception("No se pudieron enviar los avisos por correo de «%s».", titulo)

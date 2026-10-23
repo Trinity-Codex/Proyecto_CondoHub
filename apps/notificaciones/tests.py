@@ -199,6 +199,13 @@ class NotificadorCorreoTest(TestCase):
         self.assertTrue(Comunicado.objects.filter(pk=comunicado.pk).exists())
         self.assertTrue(Notificacion.objects.filter(usuario=self.e.residente).exists())  # la campana sí avisó
 
+    def test_el_log_no_acepta_saltos_de_linea_del_titulo(self):
+        evento = Evento(condominio=self.e.condominio, titulo="Aviso\nINFO falso", mensaje="m", destinatarios=[self.e.residente])
+        with mock.patch("apps.notificaciones.observador.get_connection", side_effect=ConnectionError("SMTP caído")):
+            with self.assertLogs("apps.notificaciones.observador", level="ERROR") as registro:
+                NotificadorCorreo().enviar(evento, [self.e.residente])
+        self.assertIn("«Aviso INFO falso»", registro.records[0].getMessage())
+
     def test_un_correo_por_persona_aunque_venga_repetida(self):
         evento = Evento(condominio=self.e.condominio, titulo="t", mensaje="m", destinatarios=[self.e.residente] * 3)
         with self.captureOnCommitCallbacks(execute=True):

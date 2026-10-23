@@ -10,7 +10,7 @@
 <div class="card">
   <div class="table-responsive">
     <table class="table align-middle mb-0">
-      <thead><tr><th>Espacio</th><th>Fecha</th><th>Horario</th><th>Unidad</th><th>Estado</th><th></th></tr></thead>
+      <thead><tr><th scope="col">Espacio</th><th scope="col">Fecha</th><th scope="col">Horario</th><th scope="col">Unidad</th><th scope="col">Estado</th><th scope="col"><span class="visually-hidden">Acciones</span></th></tr></thead>
       <tbody>
         {% for r in reservas %}
         <tr {% if r.fecha < hoy or r.estado == "CANCELADA" %}class="text-muted"{% endif %}>

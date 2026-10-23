@@ -34,7 +34,7 @@
   </div>
   <div class="table-responsive">
     <table class="table table-sm align-middle mb-0">
-      <thead><tr><th>Unidad</th><th class="text-end">Gastos</th><th class="text-end">Fondo de reserva</th><th class="text-end">Total</th><th>Estado</th></tr></thead>
+      <thead><tr><th scope="col">Unidad</th><th scope="col" class="text-end">Gastos</th><th scope="col" class="text-end">Fondo de reserva</th><th scope="col" class="text-end">Total</th><th scope="col">Estado</th></tr></thead>
       <tbody>
         {% for cobro in cobros %}
         <tr>
@@ -65,7 +65,7 @@
       </div>
       <div class="table-responsive">
         <table class="table align-middle mb-0">
-          <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th class="text-end">Monto</th>{% if es_admin and periodo.esta_abierto %}<th></th>{% endif %}</tr></thead>
+          <thead><tr><th scope="col">Fecha</th><th scope="col">Descripción</th><th scope="col">Categoría</th><th scope="col" class="text-end">Monto</th>{% if es_admin and periodo.esta_abierto %}<th scope="col"><span class="visually-hidden">Acciones</span></th>{% endif %}</tr></thead>
           <tbody>
             {% for e in egresos %}
             <tr>
