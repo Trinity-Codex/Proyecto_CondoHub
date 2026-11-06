@@ -75,12 +75,13 @@ fase 2 están en los [Issues](https://github.com/Trinity-Codex/Proyecto_CondoHub
 python manage.py test apps
 ```
 
-241 pruebas; GitHub Actions las ejecuta con MySQL 8 en cada Pull Request.
+243 pruebas; GitHub Actions las ejecuta con MySQL 8 en cada Pull Request.
 
 ## Documentación
 
 - [DOCUMENTACION.md](DOCUMENTACION.md): instalación paso a paso, arquitectura, roles, modelo de datos, trazabilidad con el Informe 2 y problemas comunes.
-- [CONTRIBUTING.md](CONTRIBUTING.md): cómo trabajamos con ramas, Pull Requests y revisiones.
+- [CONTRIBUTING.md](CONTRIBUTING.md): cómo trabajamos con ramas, Pull Requests y revisiones, la priorización MoSCoW y el flujo de OpenSpec.
+- [openspec/specs/](openspec/specs/): especificación de cada capacidad del sistema (requisitos y escenarios), mantenida con OpenSpec.
 - [docs/GUIA_NUEVA_FEATURE.md](docs/GUIA_NUEVA_FEATURE.md): receta para agregar un módulo nuevo.
 - [Tablero del proyecto](https://github.com/orgs/Trinity-Codex/projects/1): tareas de la entrega y mejoras de la fase 2.
 - [docs/equipo/](docs/equipo/PLAN_DE_TRABAJO.md): plan de trabajo, calendario y guía de inicio de cada integrante.

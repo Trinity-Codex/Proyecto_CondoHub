@@ -420,7 +420,7 @@ Además del informe: gestión de **proveedores** vinculados a los egresos (#9).
 python manage.py test apps
 ```
 
-241 pruebas (todas deben pasar antes de abrir un Pull Request) que cubren: RUT, inicio de sesión,
+243 pruebas (todas deben pasar antes de abrir un Pull Request) que cubren: RUT, inicio de sesión,
 perfil, alta de usuarios, condominio activo, permisos por rol, aislamiento entre condominios,
 comunicados por edificio, reglas de reserva y superposición, incidentes, patrón Observer (sitio y
 correo), prorrateo y redondeo exacto (patrón Strategy), emisión, estado de cuenta, pagos totales,
