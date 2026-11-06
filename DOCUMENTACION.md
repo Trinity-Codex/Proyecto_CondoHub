@@ -429,7 +429,9 @@ parciales y en exceso, reporte de morosidad y CSV, proveedores y redirecciones s
 
 En cada push y Pull Request, GitHub Actions ([`ci.yml`](.github/workflows/ci.yml)) levanta un
 MySQL 8 limpio, revisa el proyecto y las migraciones, carga los datos demo y ejecuta las pruebas.
-La rama `main` está protegida: solo acepta cambios por Pull Request con **1 aprobación** y el CI en verde.
+La rama `main` está protegida: solo acepta cambios por Pull Request con el CI en verde. Desde el 6 de noviembre de
+2026 la aprobación de un compañero es recomendada, no obligatoria ([plan del PMV](docs/equipo/PLAN_PMV_27NOV.md)).
+La CI también valida las especificaciones de OpenSpec (`openspec validate --all --strict`).
 
 ---
 

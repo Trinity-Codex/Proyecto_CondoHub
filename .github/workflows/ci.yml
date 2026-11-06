@@ -48,3 +48,14 @@ jobs:
           python manage.py cargar_demo
       - name: Pruebas automáticas
         run: python manage.py test apps -v 2
+      # OpenSpec (docs/equipo/PLAN_PMV_27NOV.md): sin revisión obligatoria, la CI
+      # comprueba que las especificaciones y los cambios en curso sigan siendo válidos.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Validar las especificaciones de OpenSpec
+        env:
+          OPENSPEC_TELEMETRY: "0"
+        run: |
+          npm install -g @fission-ai/openspec@1.16.0
+          openspec validate --all --strict --no-interactive

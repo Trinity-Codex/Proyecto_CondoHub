@@ -1,5 +1,8 @@
 # Plan de trabajo — Entrega del sábado 10 de octubre
 
+> **Plan cerrado.** El plan vigente es [PLAN_PMV_27NOV.md](PLAN_PMV_27NOV.md). Desde el 6 de noviembre de 2026
+> la revisión de un compañero ya no es obligatoria para unir un PR.
+
 **Equipo Trinity Codex:** Walther Mora · Maximiliano Soto · Winderson Castrillo
 
 **Objetivo:** que el sábado CondoHub tenga implementados **todos los requerimientos funcionales

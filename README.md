@@ -84,4 +84,5 @@ python manage.py test apps
 - [openspec/specs/](openspec/specs/): especificación de cada capacidad del sistema (requisitos y escenarios), mantenida con OpenSpec.
 - [docs/GUIA_NUEVA_FEATURE.md](docs/GUIA_NUEVA_FEATURE.md): receta para agregar un módulo nuevo.
 - [Tablero del proyecto](https://github.com/orgs/Trinity-Codex/projects/1): tareas de la entrega y mejoras de la fase 2.
-- [docs/equipo/](docs/equipo/PLAN_DE_TRABAJO.md): plan de trabajo, calendario y guía de inicio de cada integrante.
+- [docs/equipo/PLAN_PMV_27NOV.md](docs/equipo/PLAN_PMV_27NOV.md): plan vigente del PMV (dueños de carpetas, contratos entre ramas, calendario de uniones).
+- [docs/equipo/](docs/equipo/PLAN_DE_TRABAJO.md): plan de la entrega del 10 de octubre y guía de inicio de cada integrante.

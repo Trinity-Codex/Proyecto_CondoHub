@@ -52,23 +52,20 @@ En GitHub aparecerá el botón **Compare & pull request**. En la descripción:
 
 ## 5. Revisión
 
-- Cada PR necesita la **aprobación de un compañero** y las **pruebas automáticas (CI) en verde**.
-- **Quién revisa a quién** (al abrir el PR, elígelo en *Reviewers*):
-
-  | Quien abre el PR | Lo revisa |
-  |---|---|
-  | Walther | Maximiliano |
-  | Maximiliano | Winderson |
-  | Winderson | Walther |
-
-  GitHub no permite aprobar el PR propio. Si el revisor asignado no está disponible, puede aprobar el otro compañero.
+- Desde el 6 de noviembre de 2026, cada PR necesita las **pruebas automáticas (CI) en verde**; la aprobación de
+  un compañero ya no es obligatoria (decisión del equipo para el PMV, ver
+  [docs/equipo/PLAN_PMV_27NOV.md](docs/equipo/PLAN_PMV_27NOV.md)).
+- **Pide una revisión** (en *Reviewers* o en el grupo) cuando el PR toque un contrato, un archivo compartido
+  (`config/`, `templates/base.html`, `requirements.txt`, `.github/`) o una carpeta de otro integrante.
 - Quien revisa: descarga la rama, la prueba y comenta con respeto y de forma concreta.
 - Quien recibe comentarios: corrige en la misma rama y vuelve a hacer push (el PR se actualiza solo).
 
 ## 6. Unir a main
 
-Con la aprobación y el CI en verde, el autor presiona **Squash and merge** y borra la rama.
-Después, todos actualizan su copia:
+Antes de unir, actualiza tu rama con `main` (`git fetch origin` y `git merge origin/main`) y vuelve a correr
+`python manage.py makemigrations --check`, `python manage.py test apps` y `openspec validate --all --strict`:
+dos PR que pasan por separado pueden fallar juntos. Con el CI en verde, el autor presiona **Squash and merge**,
+borra la rama y avisa en el grupo qué unió. Después, todos actualizan su copia:
 
 ```bash
 git checkout main
@@ -117,11 +114,12 @@ repositorio. Si usas Claude Code, ejecuta `openspec update` en la carpeta del pr
 1. **Proponer:** en tu rama, pide a tu asistente `/opsx:propose <cambio>` (Claude Code), `$openspec-propose`
    (Codex) o `/opsx-propose` (Copilot), con el nombre del cambio que indica el Issue. Revisa que la propuesta
    enlace el Issue y que `openspec validate <cambio> --strict` pase.
-2. **Revisar la propuesta:** sube la rama y abre el Pull Request como **borrador** solo con la propuesta. El
-   revisor la aprueba con un comentario el mismo día. Así se discute el qué antes de programar.
+2. **Publicar la propuesta:** sube la rama y abre el Pull Request como **borrador** solo con la propuesta, y
+   avisa en el grupo. Si la propuesta cambia un contrato o la carpeta de otro integrante, espera su comentario;
+   si no, sigue. Así el qué queda a la vista antes de programar.
 3. **Implementar:** `/opsx:apply` sigue `tasks.md`. Marca las tareas a medida que las terminas.
 4. **Archivar:** antes de unir, `/opsx:archive` mueve el cambio a `archive/` y actualiza las specs. El PR
-   queda listo para revisión normal (1 aprobación y CI en verde).
+   queda listo para unir con el CI en verde (sección 6).
 
 Un Issue que no cambia el comportamiento (pruebas de usabilidad, Docker, documentación) no necesita cambio de
 OpenSpec: su sección OpenSpec lo indica.
