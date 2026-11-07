@@ -56,7 +56,7 @@ Mensaje único, sin mencionar la causa: "Demasiados intentos. Espera hasta 15 mi
 
 ### D5. Qué borra los intentos
 
-Ingresar correctamente y definir una contraseña nueva (`FormularioNuevaClave.save()`) borran las filas **de ese correo**, y así también descuentan de su dirección. No borran las filas de otros correos de esa dirección: de lo contrario, un atacante con cuenta propia podría reiniciar el contador ingresando con ella entre intentos contra otras cuentas.
+Ingresar correctamente y definir una contraseña nueva (`FormularioNuevaClave.save()`) borran las filas **de ese correo**, y así también descuentan de su dirección. No borran las filas de otros correos de esa dirección: de lo contrario, un atacante con cuenta propia podría reiniciar el contador ingresando con ella entre intentos contra otras cuentas. Por lo mismo, recuperar la contraseña no libera una dirección que llegó al límite con otros correos: desde ahí hay que esperar.
 
 ### D6. La dirección real del cliente
 
@@ -69,7 +69,7 @@ Nunca confía en la cabecera sin esa configuración, porque el visitante podría
 
 ### D7. Los datos duran poco
 
-Cada intento registrado elimina las filas fuera de la ventana. No se necesita una tarea programada. En el peor caso, las filas quedan hasta el siguiente fallo en todo el sitio.
+Cada fallo, ingreso correcto o contraseña nueva elimina las filas fuera de la ventana, con un índice por `creado` para no recorrer la tabla. No se necesita una tarea programada. En el peor caso, las filas quedan hasta el siguiente ingreso o fallo en todo el sitio.
 
 ### D8. Spec de RUT
 
@@ -81,7 +81,10 @@ La spec se ajusta a lo que hace el código. `/admin/` sigue aceptando RUT duplic
 - [Una red compartida, como el wifi de un condominio, se bloquea en conjunto si alguien falla 5 veces] → aceptado porque el Issue pide límite por dirección; dura hasta 15 minutos.
 - [Alguien puede bloquear a propósito a otra persona fallando con su correo] → aceptado: es temporal y la persona se desbloquea recuperando su contraseña.
 - [Solicitudes simultáneas pueden superar en poco los 5 intentos, porque se cuenta antes de comprobar] → aceptado: un bloqueo de fila por intento no se justifica y el exceso queda limitado a una ráfaga.
-- [Se guarda correo e IP de quien falla] → duran como máximo hasta el siguiente fallo tras la ventana; #51 debe mencionarlo.
+- [Se guarda correo e IP de quien falla] → duran como máximo hasta el siguiente ingreso o fallo tras la ventana; #51 debe mencionarlo.
+- [El mensaje en `/admin/` menciona un enlace que solo existe en el inicio de sesión del sitio] → aceptado: solo afecta al superusuario.
+- [Una dirección IPv6 distinta por intento evita el límite por dirección] → aceptado para el PMV: el límite por correo sigue protegiendo cada cuenta.
+- [Cambiar la contraseña en Mi perfil permite probar la clave actual sin límite] → fuera de este cambio: requiere una sesión ya abierta.
 
 ## Migration Plan
 

@@ -38,8 +38,12 @@ El sistema SHALL identificar a cada persona por su correo electrónico y exigir 
 - **THEN** sus intentos fallidos se borran y vuelve a tener 5 intentos
 
 #### Scenario: Recuperar la contraseña durante el bloqueo
-- **WHEN** una persona bloqueada define una contraseña nueva con el enlace del correo
+- **WHEN** una persona bloqueada por los intentos de su correo define una contraseña nueva con el enlace del correo
 - **THEN** los intentos de su cuenta se borran y puede ingresar de inmediato
+
+#### Scenario: Dirección bloqueada por otros correos
+- **WHEN** una persona define una contraseña nueva, pero su dirección llegó al límite con fallos de otros correos
+- **THEN** sigue bloqueada desde esa dirección hasta que los intentos salgan de la ventana
 
 #### Scenario: Panel de administración
 - **WHEN** alguien falla 5 veces en el inicio de sesión de `/admin/`

@@ -37,5 +37,5 @@ Ninguna.
 - **Mis carpetas:** `apps/cuentas` (modelo y migración, `limite_intentos.py`, formularios, `admin.py`, pruebas).
 - **Sin librerías nuevas** ni cambios en `config/`, `templates/base.html` o `requirements.txt`.
 - **Coordinación con #29 (Walther):** detrás de un proxy, todas las visitas parecen venir de la misma dirección y un solo atacante bloquearía a todo el sitio. Hay que definir `CUENTAS_PROXIES_CONFIABLES` en producción.
-- **Datos personales:** guarda correo y dirección IP de cada fallo hasta el primer fallo posterior a los 15 minutos; #51 debe mencionarlo en el aviso de privacidad.
+- **Datos personales:** guarda correo e IP de cada fallo hasta el primer ingreso o fallo posterior a los 15 minutos; #51 debe mencionarlo en el aviso de privacidad.
 - **Datos demo:** no se necesitan.
