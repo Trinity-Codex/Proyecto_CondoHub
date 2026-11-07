@@ -22,8 +22,11 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.staticfiles import finders
+from django.contrib.staticfiles.storage import staticfiles_storage
+from django.core.exceptions import SuspiciousFileOperation
 from django.http import HttpResponse
 from django.template.loader import render_to_string
+from django.utils.http import content_disposition_header
 from django.utils.text import get_valid_filename
 from xhtml2pdf import pisa
 from xhtml2pdf.config.resources import ResourceAccessPolicy
@@ -34,8 +37,31 @@ class ErrorPDF(Exception):
 
 
 def _carpetas_estaticas():
-    """Carpetas de static/ del proyecto: las únicas desde donde un PDF lee archivos."""
-    return [Path(carpeta).resolve() for carpeta in settings.STATICFILES_DIRS]
+    """
+    Carpetas desde donde un PDF puede leer archivos: las de static/ del proyecto y,
+    en un servidor con collectstatic (STATIC_ROOT), la carpeta donde quedan copiados.
+    """
+    carpetas = [Path(carpeta).resolve() for carpeta in settings.STATICFILES_DIRS]
+    if settings.STATIC_ROOT:
+        carpetas.append(Path(settings.STATIC_ROOT).resolve())
+    return carpetas
+
+
+def _archivo_estatico(ruta):
+    """
+    Ruta en el disco de un archivo estático, o "" si no existe o queda fuera de static/.
+    Primero se busca con los finders (nombre original, ej. "img/logo.png"); si no está,
+    en STATIC_ROOT, donde un almacenamiento con hash (WhiteNoise) deja "img/logo.3f2a.png".
+    """
+    try:
+        encontrado = finders.find(ruta)
+        if not encontrado and settings.STATIC_ROOT:
+            candidato = staticfiles_storage.path(ruta)
+            encontrado = candidato if Path(candidato).is_file() else None
+    except (SuspiciousFileOperation, NotImplementedError):
+        # "../" que sale de static/, o un almacenamiento sin disco: se ignora esa imagen, no el PDF.
+        return ""
+    return str(Path(encontrado).resolve()) if encontrado else ""
 
 
 def _resolver_estatico(uri, rel):
@@ -49,10 +75,9 @@ def _resolver_estatico(uri, rel):
     ruta = str(uri)
     if ruta.startswith(prefijo):
         ruta = ruta[len(prefijo):]
-    elif "://" in ruta or ruta.startswith("//"):
-        return ""
-    encontrado = finders.find(ruta.lstrip("/"))
-    return str(Path(encontrado).resolve()) if encontrado else ""
+    elif "://" in ruta or ruta.startswith(("//", "data:")):
+        return ""  # externa o incrustada: no es un archivo de static/
+    return _archivo_estatico(ruta.lstrip("/"))
 
 
 def _politica():
@@ -80,6 +105,20 @@ def generar_pdf(plantilla, contexto):
     return salida.getvalue()
 
 
+NOMBRE_POR_DEFECTO = "documento"
+
+
+def _nombre_archivo(nombre):
+    """"../cobros/2026 nov" -> "cobros-2026_nov.pdf". Si no queda nada útil, "documento.pdf"."""
+    base = nombre[:-4] if nombre.lower().endswith(".pdf") else nombre
+    # "/" y "\" separarían carpetas; los puntos y guiones del borde (como en "../") sobran.
+    base = base.replace("/", "-").replace("\\", "-").strip(" .-")
+    try:
+        return get_valid_filename(base) + ".pdf"
+    except SuspiciousFileOperation:  # get_valid_filename rechaza un nombre vacío
+        return NOMBRE_POR_DEFECTO + ".pdf"
+
+
 def renderizar_pdf(plantilla: str, contexto: dict, nombre: str) -> HttpResponse:
     """
     Devuelve un HttpResponse con el PDF de la plantilla, para abrirlo en el navegador.
@@ -91,9 +130,7 @@ def renderizar_pdf(plantilla: str, contexto: dict, nombre: str) -> HttpResponse:
     Lanza ErrorPDF si la conversión falla.
     """
     contenido = generar_pdf(plantilla, contexto)
-    base = nombre[:-4] if nombre.lower().endswith(".pdf") else nombre
-    # "/" y "\\" separarían carpetas; los puntos y guiones del borde (como en "../") sobran.
-    archivo = get_valid_filename(base.replace("/", "-").replace("\\", "-").strip(" .-")) + ".pdf"
     respuesta = HttpResponse(contenido, content_type="application/pdf")
-    respuesta["Content-Disposition"] = f'inline; filename="{archivo}"'
+    # El ayudante de Django agrega filename* (RFC 5987) si el nombre tiene caracteres no ASCII.
+    respuesta["Content-Disposition"] = content_disposition_header(False, _nombre_archivo(nombre))
     return respuesta

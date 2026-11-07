@@ -1,8 +1,11 @@
 """Pruebas de core: condominio activo, permisos por rol, residentes, PDF y datos demo."""
+import tempfile
 from decimal import Decimal
 from io import BytesIO, StringIO
+from pathlib import Path
 from unittest import mock
 
+from django.conf import settings
 from django.core.management import call_command
 from django.db.models import Count, Sum
 from django.test import SimpleTestCase, TestCase
@@ -11,7 +14,7 @@ from pypdf import PdfReader
 
 from apps.comunicados.models import Comunicado
 from apps.condominios.models import Condominio, Edificio, Membresia, Residente, Unidad
-from apps.core.pdf import ErrorPDF, generar_pdf, renderizar_pdf
+from apps.core.pdf import ErrorPDF, _resolver_estatico, generar_pdf, renderizar_pdf
 from apps.core.pruebas import crear_escenario, crear_usuario
 from apps.cuentas.models import Usuario
 from apps.gastos.models import DetalleGastoComun, Egreso, PeriodoGasto
@@ -169,13 +172,38 @@ class RenderizarPdfTest(SimpleTestCase):
             ("aviso.pdf", "aviso.pdf"),
             ("aviso.PDF", "aviso.pdf"),
             ("../cobros/2026 nov", "cobros-2026_nov.pdf"),
+            ("", "documento.pdf"),
+            (".pdf", "documento.pdf"),
+            ("/", "documento.pdf"),
         ]:
             with self.subTest(nombre=nombre):
                 respuesta = renderizar_pdf(self.plantilla, {}, nombre)
                 self.assertEqual(respuesta["Content-Disposition"], f'inline; filename="{esperado}"')
 
+    def test_nombre_con_caracteres_no_ascii(self):
+        respuesta = renderizar_pdf(self.plantilla, {}, "aviso-Ñuñoa")
+        self.assertEqual(respuesta["Content-Disposition"], "inline; filename*=utf-8''aviso-%C3%91u%C3%B1oa.pdf")
+
+    def test_una_ruta_fuera_de_static_se_ignora_sin_romper_el_pdf(self):
+        contexto = {"imagen_extra": "/static/../config/settings.py"}
+        with self.assertLogs("xhtml2pdf", level="WARNING"):
+            pagina = PdfReader(BytesIO(generar_pdf(self.plantilla, contexto))).pages[0]
+        self.assertEqual(len(pagina.images), 1)  # solo el logo
+
+    def test_lee_nombres_con_hash_desde_static_root(self):
+        # Con WhiteNoise (#29) {% static %} entrega "img/logo.<hash>.png", que solo existe en STATIC_ROOT.
+        with tempfile.TemporaryDirectory() as carpeta:
+            archivo = Path(carpeta, "img", "logo.3f2a.png")
+            archivo.parent.mkdir()
+            archivo.write_bytes(Path(settings.BASE_DIR, "static", "img", "icono-96.png").read_bytes())
+            with self.settings(STATIC_ROOT=carpeta):
+                self.assertEqual(_resolver_estatico("/static/img/logo.3f2a.png", None), str(archivo.resolve()))
+                contexto = {"imagen_extra": "/static/img/logo.3f2a.png"}
+                pagina = PdfReader(BytesIO(generar_pdf(self.plantilla, contexto))).pages[0]
+        self.assertEqual(len(pagina.images), 2)
+
     def test_no_descarga_imagenes_externas(self):
-        contexto = {"imagen_externa": "https://example.com/rastreo.png"}
+        contexto = {"imagen_extra": "https://example.com/rastreo.png"}
         with (
             mock.patch("http.client.HTTPConnection.request") as http,
             mock.patch("http.client.HTTPSConnection.request") as https,

@@ -277,6 +277,33 @@ class VencimientoYReglamentoTest(TestCase):
         self.abrir(fecha_vencimiento=propuesta.isoformat())
         self.assertEqual(PeriodoGasto.objects.get().fecha_vencimiento, date(2026, 12, 10))
 
+    def test_cambiar_el_mes_ajusta_el_vencimiento_propuesto(self):
+        # El 7 de noviembre se propone el 10-12; el administrador abre diciembre sin tocar la fecha.
+        with mock.patch("apps.gastos.views.timezone.localdate", return_value=date(2026, 11, 7)):
+            respuesta = self.client.post(reverse("gastos:periodo_nuevo"), {
+                "mes": 12, "anio": 2026, "porcentaje_fondo_reserva": "5", "criterio_prorrateo": "ALICUOTA",
+                "referencia_reglamento": "", "fecha_vencimiento": "2026-12-10",
+            })
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertEqual(PeriodoGasto.objects.get().fecha_vencimiento, date(2027, 1, 10))
+
+    def test_una_fecha_escrita_a_mano_no_se_cambia(self):
+        with mock.patch("apps.gastos.views.timezone.localdate", return_value=date(2026, 11, 7)):
+            self.client.post(reverse("gastos:periodo_nuevo"), {
+                "mes": 12, "anio": 2026, "porcentaje_fondo_reserva": "5", "criterio_prorrateo": "ALICUOTA",
+                "referencia_reglamento": "", "fecha_vencimiento": "2027-01-15",
+            })
+        self.assertEqual(PeriodoGasto.objects.get().fecha_vencimiento, date(2027, 1, 15))
+
+    def test_al_editar_el_mes_se_ajusta_el_vencimiento_por_defecto(self):
+        periodo = crear_periodo(self.e.condominio, mes=11)  # vence el 10-12-2026
+        self.client.post(reverse("gastos:periodo_editar", args=[periodo.pk]), {
+            "mes": 10, "anio": 2026, "porcentaje_fondo_reserva": "5", "criterio_prorrateo": "ALICUOTA",
+            "referencia_reglamento": "", "fecha_vencimiento": "2026-12-10",
+        })
+        periodo.refresh_from_db()
+        self.assertEqual((periodo.mes, periodo.fecha_vencimiento), (10, date(2026, 11, 10)))
+
     def test_vencimiento_vacio_usa_el_dia_10_del_mes_siguiente(self):
         self.abrir(mes=12)
         self.assertEqual(PeriodoGasto.objects.get().fecha_vencimiento, date(2027, 1, 10))

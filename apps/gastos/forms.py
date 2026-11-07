@@ -44,6 +44,7 @@ class PeriodoForm(ModeloFormularioBootstrap):
         que se valida a mano.
         """
         datos = super().clean()
+        self._ajustar_vencimiento_propuesto(datos)
         anio, mes = datos.get("anio"), datos.get("mes")
         if anio and mes:
             repetido = PeriodoGasto.objects.filter(condominio=self.condominio, anio=anio, mes=mes)
@@ -52,6 +53,19 @@ class PeriodoForm(ModeloFormularioBootstrap):
             if repetido.exists():
                 raise forms.ValidationError(f"Ya existe el período {MESES[mes - 1]} {anio} en este condominio.")
         return datos
+
+    def _ajustar_vencimiento_propuesto(self, datos):
+        """
+        Si el administrador cambia el mes o el año pero deja la fecha propuesta (la del
+        día 10 siguiente al mes inicial), la fecha se vacía para que save() calcule la del
+        mes elegido. Una fecha que el administrador escribió a mano no se toca.
+        """
+        cambio_de_mes = {"mes", "anio"} & set(self.changed_data)
+        mes, anio = self.initial.get("mes"), self.initial.get("anio")
+        if not cambio_de_mes or "fecha_vencimiento" in self.changed_data or not (mes and anio):
+            return
+        if datos.get("fecha_vencimiento") == vencimiento_por_defecto(int(anio), int(mes)):
+            datos["fecha_vencimiento"] = None
 
 
 class EgresoForm(ModeloFormularioBootstrap):
