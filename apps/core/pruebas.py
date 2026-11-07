@@ -13,7 +13,7 @@ Uso en un test:
 El escenario tiene 2 condominios para poder probar que los datos de uno
 NUNCA se ven desde el otro (regla multi-condominio).
 """
-from datetime import time
+from datetime import date, time
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -53,8 +53,9 @@ def crear_escenario():
 
     residente = crear_usuario("residente@prueba.cl")
     residente_b = crear_usuario("residente.b@prueba.cl")
-    Residente.objects.create(usuario=residente, unidad=a101)
-    Residente.objects.create(usuario=residente_b, unidad=b101)
+    # Fechadas en 2020: las pruebas usan cobros de meses pasados (Issue #46).
+    Residente.objects.create(usuario=residente, unidad=a101, desde=date(2020, 1, 1))
+    Residente.objects.create(usuario=residente_b, unidad=b101, desde=date(2020, 1, 1))
 
     quincho = EspacioComun.objects.create(
         condominio=condominio, nombre="Quincho", capacidad=10, hora_apertura=time(9), hora_cierre=time(22)
@@ -65,6 +66,6 @@ def crear_escenario():
     torre_ajena = Edificio.objects.create(condominio=ajeno, nombre="Torre única")
     unidad_ajena = Unidad.objects.create(edificio=torre_ajena, numero="101", alicuota=Decimal("1"))
     residente_ajeno = crear_usuario("ajeno@prueba.cl")
-    Residente.objects.create(usuario=residente_ajeno, unidad=unidad_ajena)
+    Residente.objects.create(usuario=residente_ajeno, unidad=unidad_ajena, desde=date(2020, 1, 1))
 
     return SimpleNamespace(**locals())

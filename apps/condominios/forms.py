@@ -1,7 +1,8 @@
 """Formularios de edificios, unidades y residentes (Issue #10, RF01)."""
 from django import forms
+from django.utils import timezone
 
-from apps.core.formularios import FormularioBootstrap, ModeloFormularioBootstrap
+from apps.core.formularios import CampoFecha, FormularioBootstrap, ModeloFormularioBootstrap
 from apps.cuentas.models import Usuario
 
 from .models import Edificio, Residente, Unidad
@@ -73,6 +74,12 @@ class ResidenteForm(FormularioBootstrap):
 
     correo = forms.EmailField(help_text="Correo con el que la persona inicia sesión en CondoHub.")
     tipo = forms.ChoiceField(choices=Residente.Tipo.choices, initial=Residente.Tipo.PROPIETARIO)
+    desde = forms.DateField(
+        label="Fecha de inicio",
+        widget=CampoFecha(),
+        initial=timezone.localdate,
+        help_text="Desde cuándo vive en la unidad. Verá los cobros desde ese mes.",
+    )
 
     def __init__(self, *args, unidad, **kwargs):
         super().__init__(*args, **kwargs)
@@ -88,14 +95,24 @@ class ResidenteForm(FormularioBootstrap):
         self.cleaned_data["usuario"] = usuario
         return correo
 
+    def clean_desde(self):
+        desde = self.cleaned_data["desde"]
+        if desde > timezone.localdate():
+            raise forms.ValidationError("La fecha de inicio no puede ser futura.")
+        return desde
+
     def save(self):
         """
         Crea el residente, o lo reactiva si antes se había dado de baja en esta
-        unidad (la tabla no permite repetir usuario + unidad).
-        Residente.save() le da el rol RESIDENTE en el condominio.
+        unidad (la tabla no permite repetir usuario + unidad): la residencia parte
+        de la nueva fecha. Residente.save() le da el rol RESIDENTE en el condominio.
         """
-        residente, _ = Residente.objects.get_or_create(usuario=self.cleaned_data["usuario"], unidad=self.unidad)
-        residente.tipo = self.cleaned_data["tipo"]
+        datos = self.cleaned_data
+        residente, _ = Residente.objects.get_or_create(
+            usuario=datos["usuario"], unidad=self.unidad, defaults={"desde": datos["desde"]}
+        )
+        residente.tipo = datos["tipo"]
+        residente.desde = datos["desde"]
         residente.activo = True
         residente.save()
         return residente

@@ -48,7 +48,7 @@ Quien fue dado de baja no ve cobros de esa unidad, igual que hoy. Así la deuda 
 
 `Residente.save()` completa `hasta` con la fecha de hoy al desactivar y lo limpia al reactivar. Si la llamada usa `update_fields` con `activo`, también incluye `hasta`. Así funciona también desde `/admin/`, no solo desde `dar_de_baja()`.
 
-Una `CheckConstraint` exige `hasta >= desde`. Como el formulario no admite `desde` futuro, una baja desde el sitio la cumple. Una baja desde `/admin/` de una fila con `desde` futuro falla con error: es un caso que solo ocurre editando a mano.
+Una `CheckConstraint` exige `hasta >= desde`. El formulario no admite `desde` futuro, y si una fila lo tiene por una edición en `/admin/`, al darla de baja `hasta` toma esa misma fecha, así la baja nunca falla.
 
 ### D5. `desde` con valor por defecto
 

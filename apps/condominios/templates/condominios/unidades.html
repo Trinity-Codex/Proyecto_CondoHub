@@ -39,7 +39,7 @@
           <td>
             {% for r in u.residentes.all %}
             <div class="small d-flex align-items-center gap-1">
-              {{ r.usuario }} <span class="text-muted">({{ r.get_tipo_display }})</span>
+              <span class="text-nowrap">{{ r.usuario }}<br><span class="text-muted">{{ r.get_tipo_display }} · desde {{ r.desde|date:"d-m-Y" }}</span></span>
               {% if es_admin %}
               <form method="post" action="{% url 'condominios:residente_baja' r.pk %}" class="d-inline"
                     onsubmit="return confirm('¿Dar de baja a {{ r.usuario|escapejs }} de la unidad {{ u.numero|escapejs }}?');">

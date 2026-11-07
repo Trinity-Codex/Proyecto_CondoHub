@@ -21,6 +21,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 
 class Condominio(models.Model):
@@ -177,10 +178,17 @@ class Residente(models.Model):
     unidad = models.ForeignKey(Unidad, on_delete=models.CASCADE, related_name="residentes")
     tipo = models.CharField(max_length=20, choices=Tipo.choices, default=Tipo.PROPIETARIO)
     activo = models.BooleanField(default=True)
+    # Período de residencia (Issue #46): decide qué cobros ve la persona (ver residencias.py).
+    desde = models.DateField("fecha de inicio", default=timezone.localdate)
+    hasta = models.DateField("fecha de término", null=True, blank=True)  # se completa al dar de baja
 
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["usuario", "unidad"], name="uq_residente_unidad"),
+            models.CheckConstraint(
+                condition=models.Q(hasta__isnull=True) | models.Q(hasta__gte=models.F("desde")),
+                name="ck_residente_fechas",
+            ),
         ]
 
     def __str__(self):
@@ -191,7 +199,16 @@ class Residente(models.Model):
         Al registrar a alguien como residente activo de una unidad, se le da
         también el rol RESIDENTE en ese condominio (o se reactiva si estaba
         dado de baja), para que pueda entrar al sitio con esos permisos.
+
+        Aquí se mantiene "hasta" coherente con "activo", así también funciona
+        al cambiar el residente desde /admin/ y no solo con dar_de_baja().
         """
+        if self.activo:
+            self.hasta = None
+        elif self.hasta is None:
+            self.hasta = max(timezone.localdate(), self.desde)  # nunca antes de "desde"
+        if "activo" in (kwargs.get("update_fields") or ()):
+            kwargs["update_fields"] = {*kwargs["update_fields"], "hasta"}
         super().save(*args, **kwargs)
         if self.activo:
             membresia, _ = Membresia.objects.get_or_create(
