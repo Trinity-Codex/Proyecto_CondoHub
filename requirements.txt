@@ -13,3 +13,21 @@ python-dotenv==1.2.4
 asgiref==3.12.1
 sqlparse==0.6.0
 tzdata==2026.5
+
+# PDF (contrato C0, #62): xhtml2pdf convierte una plantilla HTML de Django en PDF.
+# 100 % Python, con ruedas para Windows y Linux (no necesita GTK ni compilar nada).
+xhtml2pdf==0.2.28
+# Dependencias de xhtml2pdf (pip las instala solas; se fijan igual).
+# pypdf también sirve en las pruebas para leer el texto de un PDF.
+arabic-reshaper==3.1.0
+charset-normalizer==3.5.2
+cssselect2==0.10.1
+html5lib==1.1
+lxml==6.1.3
+pillow==13.0.0
+pypdf==7.0.0
+reportlab==5.1.0
+six==1.17.0
+svglib==2.4.0
+tinycss2==1.5.1
+webencodings==0.6.1

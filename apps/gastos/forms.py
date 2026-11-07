@@ -6,21 +6,35 @@ from apps.condominios.models import Edificio
 from apps.core.formularios import CampoFecha, FormularioBootstrap, ModeloFormularioBootstrap
 from apps.proveedores.models import Proveedor
 
-from .models import MESES, Egreso, PeriodoGasto
+from .models import MESES, Egreso, PeriodoGasto, vencimiento_por_defecto
 
 
 class PeriodoForm(ModeloFormularioBootstrap):
-    """Abrir (o corregir) un período de gastos: mes, año, % del fondo de reserva y criterio de prorrateo."""
+    """
+    Abrir (o corregir) un período de gastos: mes, año, % del fondo de reserva, criterio
+    de prorrateo, referencia del reglamento y fecha de vencimiento. Las reglas de esos dos
+    últimos campos están en PeriodoGasto.clean(), que el formulario ejecuta al validar.
+    """
 
     class Meta:
         model = PeriodoGasto
-        fields = ["mes", "anio", "porcentaje_fondo_reserva", "criterio_prorrateo"]
-        # El mes se elige de una lista con su nombre en vez de escribir un número.
-        widgets = {"mes": forms.Select(choices=[(i, m.capitalize()) for i, m in enumerate(MESES, start=1)])}
+        fields = [
+            "mes", "anio", "porcentaje_fondo_reserva", "criterio_prorrateo", "referencia_reglamento",
+            "fecha_vencimiento",
+        ]
+        widgets = {
+            # El mes se elige de una lista con su nombre en vez de escribir un número.
+            "mes": forms.Select(choices=[(i, m.capitalize()) for i, m in enumerate(MESES, start=1)]),
+            "fecha_vencimiento": CampoFecha(),
+        }
 
     def __init__(self, *args, condominio, **kwargs):
         super().__init__(*args, **kwargs)
         self.condominio = condominio
+        # Al abrir un período se propone el vencimiento por defecto del mes inicial.
+        mes, anio = self.initial.get("mes"), self.initial.get("anio")
+        if not self.instance.pk and mes and anio and not self.initial.get("fecha_vencimiento"):
+            self.initial["fecha_vencimiento"] = vencimiento_por_defecto(anio, mes)
 
     def clean(self):
         """
@@ -30,6 +44,7 @@ class PeriodoForm(ModeloFormularioBootstrap):
         que se valida a mano.
         """
         datos = super().clean()
+        self._ajustar_vencimiento_propuesto(datos)
         anio, mes = datos.get("anio"), datos.get("mes")
         if anio and mes:
             repetido = PeriodoGasto.objects.filter(condominio=self.condominio, anio=anio, mes=mes)
@@ -38,6 +53,19 @@ class PeriodoForm(ModeloFormularioBootstrap):
             if repetido.exists():
                 raise forms.ValidationError(f"Ya existe el período {MESES[mes - 1]} {anio} en este condominio.")
         return datos
+
+    def _ajustar_vencimiento_propuesto(self, datos):
+        """
+        Si el administrador cambia el mes o el año pero deja la fecha propuesta (la del
+        día 10 siguiente al mes inicial), la fecha se vacía para que save() calcule la del
+        mes elegido. Una fecha que el administrador escribió a mano no se toca.
+        """
+        cambio_de_mes = {"mes", "anio"} & set(self.changed_data)
+        mes, anio = self.initial.get("mes"), self.initial.get("anio")
+        if not cambio_de_mes or "fecha_vencimiento" in self.changed_data or not (mes and anio):
+            return
+        if datos.get("fecha_vencimiento") == vencimiento_por_defecto(int(anio), int(mes)):
+            datos["fecha_vencimiento"] = None
 
 
 class EgresoForm(ModeloFormularioBootstrap):

@@ -295,6 +295,94 @@ python manage.py test apps
 Prueba siempre: **lo que debe funcionar**, **lo que un rol no debe poder hacer** (403/404) y que
 **no se vean datos de otro condominio**.
 
+## Paso 10. Los datos demo de tu app
+
+Desde el Issue #62 cada app tiene sus datos demo en `apps/<app>/demo.py`, con una función
+`cargar(datos)`. `python manage.py cargar_demo` las llama en orden (lista `APPS_DEMO` de
+`apps/core/management/commands/cargar_demo.py`) dentro de una transacción: **no edites ese
+archivo**, edita solo el `demo.py` de tu app.
+
+`datos` es un diccionario que las apps anteriores ya llenaron:
+
+| Clave | Qué es | Lo deja |
+|---|---|---|
+| `usuarios` | `{"administrador": Usuario, "comite": ..., "residente": ...}` | `cuentas` |
+| `vista_verde`, `los_aromos` | Los dos condominios demo | `condominios` |
+| `unidades` | Unidades de Vista Verde por "Torre-número": `datos["unidades"]["A-101"]` | `condominios` |
+| `proveedores` | `{"ascensores": Proveedor, "aseo": ..., "seguridad": ...}` | `proveedores` |
+| `periodos` | `{"hace_dos_meses": ..., "anterior": ..., "actual": PeriodoGasto}` | `gastos` |
+
+```python
+# apps/mascotas/demo.py
+from apps.mascotas.models import Mascota
+
+
+def cargar(datos):
+    Mascota.objects.create(
+        condominio=datos["vista_verde"], unidad=datos["unidades"]["A-101"], nombre="Toby", especie="PERRO"
+    )
+```
+
+Si tu app deja algo que otra necesita, agrégalo a `datos` con una clave nueva y anótala en el
+comentario de tu `demo.py`. `cargar_demo --reiniciar` borra los dos condominios (y en cascada lo que
+cuelga de ellos), así que un modelo con `condominio` se limpia solo.
+
+La prueba `CargarDemoTest` de `apps/core/tests.py` compara una "huella" (conteos y sumas) de la demo.
+Si agregas datos demo a propósito, actualiza el número que corresponde en `HUELLA`.
+
+## Paso 11 (si tu módulo entrega un documento). PDF con `renderizar_pdf`
+
+`apps/core/pdf.py` (contrato C0) convierte una plantilla de Django en PDF con xhtml2pdf:
+
+```python
+from apps.core.pdf import renderizar_pdf
+
+
+class AvisoCobroPdfView(RolRequeridoMixin, CondominioQuerysetMixin, DetailView):
+    model = DetalleGastoComun
+    campo_condominio = "periodo__condominio"
+
+    def get(self, request, *args, **kwargs):
+        cobro = self.get_object()
+        return renderizar_pdf("pagos/pdf/aviso.html", {"cobro": cobro}, f"aviso-{cobro.pk}")
+```
+
+- `renderizar_pdf(plantilla, contexto, nombre)` devuelve un `HttpResponse` (`application/pdf`,
+  se abre en el navegador). El `.pdf` del nombre se agrega solo y se limpian caracteres como `/`.
+- `generar_pdf(plantilla, contexto)` devuelve los bytes, para las pruebas o para adjuntar a un correo.
+- Si la conversión falla, lanza `ErrorPDF`: nunca entrega un PDF a medias.
+- La plantilla se renderiza **sin `request`**: pasa en el contexto todo lo que usa.
+
+La plantilla extiende `core/pdf/base.html` (logo, márgenes y pie con la fecha y el número de página):
+
+```django
+{% extends "core/pdf/base.html" %}
+{% load condohub %}
+{% block titulo %}Aviso de cobro{% endblock %}
+{% block encabezado %}Aviso de cobro {{ cobro.periodo }}{% endblock %}
+{% block contenido %}
+<table>
+  <tr><th scope="col">Concepto</th><th scope="col" class="derecha">Monto</th></tr>
+  <tr><td>Gastos comunes</td><td class="derecha">{{ cobro.monto|pesos }}</td></tr>
+</table>
+{% endblock %}
+```
+
+**CSS que admite xhtml2pdf:** CSS 2 básico (márgenes, bordes, colores, fuentes, tamaños,
+`text-align`, `@page` para el tamaño de hoja). **No admite** flexbox, grid, variables CSS ni
+Bootstrap: las columnas se maquetan con `<table>` (solo en el PDF; en las páginas web, nunca).
+Las imágenes se leen **solo de `static/`** con `{% static %}`; una URL externa se ignora.
+
+Para probarlo, lee el texto del PDF con `pypdf` (ya viene instalado):
+
+```python
+from io import BytesIO
+from pypdf import PdfReader
+
+texto = PdfReader(BytesIO(respuesta.content)).pages[0].extract_text()
+self.assertIn("$1.234.567", texto)
+```
+
 ---
 
 ## Lista de revisión antes de abrir el Pull Request
@@ -306,4 +394,5 @@ Prueba siempre: **lo que debe funcionar**, **lo que un rol no debe poder hacer**
 - [ ] Lo que el usuario no debe elegir (condominio, autor...) lo completa la vista en `form_valid`.
 - [ ] Las plantillas extienden `base.html` y se ven bien en el celular.
 - [ ] Hay pruebas y `python manage.py test apps` pasa completo.
+- [ ] Si la funcionalidad se ve en la demo, sus datos están en el `demo.py` de tu app.
 - [ ] El código está comentado para que un compañero lo entienda.
