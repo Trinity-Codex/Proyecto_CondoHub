@@ -23,3 +23,9 @@ Thumbs.db
 
 # Registros
 *.log
+
+# Informe 1 (material de la evaluacion, no se sube al repositorio)
+docs/Informe 1/
+
+# Analisis de la competencia (resume datos simulados del cliente; no se sube al repositorio)
+docs/analisis_competencia/

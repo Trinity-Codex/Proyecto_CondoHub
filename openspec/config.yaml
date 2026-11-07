@@ -1,0 +1,44 @@
+schema: spec-driven
+
+context: |
+  Language: es
+  All artifacts must be written in es.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  Proyecto: CondoHub, plataforma web de gestión de condominios para Chile (equipo Trinity Codex).
+  Stack: Python 3.12, Django 5.2 LTS, MySQL 8, plantillas de Django con Bootstrap 5, PWA. Monolito modular.
+  Apps: core, cuentas, condominios, gastos, pagos, proveedores, comunicados, reservas, incidentes, notificaciones.
+  Multi-condominio: todo registro pertenece a un condominio (directo o a través de una relación).
+  Roles por condominio (Membresia): ADMINISTRADOR, COMITE, CONSERJE, RESIDENTE.
+  Patrones: Observer para notificaciones (apps/notificaciones/observador.py) y Strategy para el prorrateo (apps/gastos/prorrateo.py).
+  Código, comentarios e interfaz en español de Chile. Montos en pesos chilenos enteros.
+
+  Capacidades (specs) y su etiqueta de módulo en GitHub:
+  cuentas (módulo: cuentas), condominios (módulo: condominios), gastos-comunes (módulo: gastos comunes),
+  pagos (módulo: pagos), reportes (módulo: reportes), proveedores (módulo: proveedores),
+  comunicacion (módulo: comunicación), reservas (módulo: reservas), incidentes (módulo: incidentes),
+  plataforma (módulo: plataforma), privacidad (módulo: privacidad), conserjeria (módulo: conserjería),
+  asambleas (módulo: asambleas), remuneraciones (módulo: remuneraciones).
+
+  Priorización: MoSCoW por entrega (etiquetas moscow: must, should, could, won't en cada Issue).
+  Entrega actual: hito "PMV 27-nov" (Must y Should). Cada cambio corresponde a un Issue de GitHub.
+
+rules:
+  proposal:
+    - Enlazar el Issue de GitHub (Closes #N) e indicar su prioridad MoSCoW.
+    - Decir qué queda fuera del alcance.
+    - Mantener la propuesta bajo 400 palabras; el equipo tiene tres semanas para el PMV.
+  specs:
+    - Usar los nombres exactos de los requisitos de openspec/specs/ en las secciones MODIFIED y REMOVED.
+    - Cada requisito nuevo lleva al menos un escenario de acceso por rol (quién puede y quién recibe 403 o 404).
+  tasks:
+    - Incluir pruebas en el tests.py de la app y correr python manage.py test apps completo.
+    - Incluir datos demo en apps/core/management/commands/cargar_demo.py cuando la funcionalidad se vea en la demo.
+    - Toda vista nueva usa RolRequeridoMixin y CondominioQuerysetMixin (apps/core/permisos.py).
+    - Si el cambio toca dinero, roles o datos personales, registrar el evento de auditoría.
+    - Si una librería nueva entra a requirements.txt, fijar su versión exacta y la de sus dependencias.
+
+operations:
+  archive:
+    guidance:
+      - Archivar el cambio en el mismo Pull Request, antes de unirlo a main, para que las specs queden al día.
