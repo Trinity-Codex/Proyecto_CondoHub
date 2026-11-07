@@ -2,8 +2,11 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .forms import FormularioCrearUsuario, FormularioEditarUsuario
+from .forms import FormularioCrearUsuario, FormularioEditarUsuario, FormularioInicioAdmin
 from .models import Usuario
+
+# El inicio de sesión de /admin/ también limita los intentos (Issue #52).
+admin.site.login_form = FormularioInicioAdmin
 
 
 @admin.register(Usuario)

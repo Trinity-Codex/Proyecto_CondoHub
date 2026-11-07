@@ -13,6 +13,7 @@ aquí, sino en condominios.Membresia.
 """
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
+from django.utils import timezone
 
 from .validadores import normalizar_rut, validar_rut
 
@@ -79,3 +80,27 @@ class Usuario(AbstractUser):
 
     def __str__(self):
         return self.get_full_name() or self.email
+
+
+class IntentoFallido(models.Model):
+    """
+    Un inicio de sesión fallido (Issue #52). Se guarda en la base de datos porque
+    la caché por defecto de Django es por proceso: con varios procesos en
+    producción, cada uno contaría por separado. Las reglas están en limite_intentos.py.
+    """
+
+    correo = models.CharField(max_length=254)  # normalizado; puede no tener cuenta
+    direccion = models.CharField("dirección IP", max_length=45, blank=True)
+    creado = models.DateTimeField(default=timezone.now)  # sin auto_now_add: las pruebas simulan el tiempo
+
+    class Meta:
+        verbose_name = "intento fallido"
+        verbose_name_plural = "intentos fallidos"
+        indexes = [
+            models.Index(fields=["correo", "creado"], name="ix_intento_correo"),
+            models.Index(fields=["direccion", "creado"], name="ix_intento_direccion"),
+            models.Index(fields=["creado"], name="ix_intento_creado"),  # para borrar los antiguos sin recorrer la tabla
+        ]
+
+    def __str__(self):
+        return f"{self.correo} desde {self.direccion} ({self.creado:%d-%m-%Y %H:%M})"

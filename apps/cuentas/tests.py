@@ -1,15 +1,18 @@
 """Pruebas de cuentas: RUT, usuarios, inicio de sesión, recuperar contraseña y alta (Issue #11)."""
 import re
+from datetime import timedelta
 
 from django.core import mail
 from django.core.exceptions import ValidationError
-from django.test import SimpleTestCase, TestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.condominios.models import Membresia
 from apps.core.pruebas import CLAVE, crear_escenario, crear_usuario
 
-from .models import Usuario
+from . import limite_intentos
+from .models import IntentoFallido, Usuario
 from .validadores import calcular_dv, normalizar_rut, validar_rut
 
 
@@ -306,3 +309,226 @@ class CambiarClaveTest(TestCase):
     def test_pide_iniciar_sesion(self):
         self.client.logout()
         self.assertEqual(self.client.get(reverse("cuentas:cambiar_clave")).status_code, 302)
+
+
+def envejecer_intentos(minutos=16):
+    """Simula que pasó el tiempo: mueve al pasado los intentos guardados."""
+    IntentoFallido.objects.update(creado=timezone.now() - timedelta(minutes=minutos))
+
+
+class LimiteIntentosReglasTest(TestCase):
+    """Issue #52: las reglas, sin pasar por las páginas."""
+
+    def fallar(self, correo="a@prueba.cl", direccion="10.0.0.1", veces=5):
+        for _ in range(veces):
+            limite_intentos.registrar_fallo(correo, direccion)
+
+    def test_cuatro_fallos_no_bloquean(self):
+        self.fallar(veces=4)
+        self.assertFalse(limite_intentos.esta_bloqueado("a@prueba.cl", "10.0.0.1"))
+
+    def test_bloquea_el_correo_aunque_cambie_la_direccion(self):
+        for numero in range(5):
+            limite_intentos.registrar_fallo("a@prueba.cl", f"10.0.0.{numero}")
+        self.assertTrue(limite_intentos.esta_bloqueado("a@prueba.cl", "10.9.9.9"))
+
+    def test_bloquea_la_direccion_aunque_cambie_el_correo(self):
+        for numero in range(5):
+            limite_intentos.registrar_fallo(f"a{numero}@prueba.cl", "10.0.0.1")
+        self.assertTrue(limite_intentos.esta_bloqueado("otro@prueba.cl", "10.0.0.1"))
+        self.assertFalse(limite_intentos.esta_bloqueado("otro@prueba.cl", "10.0.0.2"))
+
+    def test_sin_direccion_no_se_junta_a_personas_distintas(self):
+        for numero in range(5):
+            limite_intentos.registrar_fallo(f"a{numero}@prueba.cl", "")
+        self.assertFalse(limite_intentos.esta_bloqueado("otro@prueba.cl", ""))
+
+    def test_el_correo_se_normaliza(self):
+        self.assertEqual(limite_intentos.normalizar_correo("  Ana@Prueba.CL "), "ana@prueba.cl")
+        self.assertEqual(limite_intentos.normalizar_correo(None), "")
+
+    def test_el_bloqueo_termina_cuando_los_intentos_salen_de_la_ventana(self):
+        self.fallar()
+        envejecer_intentos(minutos=14)
+        self.assertTrue(limite_intentos.esta_bloqueado("a@prueba.cl", "10.0.0.1"))
+        envejecer_intentos(minutos=16)
+        self.assertFalse(limite_intentos.esta_bloqueado("a@prueba.cl", "10.0.0.1"))
+
+    def test_los_intentos_antiguos_se_eliminan(self):
+        self.fallar(veces=3)
+        envejecer_intentos()
+        limite_intentos.registrar_fallo("b@prueba.cl", "10.0.0.2")
+        self.assertEqual(list(IntentoFallido.objects.values_list("correo", flat=True)), ["b@prueba.cl"])
+
+    def test_un_ingreso_correcto_tambien_elimina_los_antiguos(self):
+        self.fallar(veces=3)
+        envejecer_intentos()
+        limite_intentos.limpiar_correo("otra.persona@prueba.cl")
+        self.assertFalse(IntentoFallido.objects.exists())
+
+
+class DireccionClienteTest(SimpleTestCase):
+    def peticion(self, **meta):
+        return RequestFactory().post("/", REMOTE_ADDR="10.0.0.1", **meta)
+
+    def test_sin_configuracion_ignora_una_cabecera_falsificada(self):
+        peticion = self.peticion(HTTP_X_FORWARDED_FOR="1.2.3.4")
+        self.assertEqual(limite_intentos.direccion_cliente(peticion), "10.0.0.1")
+
+    @override_settings(CUENTAS_PROXIES_CONFIABLES=1)
+    def test_con_un_proxy_toma_lo_que_agrego_el_proxy(self):
+        # El visitante puede inventar la primera parte; la última la escribe nuestro proxy.
+        peticion = self.peticion(HTTP_X_FORWARDED_FOR="1.2.3.4, 200.1.1.1")
+        self.assertEqual(limite_intentos.direccion_cliente(peticion), "200.1.1.1")
+
+    @override_settings(CUENTAS_PROXIES_CONFIABLES="1")
+    def test_el_ajuste_puede_venir_como_texto_de_una_variable_de_entorno(self):
+        peticion = self.peticion(HTTP_X_FORWARDED_FOR="1.2.3.4, 200.1.1.1")
+        self.assertEqual(limite_intentos.direccion_cliente(peticion), "200.1.1.1")
+
+    @override_settings(CUENTAS_PROXIES_CONFIABLES=2)
+    def test_con_dos_proxies_cuenta_desde_la_derecha(self):
+        peticion = self.peticion(HTTP_X_FORWARDED_FOR="1.2.3.4, 200.1.1.1, 10.0.0.9")
+        self.assertEqual(limite_intentos.direccion_cliente(peticion), "200.1.1.1")
+
+    @override_settings(CUENTAS_PROXIES_CONFIABLES=1)
+    def test_con_proxy_y_sin_cabecera_usa_remote_addr(self):
+        self.assertEqual(limite_intentos.direccion_cliente(self.peticion()), "10.0.0.1")
+
+    def test_sin_remote_addr_no_falla(self):
+        peticion = self.peticion()
+        del peticion.META["REMOTE_ADDR"]
+        self.assertEqual(limite_intentos.direccion_cliente(peticion), "")
+
+    def test_sin_peticion_no_falla(self):
+        self.assertEqual(limite_intentos.direccion_cliente(None), "")
+
+
+class LimiteIntentosSitioTest(TestCase):
+    """Issue #52: el inicio de sesión del sitio."""
+
+    def setUp(self):
+        self.usuario = crear_usuario("persona@prueba.cl")
+
+    def entrar(self, correo="persona@prueba.cl", clave="mala", **extra):
+        return self.client.post(reverse("cuentas:iniciar_sesion"), {"username": correo, "password": clave}, **extra)
+
+    def fallar(self, correo="persona@prueba.cl", veces=5):
+        for _ in range(veces):
+            respuesta = self.entrar(correo)
+        return respuesta
+
+    def errores(self, respuesta):
+        return respuesta.context["form"].non_field_errors()
+
+    def test_antes_del_limite_muestra_el_error_normal(self):
+        self.assertNotIn(limite_intentos.MENSAJE_BLOQUEO, self.errores(self.fallar(veces=4)))
+
+    def test_el_quinto_fallo_bloquea_y_dice_como_recuperar_la_clave(self):
+        respuesta = self.fallar()
+        self.assertEqual(self.errores(respuesta), [limite_intentos.MENSAJE_BLOQUEO])
+        self.assertContains(respuesta, "Olvidaste tu contraseña")
+        self.assertContains(respuesta, reverse("cuentas:recuperar_clave"))
+
+    def test_la_clave_correcta_no_entra_durante_el_bloqueo(self):
+        self.fallar()
+        respuesta = self.entrar(clave=CLAVE)
+        self.assertEqual(self.errores(respuesta), [limite_intentos.MENSAJE_BLOQUEO])
+        self.assertFalse(respuesta.wsgi_request.user.is_authenticated)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_cambiar_mayusculas_no_evita_el_limite(self):
+        correos = ["persona@prueba.cl", "PERSONA@prueba.cl", "Persona@Prueba.cl", "persona@PRUEBA.cl", "PERSONA@PRUEBA.CL"]
+        for numero, correo in enumerate(correos):
+            respuesta = self.entrar(correo, REMOTE_ADDR=f"10.0.1.{numero}")  # direcciones distintas: solo cuenta el correo
+        self.assertEqual(self.errores(respuesta), [limite_intentos.MENSAJE_BLOQUEO])
+
+    def test_el_mensaje_no_revela_si_el_correo_existe(self):
+        for intento in range(1, 6):
+            with self.subTest(intento=intento):
+                existe = self.entrar("persona@prueba.cl", REMOTE_ADDR="10.0.0.1")
+                no_existe = self.entrar("nadie@prueba.cl", REMOTE_ADDR="10.0.0.2")
+                self.assertEqual(self.errores(existe), self.errores(no_existe))
+        self.assertEqual(self.errores(existe), [limite_intentos.MENSAJE_BLOQUEO])
+
+    def test_el_bloqueo_termina_solo_y_la_persona_entra(self):
+        self.fallar()
+        envejecer_intentos()
+        respuesta = self.entrar(clave=CLAVE)
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertIn("_auth_user_id", self.client.session)
+
+    def test_los_intentos_durante_el_bloqueo_no_lo_alargan(self):
+        self.fallar()
+        self.fallar(veces=3)
+        self.assertEqual(IntentoFallido.objects.count(), 5)
+
+    def test_ingresar_bien_reinicia_el_contador(self):
+        self.fallar(veces=4)
+        self.assertEqual(self.entrar(clave=CLAVE).status_code, 302)
+        self.assertFalse(IntentoFallido.objects.exists())
+
+    def test_ingresar_con_otra_cuenta_no_borra_los_intentos_contra_esta(self):
+        crear_usuario("atacante@prueba.cl")
+        self.fallar(veces=4)
+        self.assertEqual(self.entrar("atacante@prueba.cl", CLAVE).status_code, 302)
+        self.client.logout()
+        self.assertEqual(IntentoFallido.objects.filter(correo="persona@prueba.cl").count(), 4)
+        self.assertEqual(self.errores(self.entrar()), [limite_intentos.MENSAJE_BLOQUEO])
+
+    def test_un_formulario_incompleto_no_cuenta_como_intento(self):
+        self.client.post(reverse("cuentas:iniciar_sesion"), {"username": "persona@prueba.cl", "password": ""})
+        self.client.post(reverse("cuentas:iniciar_sesion"), {"username": "no-es-correo", "password": "x"})
+        self.assertFalse(IntentoFallido.objects.exists())
+
+    def test_recuperar_la_clave_desbloquea_de_inmediato(self):
+        self.fallar()
+        self.client.post(reverse("cuentas:recuperar_clave"), {"email": "persona@prueba.cl"})
+        nueva = "Clave-nueva-segura-2026"
+        definir_clave(self.client, enlace_del_correo(mail.outbox[0]), nueva)
+        self.assertEqual(self.entrar(clave=nueva).status_code, 302)
+        self.assertIn("_auth_user_id", self.client.session)
+
+    def test_recuperar_la_clave_no_libera_una_direccion_bloqueada_por_otros_correos(self):
+        for numero in range(5):
+            self.entrar(f"otro{numero}@prueba.cl", REMOTE_ADDR="10.0.0.1")
+        self.client.post(reverse("cuentas:recuperar_clave"), {"email": "persona@prueba.cl"})
+        nueva = "Clave-nueva-segura-2026"
+        definir_clave(self.client, enlace_del_correo(mail.outbox[0]), nueva)
+        # Desde esa dirección espera; desde otra, entra de inmediato.
+        self.assertEqual(self.errores(self.entrar(clave=nueva, REMOTE_ADDR="10.0.0.1")), [limite_intentos.MENSAJE_BLOQUEO])
+        self.assertEqual(self.entrar(clave=nueva, REMOTE_ADDR="10.0.0.2").status_code, 302)
+
+
+class LimiteIntentosAdminTest(TestCase):
+    """Issue #52: /admin/ también comprueba claves, así que no puede ser una puerta sin límite."""
+
+    def setUp(self):
+        self.root = Usuario.objects.create_superuser("root@prueba.cl", CLAVE)
+
+    def entrar(self, clave="mala"):
+        return self.client.post(reverse("admin:login"), {"username": "root@prueba.cl", "password": clave, "next": "/admin/"})
+
+    def test_cinco_fallos_bloquean(self):
+        for _ in range(5):
+            respuesta = self.entrar()
+        self.assertContains(respuesta, limite_intentos.MENSAJE_BLOQUEO)
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertEqual(self.entrar(CLAVE).status_code, 200)  # ni con la clave correcta
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_el_superusuario_entra_sin_bloqueo(self):
+        self.assertEqual(self.entrar(CLAVE).status_code, 302)
+        self.assertIn("_auth_user_id", self.client.session)
+
+    def test_los_fallos_en_admin_cuentan_para_el_sitio(self):
+        for _ in range(5):
+            self.entrar()
+        respuesta = self.client.post(reverse("cuentas:iniciar_sesion"), {"username": "root@prueba.cl", "password": CLAVE})
+        self.assertEqual(respuesta.context["form"].non_field_errors(), [limite_intentos.MENSAJE_BLOQUEO])
+
+    def test_una_cuenta_sin_permiso_de_admin_cuenta_como_fallo_y_no_entra(self):
+        crear_usuario("persona@prueba.cl")
+        self.client.post(reverse("admin:login"), {"username": "persona@prueba.cl", "password": CLAVE, "next": "/admin/"})
+        self.assertEqual(IntentoFallido.objects.filter(correo="persona@prueba.cl").count(), 1)
+        self.assertNotIn("_auth_user_id", self.client.session)
