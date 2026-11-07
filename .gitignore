@@ -29,3 +29,11 @@ docs/Informe 1/
 
 # Analisis de la competencia (resume datos simulados del cliente; no se sube al repositorio)
 docs/analisis_competencia/
+
+# Claude Code: archivos propios de cada PC
+# (.claude/rules/ no se ignora: queda abierto a compartirse más adelante)
+.claude/settings.local.json
+.claude/worktrees/
+# Los regenera "openspec init --tools claude" en cada PC
+.claude/commands/opsx/
+.claude/skills/openspec-*/

@@ -107,7 +107,13 @@ openspec config set telemetry.enabled false
 ```
 
 Los comandos para Codex (`.agents/`) y GitHub Copilot (`.github/prompts/`, `.github/skills/`) ya están en el
-repositorio. Si usas Claude Code, ejecuta `openspec update` en la carpeta del proyecto para generarlos en tu PC.
+repositorio. Si usas Claude Code, ejecuta este comando en la carpeta del proyecto para generarlos en tu PC (`openspec update` no los crea):
+
+```bash
+openspec init --tools claude --no-animation --no-copilot-cloud
+```
+
+Genera `.claude/commands/opsx/` y `.claude/skills/openspec-*/`, que el `.gitignore` ya ignora. No modifica los archivos de `.agents/` ni `.github/`.
 
 ### Flujo por Issue (un Pull Request)
 
