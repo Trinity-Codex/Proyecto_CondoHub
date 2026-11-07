@@ -21,6 +21,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
@@ -35,6 +36,20 @@ MESES = [
     "enero", "febrero", "marzo", "abril", "mayo", "junio",
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ]
+
+# Día del mes siguiente en que vencen los gastos comunes de un período (Issue #62).
+# Ej.: el período de noviembre vence el 10 de diciembre.
+DIA_VENCIMIENTO = 10
+
+
+def primer_dia_mes_siguiente(anio, mes):
+    """1 del mes siguiente al período: la fecha más temprana en que puede vencer."""
+    return date(anio + 1, 1, 1) if mes == 12 else date(anio, mes + 1, 1)
+
+
+def vencimiento_por_defecto(anio, mes):
+    """Día DIA_VENCIMIENTO del mes siguiente: noviembre 2026 -> 10-12-2026; diciembre -> 10 de enero."""
+    return primer_dia_mes_siguiente(anio, mes).replace(day=DIA_VENCIMIENTO)
 
 
 class PeriodoGasto(Sujeto, models.Model):
@@ -82,6 +97,22 @@ class PeriodoGasto(Sujeto, models.Model):
         default=Criterio.ALICUOTA,
         help_text="Por defecto, según la alícuota. Usa otro solo si el reglamento del condominio lo indica.",
     )
+    # Hasta cuándo se paga sin quedar atrasado. Si se deja vacía, save() pone el
+    # día DIA_VENCIMIENTO del mes siguiente (ver vencimiento_por_defecto).
+    fecha_vencimiento = models.DateField(
+        "fecha de vencimiento",
+        blank=True,
+        help_text=f"Si la dejas vacía, vence el día {DIA_VENCIMIENTO} del mes siguiente.",
+    )
+    # Ley 21.442: repartir en partes iguales (y no según la alícuota) solo vale si
+    # el reglamento de copropiedad lo autoriza. Aquí se anota el artículo.
+    referencia_reglamento = models.CharField(
+        "referencia del reglamento",
+        max_length=200,
+        blank=True,
+        help_text="Artículo del reglamento de copropiedad que autoriza el criterio. "
+        "Obligatoria si se reparte en partes iguales. Ej.: Art. 12 del reglamento de copropiedad.",
+    )
     fecha_emision = models.DateTimeField("fecha de emisión", null=True, blank=True)
     creado = models.DateTimeField(auto_now_add=True)
 
@@ -99,6 +130,32 @@ class PeriodoGasto(Sujeto, models.Model):
 
     def get_absolute_url(self):
         return reverse("gastos:periodo_detalle", args=[self.pk])
+
+    def clean(self):
+        """
+        Reglas del período que valen en el formulario y también en el /admin/ de Django:
+          - partes iguales exige la referencia del reglamento (Ley 21.442);
+          - el vencimiento no puede ser antes del 1 del mes siguiente al período.
+        """
+        super().clean()
+        errores = {}
+        if self.criterio_prorrateo == self.Criterio.PARTES_IGUALES and not self.referencia_reglamento.strip():
+            errores["referencia_reglamento"] = (
+                "Para repartir en partes iguales indica el artículo del reglamento de copropiedad que lo autoriza."
+            )
+        if self.fecha_vencimiento and self.anio and self.mes:
+            desde = primer_dia_mes_siguiente(self.anio, self.mes)
+            if self.fecha_vencimiento < desde:
+                errores["fecha_vencimiento"] = (
+                    f"El período vence en el mes siguiente: la fecha debe ser desde el {desde:%d-%m-%Y}."
+                )
+        if errores:
+            raise ValidationError(errores)
+
+    def save(self, *args, **kwargs):
+        if not self.fecha_vencimiento:
+            self.fecha_vencimiento = vencimiento_por_defecto(self.anio, self.mes)
+        super().save(*args, **kwargs)
 
     @property
     def nombre_mes(self):

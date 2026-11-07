@@ -79,7 +79,7 @@
         {% endcomment %}
         {% if es_admin or es_comite %}
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle {% if seccion == 'condominios' or seccion == 'gastos' or seccion == 'proveedores' or seccion == 'pagos' and vista != 'estado_cuenta' and vista != 'cobro_detalle' or seccion == 'cuentas' and 'usuario' in vista %}active{% endif %}"
+          <a class="nav-link dropdown-toggle {% if seccion == 'condominios' or seccion == 'gastos' or seccion == 'proveedores' or seccion == 'pagos' and vista != 'estado_cuenta' and vista != 'cobro_detalle' or seccion == 'cuentas' and 'usuario' in vista or seccion == 'cartera' or seccion == 'rendicion' or seccion == 'auditoria' %}active{% endif %}"
              href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="bi bi-briefcase"></i> Administración
           </a>
@@ -95,6 +95,14 @@
             <li><a class="dropdown-item {% if seccion == 'pagos' and vista != 'estado_cuenta' and vista != 'cobro_detalle' %}active{% endif %}" href="{% url 'pagos:cobranza' %}"><i class="bi bi-cash-stack"></i> Cobranza</a></li>
             <li><a class="dropdown-item {% if vista == 'reporte' %}active{% endif %}" href="{% url 'gastos:reporte' %}"><i class="bi bi-graph-up"></i> Reporte de morosidad</a></li>
             <li><a class="dropdown-item {% if seccion == 'proveedores' %}active{% endif %}" href="{% url 'proveedores:lista' %}"><i class="bi bi-truck"></i> Proveedores</a></li>
+            {# Apps del PMV 27-nov (#62): cartera y rendición para administrador y comité; auditoría solo para el administrador. #}
+            <li><a class="dropdown-item {% if seccion == 'cartera' %}active{% endif %}" href="{% url 'cartera:inicio' %}"><i class="bi bi-wallet"></i> Cartera</a></li>
+            <li><a class="dropdown-item {% if seccion == 'rendicion' %}active{% endif %}" href="{% url 'rendicion:inicio' %}"><i class="bi bi-clipboard-data"></i> Rendición mensual</a></li>
+            {% if es_admin %}
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">Control</h6></li>
+            <li><a class="dropdown-item {% if seccion == 'auditoria' %}active{% endif %}" href="{% url 'auditoria:inicio' %}"><i class="bi bi-journal-check"></i> Auditoría</a></li>
+            {% endif %}
           </ul>
         </li>
         {% endif %}
@@ -191,8 +199,10 @@
   {% block contenido %}{% endblock %}
 </main>
 
+{# El aviso de privacidad (#51) se enlaza en el pie: se ve con y sin sesión, también en el inicio de sesión. #}
 <footer class="py-3 text-center text-muted small border-top">
   CondoHub · Plataforma de gestión de condominios · Trinity Codex
+  · <a class="link-secondary" href="{% url 'privacidad:aviso' %}">Aviso de privacidad</a>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"

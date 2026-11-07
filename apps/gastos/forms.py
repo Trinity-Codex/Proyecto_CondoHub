@@ -6,21 +6,35 @@ from apps.condominios.models import Edificio
 from apps.core.formularios import CampoFecha, FormularioBootstrap, ModeloFormularioBootstrap
 from apps.proveedores.models import Proveedor
 
-from .models import MESES, Egreso, PeriodoGasto
+from .models import MESES, Egreso, PeriodoGasto, vencimiento_por_defecto
 
 
 class PeriodoForm(ModeloFormularioBootstrap):
-    """Abrir (o corregir) un período de gastos: mes, año, % del fondo de reserva y criterio de prorrateo."""
+    """
+    Abrir (o corregir) un período de gastos: mes, año, % del fondo de reserva, criterio
+    de prorrateo, referencia del reglamento y fecha de vencimiento. Las reglas de esos dos
+    últimos campos están en PeriodoGasto.clean(), que el formulario ejecuta al validar.
+    """
 
     class Meta:
         model = PeriodoGasto
-        fields = ["mes", "anio", "porcentaje_fondo_reserva", "criterio_prorrateo"]
-        # El mes se elige de una lista con su nombre en vez de escribir un número.
-        widgets = {"mes": forms.Select(choices=[(i, m.capitalize()) for i, m in enumerate(MESES, start=1)])}
+        fields = [
+            "mes", "anio", "porcentaje_fondo_reserva", "criterio_prorrateo", "referencia_reglamento",
+            "fecha_vencimiento",
+        ]
+        widgets = {
+            # El mes se elige de una lista con su nombre en vez de escribir un número.
+            "mes": forms.Select(choices=[(i, m.capitalize()) for i, m in enumerate(MESES, start=1)]),
+            "fecha_vencimiento": CampoFecha(),
+        }
 
     def __init__(self, *args, condominio, **kwargs):
         super().__init__(*args, **kwargs)
         self.condominio = condominio
+        # Al abrir un período se propone el vencimiento por defecto del mes inicial.
+        mes, anio = self.initial.get("mes"), self.initial.get("anio")
+        if not self.instance.pk and mes and anio and not self.initial.get("fecha_vencimiento"):
+            self.initial["fecha_vencimiento"] = vencimiento_por_defecto(anio, mes)
 
     def clean(self):
         """

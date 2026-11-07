@@ -109,6 +109,16 @@
         {% endfor %}
       </ul>
     </div>
+    {# Vencimiento y criterio de prorrateo (Issue #62). #}
+    <div class="card mb-4">
+      <div class="card-body small">
+        <div class="d-flex justify-content-between"><span>Vencimiento</span><strong>{{ periodo.fecha_vencimiento|date:"d-m-Y" }}</strong></div>
+        <div class="d-flex justify-content-between mt-2 gap-2"><span>Prorrateo</span><strong class="text-end">{{ periodo.get_criterio_prorrateo_display }}</strong></div>
+        {% if periodo.referencia_reglamento %}
+        <p class="text-muted mb-0 mt-2">Autorizado por: {{ periodo.referencia_reglamento }}</p>
+        {% endif %}
+      </div>
+    </div>
     <div class="card">
       <div class="card-body small">
         <div class="d-flex justify-content-between"><span>Fondo de reserva</span><strong>{{ periodo.porcentaje_fondo_reserva|floatformat:"-2" }} %</strong></div>

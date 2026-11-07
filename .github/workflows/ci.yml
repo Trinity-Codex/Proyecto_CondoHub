@@ -42,10 +42,12 @@ jobs:
         run: |
           python manage.py check
           python manage.py makemigrations --check --dry-run
+      # --reiniciar: comprueba que la demo se borra y se vuelve a crear sin errores (#62).
       - name: Migrar y cargar los datos demo
         run: |
           python manage.py migrate --noinput
           python manage.py cargar_demo
+          python manage.py cargar_demo --reiniciar
       - name: Pruebas automáticas
         run: python manage.py test apps -v 2
       # OpenSpec (docs/equipo/PLAN_PMV_27NOV.md): sin revisión obligatoria, la CI

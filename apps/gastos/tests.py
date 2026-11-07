@@ -4,17 +4,21 @@ Pruebas de gastos comunes: períodos y egresos (Issue #1, RF02).
 Cada clase corresponde a un criterio de aceptación del Issue.
 """
 from datetime import date
+from unittest import mock
 
-from django.db import IntegrityError, transaction
+from django.core.exceptions import ValidationError
+from django.core.management import call_command
+from django.db import IntegrityError, connection, transaction
+from django.db.migrations.executor import MigrationExecutor
 from django.db.models import RestrictedError
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from django.urls import reverse
 
 from apps.condominios.models import Unidad
 from apps.core.pruebas import crear_escenario
 from apps.core.templatetags.condohub import pesos
 
-from .models import DetalleGastoComun, Egreso, PeriodoGasto
+from .models import DetalleGastoComun, Egreso, PeriodoGasto, vencimiento_por_defecto
 
 
 def crear_periodo(condominio, mes=10, anio=2026, **campos):
@@ -242,3 +246,124 @@ class FiltroPesosTest(SimpleTestCase):
         self.assertEqual(pesos(990), "$990")
         self.assertEqual(pesos(None), "$0")
         self.assertEqual(pesos(-5000), "-$5.000")
+
+
+class VencimientoYReglamentoTest(TestCase):
+    """
+    Issue #62 (spec gastos-comunes, «Período mensual de gastos»): vencimiento por defecto
+    el día 10 del mes siguiente y referencia del reglamento si el criterio es partes iguales.
+    """
+
+    referencia = "Art. 12 del reglamento de copropiedad"
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.client.force_login(self.e.administrador)
+
+    def abrir(self, **cambios):
+        datos = {"mes": 11, "anio": 2026, "porcentaje_fondo_reserva": "5", "criterio_prorrateo": "ALICUOTA",
+                 "referencia_reglamento": "", "fecha_vencimiento": "", **cambios}
+        return self.client.post(reverse("gastos:periodo_nuevo"), datos)
+
+    def test_vencimiento_por_defecto(self):
+        self.assertEqual(vencimiento_por_defecto(2026, 11), date(2026, 12, 10))
+        self.assertEqual(vencimiento_por_defecto(2026, 12), date(2027, 1, 10))
+
+    def test_el_formulario_propone_el_vencimiento_y_se_guarda(self):
+        with mock.patch("apps.gastos.views.timezone.localdate", return_value=date(2026, 11, 7)):
+            formulario = self.client.get(reverse("gastos:periodo_nuevo")).context["form"]
+        propuesta = formulario.initial["fecha_vencimiento"]
+        self.assertEqual(propuesta, date(2026, 12, 10))
+        self.abrir(fecha_vencimiento=propuesta.isoformat())
+        self.assertEqual(PeriodoGasto.objects.get().fecha_vencimiento, date(2026, 12, 10))
+
+    def test_vencimiento_vacio_usa_el_dia_10_del_mes_siguiente(self):
+        self.abrir(mes=12)
+        self.assertEqual(PeriodoGasto.objects.get().fecha_vencimiento, date(2027, 1, 10))
+
+    def test_vencimiento_dentro_del_mismo_mes_se_rechaza(self):
+        respuesta = self.abrir(fecha_vencimiento="2026-11-30")
+        self.assertIn("desde el 01-12-2026", respuesta.context["form"].errors["fecha_vencimiento"][0])
+        self.assertFalse(PeriodoGasto.objects.exists())
+
+    def test_el_primer_dia_del_mes_siguiente_si_se_acepta(self):
+        self.abrir(fecha_vencimiento="2026-12-01")
+        self.assertEqual(PeriodoGasto.objects.get().fecha_vencimiento, date(2026, 12, 1))
+
+    def test_partes_iguales_sin_referencia_se_rechaza(self):
+        respuesta = self.abrir(criterio_prorrateo="PARTES_IGUALES", referencia_reglamento="   ")
+        self.assertIn("reglamento", respuesta.context["form"].errors["referencia_reglamento"][0])
+        self.assertFalse(PeriodoGasto.objects.exists())
+
+    def test_partes_iguales_con_referencia_se_guarda_y_se_muestra(self):
+        self.abrir(criterio_prorrateo="PARTES_IGUALES", referencia_reglamento=self.referencia)
+        respuesta = self.client.get(PeriodoGasto.objects.get().get_absolute_url())
+        self.assertContains(respuesta, "En partes iguales")
+        self.assertContains(respuesta, self.referencia)
+
+    def test_la_regla_del_reglamento_tambien_vale_en_el_admin(self):
+        # El /admin/ de Django llama a full_clean(): por eso la regla está en el modelo.
+        periodo = PeriodoGasto(condominio=self.e.condominio, anio=2026, mes=11,
+                               criterio_prorrateo=PeriodoGasto.Criterio.PARTES_IGUALES)
+        with self.assertRaises(ValidationError) as error:
+            periodo.full_clean()
+        self.assertIn("referencia_reglamento", error.exception.message_dict)
+
+    def test_comite_ve_el_vencimiento_y_no_puede_editar(self):
+        periodo = crear_periodo(self.e.condominio, mes=11, criterio_prorrateo=PeriodoGasto.Criterio.PARTES_IGUALES,
+                                referencia_reglamento=self.referencia)
+        self.client.force_login(self.e.comite)
+        respuesta = self.client.get(periodo.get_absolute_url())
+        self.assertContains(respuesta, "10-12-2026")
+        self.assertContains(respuesta, self.referencia)
+        self.assertEqual(self.client.get(reverse("gastos:periodo_nuevo")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("gastos:periodo_editar", args=[periodo.pk])).status_code, 403)
+
+    def test_residente_y_conserje_reciben_403(self):
+        periodo = crear_periodo(self.e.condominio, mes=11)
+        rutas = [periodo.get_absolute_url(), reverse("gastos:periodo_nuevo"),
+                 reverse("gastos:periodo_editar", args=[periodo.pk])]
+        for usuario in (self.e.residente, self.e.conserje):
+            self.client.force_login(usuario)
+            for ruta in rutas:
+                self.assertEqual(self.client.get(ruta).status_code, 403, f"{usuario} {ruta}")
+
+    def test_periodo_de_otro_condominio_da_404(self):
+        ajeno = crear_periodo(self.e.ajeno, mes=11)
+        respuesta = self.client.post(reverse("gastos:periodo_editar", args=[ajeno.pk]), {
+            "mes": 11, "anio": 2026, "porcentaje_fondo_reserva": "5", "criterio_prorrateo": "ALICUOTA",
+            "fecha_vencimiento": "2026-12-15",
+        })
+        self.assertEqual(respuesta.status_code, 404)
+        ajeno.refresh_from_db()
+        self.assertEqual(ajeno.fecha_vencimiento, date(2026, 12, 10))
+
+
+class MigracionVencimientoTest(TransactionTestCase):
+    """Escenario «Períodos anteriores al cambio»: la migración 0006 completa el vencimiento de los períodos que ya había."""
+
+    antes = [("gastos", "0005_egreso_proveedor")]
+    despues = [("gastos", "0006_vencimiento_y_reglamento")]
+
+    def tearDown(self):
+        # Deja la base de pruebas con todas las migraciones, como la esperan las demás pruebas.
+        call_command("migrate", verbosity=0)
+
+    def test_periodos_existentes_quedan_con_el_dia_10_del_mes_siguiente(self):
+        ejecutor = MigrationExecutor(connection)
+        ejecutor.migrate(self.antes)
+        estado = ejecutor.loader.project_state(self.antes).apps
+        condominio = estado.get_model("condominios", "Condominio").objects.create(
+            nombre="Antiguo", direccion="Calle 3", comuna="Maipú"
+        )
+        periodo_antiguo = estado.get_model("gastos", "PeriodoGasto")
+        noviembre = periodo_antiguo.objects.create(condominio=condominio, anio=2025, mes=11)
+        diciembre = periodo_antiguo.objects.create(condominio=condominio, anio=2025, mes=12)
+
+        ejecutor = MigrationExecutor(connection)
+        ejecutor.loader.build_graph()
+        ejecutor.migrate(self.despues)
+        periodo_nuevo = ejecutor.loader.project_state(self.despues).apps.get_model("gastos", "PeriodoGasto")
+        self.assertEqual(periodo_nuevo.objects.get(pk=noviembre.pk).fecha_vencimiento, date(2025, 12, 10))
+        self.assertEqual(periodo_nuevo.objects.get(pk=diciembre.pk).fecha_vencimiento, date(2026, 1, 10))
+        self.assertEqual(periodo_nuevo.objects.get(pk=diciembre.pk).referencia_reglamento, "")
