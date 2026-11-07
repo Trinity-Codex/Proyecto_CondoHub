@@ -7,6 +7,9 @@
 El objetivo de este plan es que cada uno trabaje en **su** rama, en **sus** carpetas, y pueda unir sus PR a
 `main` sin esperar a los demás.
 
+Planes personales, con las instrucciones para el agente de IA y el modelo y esfuerzo de cada tarea:
+[Maximiliano](PMV_Maximiliano_Soto.md) · [Winderson](PMV_Winderson_Castrillo.md).
+
 ## 1. Cambio en el proceso (decisión del 6 de noviembre de 2026)
 
 | Antes | Desde el 6 de noviembre |
