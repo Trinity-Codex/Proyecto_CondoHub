@@ -2,6 +2,7 @@
 import secrets
 
 from django import forms
+from django.contrib.admin.forms import AdminAuthenticationForm
 from django.contrib.auth.forms import (
     AuthenticationForm,
     PasswordChangeForm,
@@ -15,14 +16,44 @@ from django.db import transaction
 from apps.condominios.models import Membresia
 from apps.core.formularios import BootstrapMixin, FormularioBootstrap, ModeloFormularioBootstrap
 
+from . import limite_intentos
 from .models import Usuario
 from .validadores import normalizar_rut, validar_rut
 
 
-class FormularioInicioSesion(BootstrapMixin, AuthenticationForm):
+class LimiteIntentosMixin:
+    """
+    Limita los intentos de cualquier formulario de inicio de sesión (Issue #52).
+    Va antes del formulario de Django para envolver su clean(), que comprueba la clave.
+    """
+
+    def clean(self):
+        correo = limite_intentos.normalizar_correo(self.cleaned_data.get("username"))
+        direccion = limite_intentos.direccion_cliente(self.request)
+        # Se revisa antes de comprobar la clave: durante el bloqueo, ni la correcta entra.
+        if limite_intentos.esta_bloqueado(correo, direccion):
+            raise forms.ValidationError(limite_intentos.MENSAJE_BLOQUEO, code="bloqueado")
+        try:
+            datos = super().clean()
+        except forms.ValidationError:
+            limite_intentos.registrar_fallo(correo, direccion)
+            if limite_intentos.esta_bloqueado(correo, direccion):
+                raise forms.ValidationError(limite_intentos.MENSAJE_BLOQUEO, code="bloqueado")
+            raise
+        # Sin usuario no hubo comprobación (faltaba la clave o el correo es inválido): no cuenta.
+        if self.get_user() is not None:
+            limite_intentos.limpiar_correo(correo)
+        return datos
+
+
+class FormularioInicioSesion(LimiteIntentosMixin, BootstrapMixin, AuthenticationForm):
     """Formulario de inicio de sesión con el correo como usuario."""
 
     username = forms.EmailField(label="Correo electrónico", widget=forms.EmailInput(attrs={"autofocus": True}))
+
+
+class FormularioInicioAdmin(LimiteIntentosMixin, AdminAuthenticationForm):
+    """Inicio de sesión de /admin/: también comprueba claves, así que lleva el mismo límite."""
 
 
 # Formularios que usa el panel /admin/ de Django para crear y editar usuarios
@@ -48,6 +79,13 @@ class FormularioRecuperarClave(BootstrapMixin, PasswordResetForm):
 
 class FormularioNuevaClave(BootstrapMixin, SetPasswordForm):
     """Contraseña nueva (dos veces) al abrir el enlace del correo."""
+
+    def save(self, commit=True):
+        usuario = super().save(commit=commit)
+        # Quien demostró ser dueño del correo no tiene que esperar a que termine el bloqueo.
+        if commit:
+            limite_intentos.limpiar_correo(usuario.email)
+        return usuario
 
 
 # --------------------------------------------------------------------------
