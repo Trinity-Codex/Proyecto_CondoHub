@@ -70,7 +70,7 @@ class RegistroInmutableTest(TestCase):
     def test_no_se_puede_reemplazar_con_un_objeto_nuevo_con_el_mismo_id(self):
         # Un objeto nuevo con el id de otro haría un UPDATE y reemplazaría el original.
         copia = RegistroAuditoria(
-            pk=self.registro.pk, condominio_id=self.e.condominio.pk, usuario_nombre="x",
+            pk=self.registro.pk, condominio_id=self.e.condominio.pk, condominio_nombre="x", usuario_nombre="x",
             accion="otra", objeto_tipo="x", objeto_id="1",
         )
         with self.assertRaises(RegistroInmutable):
@@ -99,7 +99,8 @@ class RegistrarTest(TestCase):
         self.assertEqual(registro.usuario_id, self.e.administrador.pk)
         self.assertEqual(registro.usuario_nombre, self.e.administrador.get_full_name() or self.e.administrador.get_username())
         self.assertEqual(registro.accion, Accion.CAMBIAR_ROL)
-        self.assertEqual(registro.objeto_tipo, self.e.condominio._meta.label_lower)
+        self.assertEqual(registro.condominio_nombre, self.e.condominio.nombre)
+        self.assertEqual(registro.objeto_tipo, "condominio")
         self.assertEqual(registro.objeto_id, str(self.e.condominio.pk))
         self.assertGreaterEqual(registro.creado, antes_del_registro)
 

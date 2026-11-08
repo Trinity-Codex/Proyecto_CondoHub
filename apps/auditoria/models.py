@@ -32,6 +32,8 @@ class RegistroAuditoria(models.Model):
     # Al no ser FK, CondominioQuerysetMixin no sirve tal cual: la vista debe filtrar con
     # `condominio_id=request.condominio.pk` (ver design.md).
     condominio_id = models.PositiveBigIntegerField()
+    # Copia del nombre, igual que usuario_nombre: se lee aunque el condominio ya no exista.
+    condominio_nombre = models.CharField(max_length=120)
     usuario_id = models.PositiveBigIntegerField(null=True, blank=True)
     usuario_nombre = models.CharField(max_length=150)
     accion = models.CharField(max_length=40)

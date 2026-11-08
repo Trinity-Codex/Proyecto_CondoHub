@@ -26,7 +26,7 @@ Restricciones que pesan en el diseño:
 ## Decisions
 
 **Modelo propio `RegistroAuditoria` en `apps/auditoria/models.py`.** Se guardan usuario, condominio, acción,
-`objeto_tipo` y `objeto_id` como texto y entero, `antes` y `despues` como `JSONField` (nulos por defecto) y `creado`.
+`condominio_nombre` y `usuario_nombre` copiados en el momento, `objeto_tipo` (`_meta.model_name`) y `objeto_id` como texto, `antes` y `despues` como `JSONField` (nulos por defecto) y `creado`.
 - Alternativa descartada: `django-simple-history`. Agrega tablas por modelo, exige fijar versiones y necesita
   middleware para saber quién hizo el cambio. Para una trazabilidad simple, un modelo propio es menos código.
 - Alternativa descartada: relación genérica (`ContentType`). Obliga a una consulta extra para leer el tipo; un texto
