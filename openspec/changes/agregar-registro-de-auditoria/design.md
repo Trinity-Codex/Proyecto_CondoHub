@@ -35,7 +35,7 @@ Restricciones que pesan en el diseño:
 **El usuario y el condominio se guardan como texto y número, sin `ForeignKey` a usuario.** Si una cuenta se borra,
 el registro debe seguir existiendo con el nombre que tenía en ese momento (`usuario_nombre`). Con una clave foránea
 habría que elegir entre bloquear el borrado de la cuenta (`PROTECT`) o cambiar el registro (`SET_NULL`), y ambas
-opciones rompen la inmutabilidad. El condominio sí lleva `ForeignKey` con `PROTECT`, porque nunca se borra.
+opciones rompen la inmutabilidad. El condominio también va sin clave foránea (`condominio_id`): con `PROTECT` se rompe `cargar_demo --reiniciar`, que borra el condominio demo.
 
 **Inmutabilidad en tres niveles.**
 - `RegistroAuditoria.save()` lanza `RegistroInmutable` si la fila ya existe, y `delete()` lanza la misma excepción.
