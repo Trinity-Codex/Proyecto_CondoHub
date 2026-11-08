@@ -1,21 +1,25 @@
 """Pruebas del patrón Observer y de las notificaciones (RF10), en el sitio y por correo (Issue #14)."""
 from datetime import date
+from io import StringIO
 from unittest import mock
 
 from django.core import mail
-from django.db import transaction
+from django.core.management import CommandError, call_command
+from django.db import IntegrityError, transaction
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 from apps.comunicados.models import Comunicado
+from apps.condominios.models import Residente
 from apps.core.pruebas import crear_escenario
-from apps.gastos.models import Egreso, PeriodoGasto
+from apps.gastos.models import DetalleGastoComun, Egreso, PeriodoGasto
 from apps.gastos.servicios import emitir_periodo
 from apps.incidentes.models import Incidente
 from apps.pagos.models import Pago
 
-from .models import Notificacion
+from .models import Notificacion, RecordatorioEnviado
 from .observador import Evento, NotificadorCorreo, Observador, Sujeto
+from .recordatorios import enviar_recordatorios, tipo_de_aviso
 
 
 class ObservadorDePrueba(Observador):
@@ -225,3 +229,119 @@ class NotificadorCorreoTest(TestCase):
         )
         self.e.residente.refresh_from_db()
         self.assertTrue(self.e.residente.recibir_correos)
+
+
+# --------------------------------------------------------------------------
+# Recordatorios de pago (Issue #57)
+# --------------------------------------------------------------------------
+class RecordatoriosTest(TestCase):
+    """Con fechas simuladas: el período de marzo 2026 vence el 10 de abril 2026."""
+
+    VENCE = date(2026, 4, 10)
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.periodo = PeriodoGasto.objects.create(
+            condominio=self.e.condominio, anio=2026, mes=3, estado=PeriodoGasto.Estado.EMITIDO,
+            fecha_vencimiento=self.VENCE,
+        )
+        self.cobro_a101 = DetalleGastoComun.objects.create(
+            periodo=self.periodo, unidad=self.e.a101, monto=40000, monto_fondo_reserva=2000
+        )
+        self.cobro_b101 = DetalleGastoComun.objects.create(
+            periodo=self.periodo, unidad=self.e.b101, monto=30000, monto_fondo_reserva=1500
+        )
+
+    def enviar(self, dia):
+        with self.captureOnCommitCallbacks(execute=True):
+            return enviar_recordatorios(dia)
+
+    def avisados(self):
+        return sorted(Notificacion.objects.values_list("usuario__email", flat=True))
+
+    def test_avisa_3_dias_antes_con_el_monto_y_el_enlace(self):
+        enviados = self.enviar(date(2026, 4, 7))
+        self.assertEqual(enviados[RecordatorioEnviado.Tipo.ANTES], 2)
+        self.assertEqual(self.avisados(), ["residente.b@prueba.cl", "residente@prueba.cl"])
+        aviso = Notificacion.objects.get(usuario=self.e.residente)
+        self.assertEqual(aviso.titulo, "Tus gastos comunes de Marzo 2026 vencen el 10-04-2026")
+        self.assertIn("$42.000", aviso.mensaje)
+        self.assertEqual(aviso.url, reverse("pagos:cobro_detalle", args=[self.cobro_a101.pk]))
+        self.assertEqual(sorted(m.to[0] for m in mail.outbox), ["residente.b@prueba.cl", "residente@prueba.cl"])
+
+    def test_avisa_el_dia_siguiente_al_vencimiento(self):
+        enviados = self.enviar(date(2026, 4, 11))
+        self.assertEqual(enviados[RecordatorioEnviado.Tipo.DESPUES], 2)
+        self.assertIn("están vencidos", Notificacion.objects.first().titulo)
+
+    def test_ventanas(self):
+        for dia, tipo in [
+            (date(2026, 4, 6), None),  # 4 días antes: todavía no
+            (date(2026, 4, 7), RecordatorioEnviado.Tipo.ANTES),
+            (date(2026, 4, 9), RecordatorioEnviado.Tipo.ANTES),
+            (date(2026, 4, 10), None),  # el día del vencimiento no se avisa
+            (date(2026, 4, 11), RecordatorioEnviado.Tipo.DESPUES),
+            (date(2026, 4, 17), RecordatorioEnviado.Tipo.DESPUES),
+            (date(2026, 4, 18), None),  # 8 días después: ya no
+        ]:
+            with self.subTest(dia=dia):
+                self.assertEqual(tipo_de_aviso(self.VENCE, dia), tipo)
+
+    def test_no_repite_el_mismo_aviso(self):
+        self.enviar(date(2026, 4, 7))
+        self.enviar(date(2026, 4, 7))  # el comando corre dos veces el mismo día
+        self.enviar(date(2026, 4, 8))  # y al día siguiente, aún antes del vencimiento
+        self.assertEqual(Notificacion.objects.count(), 2)
+        self.enviar(date(2026, 4, 11))  # después del vencimiento llega el segundo aviso
+        self.assertEqual(Notificacion.objects.count(), 4)
+        self.assertEqual(RecordatorioEnviado.objects.count(), 4)
+
+    def test_la_constancia_no_se_repite(self):
+        RecordatorioEnviado.objects.create(cobro=self.cobro_a101, usuario=self.e.residente, tipo="ANTES")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            RecordatorioEnviado.objects.create(cobro=self.cobro_a101, usuario=self.e.residente, tipo="ANTES")
+
+    def test_no_avisa_a_quien_ya_pago(self):
+        Pago.registrar(self.cobro_a101, monto=42000, registrado_por=self.e.administrador)
+        Notificacion.objects.all().delete()
+        self.enviar(date(2026, 4, 7))
+        self.assertEqual(self.avisados(), ["residente.b@prueba.cl"])
+
+    def test_con_pago_parcial_avisa_el_saldo(self):
+        Pago.registrar(self.cobro_a101, monto=12000, registrado_por=self.e.administrador)
+        Notificacion.objects.all().delete()
+        self.enviar(date(2026, 4, 7))
+        self.assertIn("$30.000", Notificacion.objects.get(usuario=self.e.residente).mensaje)
+
+    def test_no_avisa_fuera_del_periodo_de_residencia(self):
+        Residente.objects.filter(usuario=self.e.residente).update(desde=date(2026, 4, 1))  # llegó después de marzo
+        Residente.objects.get(usuario=self.e.residente_b).dar_de_baja()
+        self.enviar(date(2026, 4, 7))
+        self.assertEqual(self.avisados(), [])
+
+    def test_quien_no_quiere_correos_recibe_solo_la_campana(self):
+        self.e.residente.recibir_correos = False
+        self.e.residente.save()
+        self.enviar(date(2026, 4, 7))
+        self.assertIn("residente@prueba.cl", self.avisados())
+        self.assertEqual([m.to for m in mail.outbox], [["residente.b@prueba.cl"]])
+
+    def test_no_avisa_periodos_sin_emitir(self):
+        self.periodo.estado = PeriodoGasto.Estado.ABIERTO
+        self.periodo.save()
+        self.assertEqual(sum(self.enviar(date(2026, 4, 7)).values()), 0)
+
+    def test_no_avisa_en_un_condominio_desactivado(self):
+        self.e.condominio.activo = False
+        self.e.condominio.save()
+        self.assertEqual(sum(self.enviar(date(2026, 4, 7)).values()), 0)
+
+    def test_comando_con_fecha_simulada(self):
+        salida = StringIO()
+        with self.captureOnCommitCallbacks(execute=True):
+            call_command("enviar_recordatorios", fecha="2026-04-07", stdout=salida)
+        self.assertIn("Recordatorios del 07-04-2026: 2 antes del vencimiento y 0 después", salida.getvalue())
+
+    def test_comando_rechaza_una_fecha_invalida(self):
+        with self.assertRaisesMessage(CommandError, "AAAA-MM-DD"):
+            call_command("enviar_recordatorios", fecha="07-04-2026")

@@ -8,6 +8,8 @@ from django.views.generic import TemplateView
 
 from apps.comunicados.models import Comunicado
 from apps.condominios.models import Residente, Unidad
+from apps.gastos.models import PeriodoGasto
+from apps.gastos.reportes import generar_reporte
 from apps.incidentes.models import Incidente
 from apps.pagos.consultas import cobros_del_residente, total_adeudado
 from apps.reservas.models import Reserva
@@ -21,6 +23,7 @@ class InicioView(RolRequeridoMixin, TemplateView):
       - todos:        últimos comunicados
       - residente:    su deuda, sus próximas reservas y sus incidentes abiertos
       - admin/comité/conserje: resumen del condominio (unidades, incidentes, reservas de hoy)
+      - admin/comité:  indicadores de cobranza del último período emitido (Issue #57)
     """
 
     template_name = "core/inicio.html"
@@ -58,6 +61,13 @@ class InicioView(RolRequeridoMixin, TemplateView):
                     espacio__condominio=condominio, fecha=hoy, estado=Reserva.Estado.CONFIRMADA
                 ).count(),
             }
+            # Indicadores de cobranza (Issue #57): solo administrador y comité (el conserje no ve
+            # dinero). Del último período emitido, el mismo que el reporte muestra por defecto,
+            # y con generar_reporte, para que los números coincidan siempre con el reporte.
+            if tiene_rol(self.request, ADMINISTRADOR, COMITE):
+                ultimo = PeriodoGasto.objects.filter(condominio=condominio, estado=PeriodoGasto.Estado.EMITIDO).first()
+                contexto["cobranza"] = generar_reporte(ultimo) if ultimo else None
+                contexto["ve_cobranza"] = True
             # Aviso si las alícuotas no suman 100 % (el prorrateo quedaría descuadrado).
             contexto["suma_alicuotas"] = condominio.suma_alicuotas()
             # Incidentes por atender, para el equipo del condominio.

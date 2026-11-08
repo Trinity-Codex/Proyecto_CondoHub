@@ -18,6 +18,7 @@ from apps.core.pdf import ErrorPDF, _resolver_estatico, generar_pdf, renderizar_
 from apps.core.pruebas import crear_escenario, crear_usuario
 from apps.cuentas.models import Usuario
 from apps.gastos.models import DetalleGastoComun, Egreso, PeriodoGasto
+from apps.gastos.reportes import generar_reporte
 from apps.incidentes.models import Incidente
 from apps.notificaciones.models import Notificacion
 from apps.pagos.models import Pago
@@ -309,3 +310,48 @@ class CargarDemoTest(TestCase):
         self.cargar()
         self.cargar()
         self.assertEqual(huella_demo(), self.HUELLA)
+
+
+class IndicadoresCobranzaTest(TestCase):
+    """Indicadores de cobranza en el inicio (Issue #57): los mismos números del reporte."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+        febrero = PeriodoGasto.objects.create(
+            condominio=self.e.condominio, anio=2026, mes=2, estado=PeriodoGasto.Estado.EMITIDO
+        )
+        self.marzo = PeriodoGasto.objects.create(
+            condominio=self.e.condominio, anio=2026, mes=3, estado=PeriodoGasto.Estado.EMITIDO
+        )
+        DetalleGastoComun.objects.create(periodo=febrero, unidad=self.e.a101, monto=40000, monto_fondo_reserva=0)
+        for unidad in (self.e.a101, self.e.a102, self.e.b101):
+            cobro = DetalleGastoComun.objects.create(periodo=self.marzo, unidad=unidad, monto=40000, monto_fondo_reserva=0)
+            if unidad == self.e.b101:
+                Pago.registrar(cobro, monto=40000, registrado_por=self.e.administrador)
+
+    def inicio(self, usuario):
+        self.client.force_login(usuario)
+        return self.client.get(reverse("core:inicio"))
+
+    def test_administrador_y_comite_ven_los_numeros_del_reporte(self):
+        reporte = generar_reporte(self.marzo)
+        self.assertEqual((reporte.porcentaje_recaudacion, reporte.deuda_total, len(reporte.unidades_morosas)), (33.3, 120000, 1))
+        for usuario in (self.e.administrador, self.e.comite):
+            with self.subTest(usuario=usuario):
+                respuesta = self.inicio(usuario)
+                self.assertEqual(respuesta.context["cobranza"].periodo, self.marzo)
+                self.assertContains(respuesta, "Cobranza de Marzo 2026")
+                self.assertContains(respuesta, "33,3 %")
+                self.assertContains(respuesta, "$120.000")
+                self.assertContains(respuesta, f"{reverse('gastos:reporte')}?periodo={self.marzo.pk}")
+
+    def test_sin_periodos_emitidos(self):
+        PeriodoGasto.objects.update(estado=PeriodoGasto.Estado.ABIERTO)
+        self.assertContains(self.inicio(self.e.administrador), "Aún no hay gastos comunes emitidos")
+
+    def test_conserje_y_residente_no_los_ven(self):
+        for usuario in (self.e.conserje, self.e.residente):
+            with self.subTest(usuario=usuario):
+                respuesta = self.inicio(usuario)
+                self.assertNotIn("cobranza", respuesta.context)
+                self.assertNotContains(respuesta, "Unidades morosas")
