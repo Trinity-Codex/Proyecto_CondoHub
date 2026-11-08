@@ -1,0 +1,12 @@
+{% extends "core/pdf/base.html" %}
+{% comment %}PDF de prueba del contrato C0: comprueba tildes, la ñ y el formato de los montos.{% endcomment %}
+{% block titulo %}PDF de prueba{% endblock %}
+{% block encabezado %}PDF de prueba{% endblock %}
+{% block contenido %}
+<h2>Comunidad {{ comuna|default:"Ñuñoa" }}</h2>
+<table>
+  <tr><th scope="col">Concepto</th><th scope="col" class="derecha">Monto</th></tr>
+  <tr><td>Gasto común de prueba</td><td class="derecha">{{ monto|default:"$1.234.567" }}</td></tr>
+</table>
+{% if imagen_extra %}<img src="{{ imagen_extra }}" alt="">{% endif %}
+{% endblock %}

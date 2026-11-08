@@ -22,7 +22,8 @@
 {% if not periodo.esta_abierto %}
 <div class="alert alert-info">
   <i class="bi bi-lock"></i> Este período ya fue emitido{% if periodo.fecha_emision %} el {{ periodo.fecha_emision|date:"d-m-Y \a \l\a\s H:i" }}{% endif %}: sus egresos ya no se pueden modificar.
-  <span class="d-block small mt-1">Prorrateo: {{ periodo.get_criterio_prorrateo_display }}.
+  {# El criterio de prorrateo se muestra en la tarjeta "Vencimiento" de la derecha (#62). #}
+  <span class="d-block small mt-1">
     <a href="{% url 'gastos:reporte' %}?periodo={{ periodo.pk }}" class="alert-link">Ver recaudación y morosidad</a></span>
 </div>
 
@@ -108,6 +109,16 @@
         <li class="list-group-item text-muted small">Sin egresos.</li>
         {% endfor %}
       </ul>
+    </div>
+    {# Vencimiento y criterio de prorrateo (Issue #62). #}
+    <div class="card mb-4">
+      <div class="card-body small">
+        <div class="d-flex justify-content-between"><span>Vencimiento</span><strong>{{ periodo.fecha_vencimiento|date:"d-m-Y" }}</strong></div>
+        <div class="d-flex justify-content-between mt-2 gap-2"><span>Prorrateo</span><strong class="text-end">{{ periodo.get_criterio_prorrateo_display }}</strong></div>
+        {% if periodo.referencia_reglamento %}
+        <p class="text-muted mb-0 mt-2">Autorizado por: {{ periodo.referencia_reglamento }}</p>
+        {% endif %}
+      </div>
     </div>
     <div class="card">
       <div class="card-body small">

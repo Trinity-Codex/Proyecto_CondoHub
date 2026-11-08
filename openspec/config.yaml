@@ -7,7 +7,7 @@ context: |
 
   Proyecto: CondoHub, plataforma web de gestión de condominios para Chile (equipo Trinity Codex).
   Stack: Python 3.12, Django 5.2 LTS, MySQL 8, plantillas de Django con Bootstrap 5, PWA. Monolito modular.
-  Apps: core, cuentas, condominios, gastos, pagos, proveedores, comunicados, reservas, incidentes, notificaciones.
+  Apps: core, cuentas, condominios, gastos, pagos, proveedores, comunicados, reservas, incidentes, notificaciones, auditoria, privacidad, cartera, rendicion.
   Multi-condominio: todo registro pertenece a un condominio (directo o a través de una relación).
   Roles por condominio (Membresia): ADMINISTRADOR, COMITE, CONSERJE, RESIDENTE.
   Patrones: Observer para notificaciones (apps/notificaciones/observador.py) y Strategy para el prorrateo (apps/gastos/prorrateo.py).
@@ -33,7 +33,7 @@ rules:
     - Cada requisito nuevo lleva al menos un escenario de acceso por rol (quién puede y quién recibe 403 o 404).
   tasks:
     - Incluir pruebas en el tests.py de la app y correr python manage.py test apps completo.
-    - Incluir datos demo en apps/core/management/commands/cargar_demo.py cuando la funcionalidad se vea en la demo.
+    - Incluir datos demo en apps/<app>/demo.py cuando la funcionalidad se vea en la demo.
     - Toda vista nueva usa RolRequeridoMixin y CondominioQuerysetMixin (apps/core/permisos.py).
     - Si el cambio toca dinero, roles o datos personales, registrar el evento de auditoría.
     - Si una librería nueva entra a requirements.txt, fijar su versión exacta y la de sus dependencias.

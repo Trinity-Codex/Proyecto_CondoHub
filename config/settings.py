@@ -59,6 +59,11 @@ INSTALLED_APPS = [
     "apps.gastos",          # gastos comunes: períodos y egresos (RF02)
     "apps.proveedores",     # proveedores del condominio (RF: gestión de proveedores)
     "apps.pagos",           # estado de cuenta y pagos de los residentes (RF03, RF04)
+    # Apps del PMV 27-nov (#62): quedan registradas aquí para que nadie más edite este archivo.
+    "apps.auditoria",       # registro de acciones sobre dinero, roles y datos personales (#27)
+    "apps.privacidad",      # aviso de privacidad, público (#51)
+    "apps.cartera",         # deuda por antigüedad (#54)
+    "apps.rendicion",       # rendición de cuentas mensual (#55)
 ]
 
 MIDDLEWARE = [

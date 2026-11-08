@@ -26,7 +26,7 @@ openspec config set telemetry.enabled false
 3. Genera los comandos de OpenSpec para Claude Code (no están en el repositorio):
 
 ```bash
-openspec update
+openspec init --tools claude --no-animation --no-copilot-cloud
 ```
 
 4. Comprueba: `openspec list --specs` debe mostrar 10 specs y `python manage.py test apps` debe pasar completo.
