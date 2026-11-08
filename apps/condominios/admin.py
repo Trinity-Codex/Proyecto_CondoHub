@@ -65,6 +65,6 @@ class MembresiaAdmin(admin.ModelAdmin):
 
 @admin.register(Residente)
 class ResidenteAdmin(admin.ModelAdmin):
-    list_display = ("usuario", "unidad", "tipo", "activo")
+    list_display = ("usuario", "unidad", "tipo", "activo", "desde", "hasta")
     list_filter = ("unidad__edificio__condominio", "tipo", "activo")
     autocomplete_fields = ["usuario"]

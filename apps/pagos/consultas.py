@@ -1,4 +1,5 @@
 """Consultas del estado de cuenta (Issues #3 y #4). Las vistas las comparten para dar los mismos números."""
+from apps.condominios.residencias import cobros_visibles
 from apps.gastos.models import DetalleGastoComun, PeriodoGasto
 
 
@@ -8,7 +9,7 @@ def cobros_del_residente(usuario, condominio):
     del más reciente al más antiguo. Es la única fuente de "qué cobros puede ver
     un residente": la lista y el detalle la usan, así un cobro ajeno da 404.
     """
-    return (
+    cobros = (
         DetalleGastoComun.objects.filter(
             periodo__condominio=condominio,
             periodo__estado=PeriodoGasto.Estado.EMITIDO,  # lo no emitido aún no se cobra
@@ -23,6 +24,7 @@ def cobros_del_residente(usuario, condominio):
         .distinct()  # si la unidad tiene varios residentes, el JOIN repetiría el cobro
         .order_by("-periodo__anio", "-periodo__mes", "unidad__numero")
     )
+    return cobros_visibles(cobros, usuario)  # solo los meses de su residencia (Issue #46)
 
 
 def pagado_del_cobro(cobro):
