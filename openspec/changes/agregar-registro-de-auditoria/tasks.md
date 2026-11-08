@@ -18,8 +18,8 @@ Este cambio es el PR núcleo del Issue #27 (`Refs #27`). La vista y los eventos 
 ## 3. Pruebas del núcleo
 
 - [ ] 3.1 Pruebas en `apps/auditoria/tests.py` para cada escenario de la spec: cambio con valores anteriores y nuevos, evento sin valores anteriores, intento de editar o borrar, y que el registro sobrevive si se borra el usuario. Verificación: `python manage.py test apps.auditoria` pasa.
-- [ ] 3.3 Crear `apps/auditoria/demo.py` con registros de ejemplo para la demo del PMV. Verificación: `python manage.py cargar_demo` termina sin errores.
 - [ ] 3.2 Verificar que la página provisional sigue respondiendo 403 a conserje y residente. Verificación: las pruebas existentes de `PaginaProvisionalTest` pasan sin cambios.
+- [ ] 3.3 Crear `apps/auditoria/demo.py` con registros de ejemplo para la demo del PMV. Verificación: `python manage.py cargar_demo` termina sin errores.
 
 ## 4. Verificación final del PR
 
