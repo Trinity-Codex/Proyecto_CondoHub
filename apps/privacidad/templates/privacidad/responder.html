@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block titulo %}Solicitud #{{ solicitud.pk }}{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'privacidad:solicitudes' %}">Solicitudes de datos</a></li>
+  <li class="breadcrumb-item active" aria-current="page">#{{ solicitud.pk }}</li>
+</ol></nav>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card mb-3"><div class="card-body">
+      <div class="d-flex justify-content-between gap-2 mb-2">
+        <h1 class="h5 mb-0">{{ solicitud.get_tipo_display }}</h1>
+        {% include "privacidad/_estado.html" %}
+      </div>
+      <p class="small text-muted mb-2">{{ solicitud.usuario }} · {{ solicitud.usuario.email }} · {{ solicitud.creada|date:"d-m-Y H:i" }}</p>
+      <p class="mb-0">{{ solicitud.detalle|linebreaksbr }}</p>
+    </div></div>
+
+    {% if solicitud.esta_pendiente %}
+    <div class="card"><div class="card-body">
+      <h2 class="h6">Responder y cerrar</h2>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% include "_formulario.html" with form=form %}
+        <button class="btn btn-primary" type="submit">Responder y cerrar</button>
+      </form>
+    </div></div>
+    {% else %}
+    <div class="card"><div class="card-body">
+      <h2 class="h6">Respuesta <span class="text-muted fw-normal small">· {{ solicitud.cerrada|date:"d-m-Y" }} por {{ solicitud.cerrada_por|default:"—" }}</span></h2>
+      <p class="mb-0">{{ solicitud.respuesta|linebreaksbr }}</p>
+    </div></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

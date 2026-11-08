@@ -19,6 +19,7 @@ class NotificacionesConfig(AppConfig):
         from apps.gastos.models import PeriodoGasto
         from apps.incidentes.models import Incidente
         from apps.pagos.models import Pago
+        from apps.privacidad.models import SolicitudTitular
 
         from .observador import NotificadorCorreo, NotificadorEnSitio
 
@@ -27,6 +28,7 @@ class NotificacionesConfig(AppConfig):
         Incidente.suscribir(notificador)
         PeriodoGasto.suscribir(notificador)  # gastos comunes emitidos (Issue #2)
         Pago.suscribir(notificador)  # pago registrado (Issue #4)
+        SolicitudTitular.suscribir(notificador)  # solicitudes de datos personales (Issue #51)
 
         # Canal nuevo: correo electrónico (Issue #14). Solo se agregan estas
         # líneas; comunicados, incidentes, gastos y pagos no se modifican.
@@ -35,3 +37,4 @@ class NotificacionesConfig(AppConfig):
         Incidente.suscribir(correo)
         PeriodoGasto.suscribir(correo)
         Pago.suscribir(correo)
+        SolicitudTitular.suscribir(correo)
