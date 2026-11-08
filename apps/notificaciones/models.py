@@ -20,3 +20,30 @@ class Notificacion(models.Model):
 
     def __str__(self):
         return f"{self.titulo} -> {self.usuario}"
+
+
+class RecordatorioEnviado(models.Model):
+    """
+    Constancia de un recordatorio de pago ya enviado (Issue #57): un aviso por cobro,
+    persona y tipo. Así el comando enviar_recordatorios no repite avisos aunque corra
+    varias veces el mismo día (ver recordatorios.py).
+    """
+
+    class Tipo(models.TextChoices):
+        ANTES = "ANTES", "Antes del vencimiento"
+        DESPUES = "DESPUES", "Después del vencimiento"
+
+    cobro = models.ForeignKey("gastos.DetalleGastoComun", on_delete=models.CASCADE, related_name="recordatorios")
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="recordatorios")
+    tipo = models.CharField(max_length=10, choices=Tipo.choices)
+    enviado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "recordatorio enviado"
+        verbose_name_plural = "recordatorios enviados"
+        constraints = [
+            models.UniqueConstraint(fields=["cobro", "usuario", "tipo"], name="uq_recordatorio_cobro_usuario_tipo"),
+        ]
+
+    def __str__(self):
+        return f"{self.get_tipo_display()}: {self.cobro} -> {self.usuario}"

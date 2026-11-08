@@ -46,7 +46,7 @@ Antes de avisar se crea el registro, en la misma transacción que la notificaci�
 
 ### D3. A quién se avisa
 
-1. Períodos emitidos con el vencimiento dentro de alguna ventana.
+1. Períodos emitidos de condominios activos, con el vencimiento dentro de alguna ventana.
 2. Sus cobros no pagados con `saldo_del_cobro(cobro) > 0`.
 3. Los residentes activos de esas unidades. Para cada persona, `cobros_visibles(cobros, usuario)` deja solo los cobros de su período de residencia (C2): quien llegó después o fue dado de baja no recibe aviso.
 4. Se descartan los que ya tienen su `RecordatorioEnviado`.
@@ -76,3 +76,4 @@ Los recordatorios no cambian dinero, roles ni datos personales: no registran eve
 - **Correo real:** hasta el despliegue (#29), en desarrollo los correos salen en la consola.
 - **Huella de la demo:** `cargar_demo` no envía recordatorios, para no cambiar la cantidad de notificaciones según el día (`CargarDemoTest`).
 - **Consultas:** una consulta de `cobros_visibles` por residente con saldo. Con 200 unidades es aceptable para un comando diario.
+- **Inicio:** los indicadores arman el reporte completo del período en cada visita. Es el precio de que los números coincidan siempre con el reporte; con 200 unidades es aceptable.

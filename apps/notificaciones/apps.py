@@ -22,6 +22,7 @@ class NotificacionesConfig(AppConfig):
         from apps.privacidad.models import SolicitudTitular
 
         from .observador import NotificadorCorreo, NotificadorEnSitio
+        from .recordatorios import Recordatorio
 
         notificador = NotificadorEnSitio()
         Comunicado.suscribir(notificador)
@@ -29,6 +30,7 @@ class NotificacionesConfig(AppConfig):
         PeriodoGasto.suscribir(notificador)  # gastos comunes emitidos (Issue #2)
         Pago.suscribir(notificador)  # pago registrado (Issue #4)
         SolicitudTitular.suscribir(notificador)  # solicitudes de datos personales (Issue #51)
+        Recordatorio.suscribir(notificador)  # recordatorios de pago (Issue #57)
 
         # Canal nuevo: correo electrónico (Issue #14). Solo se agregan estas
         # líneas; comunicados, incidentes, gastos y pagos no se modifican.
@@ -38,3 +40,4 @@ class NotificacionesConfig(AppConfig):
         PeriodoGasto.suscribir(correo)
         Pago.suscribir(correo)
         SolicitudTitular.suscribir(correo)
+        Recordatorio.suscribir(correo)
