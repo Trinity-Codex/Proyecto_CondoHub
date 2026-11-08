@@ -18,12 +18,12 @@
 
 ## 4. Datos demo
 
-- [ ] 4.1 Cuando #62 esté en `main`, fijar las fechas en `apps/condominios/demo.py`: residentes con fecha antigua y `residente2` (B-102) desde el mes anterior, para que no vea el cobro de hace dos meses. Verificar con `cargar_demo --reiniciar` en el navegador: Mi cuenta de `residente@condohub.cl` muestra todos sus cobros, la de `residente2@condohub.cl` no muestra el más antiguo, y la cobranza sí.
+- [x] 4.1 Cuando #62 esté en `main`, fijar las fechas en `apps/condominios/demo.py`: residentes con fecha antigua y `residente2` (B-102) desde el mes anterior, para que no vea el cobro de hace dos meses. Verificar con `cargar_demo --reiniciar` en el navegador: Mi cuenta de `residente@condohub.cl` muestra todos sus cobros, la de `residente2@condohub.cl` no muestra el más antiguo, y la cobranza sí.
 
 ## 5. Verificación de integración
 
-- [ ] 5.1 Correr `python manage.py makemigrations --check`, `python manage.py test apps` con MySQL y `openspec validate --all --strict`; todo debe pasar.
-- [ ] 5.2 Ejecutar `/code-review high` con `opus` (nivel A del plan) y corregir lo que corresponda; verificar repitiendo 5.1.
+- [x] 5.1 Correr `python manage.py makemigrations --check`, `python manage.py test apps` con MySQL y `openspec validate --all --strict`; todo debe pasar.
+- [x] 5.2 Ejecutar `/code-review high` con `opus` (nivel A del plan) y corregir lo que corresponda; verificar repitiendo 5.1.
 
 ## Workflow follow-up
 
