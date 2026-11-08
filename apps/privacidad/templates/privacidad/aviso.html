@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% comment %}
+  Aviso de privacidad (Issue #51, Ley 21.719). Página pública: no muestra datos de ningún condominio.
+  Es un texto de demostración: antes de usar CondoHub con datos reales debe revisarlo un abogado.
+{% endcomment %}
+{% block titulo %}Aviso de privacidad{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <h1 class="h3 mb-3"><i class="bi bi-shield-lock"></i> Aviso de privacidad</h1>
+
+    <div class="alert alert-warning">
+      <i class="bi bi-exclamation-triangle"></i> <strong>Instancia de demostración.</strong>
+      Esta versión de CondoHub usa datos ficticios: no ingreses datos personales reales.
+    </div>
+
+    <p>CondoHub es una plataforma para administrar condominios. Aquí te contamos qué datos personales se tratan,
+      para qué, quién responde por ellos y cómo ejercer tus derechos, según la Ley 21.719 de protección de datos personales.</p>
+
+    <h2 class="h5 mt-4" id="responsables">Quién responde por tus datos</h2>
+    <ul>
+      <li><strong>Responsable:</strong> la administración de tu condominio. Decide para qué se usan tus datos y responde tus solicitudes.</li>
+      <li><strong>Encargado:</strong> CondoHub (equipo Trinity Codex), que opera la plataforma por encargo de la administración y no usa tus datos para fines propios.</li>
+    </ul>
+
+    <h2 class="h5 mt-4" id="datos">Qué datos se tratan y para qué</h2>
+    <ul>
+      <li><strong>Identificación y contacto</strong> (nombre, RUT, correo y teléfono): crear tu cuenta, reconocerte y avisarte de lo que te concierne.</li>
+      <li><strong>Residencia</strong> (unidad, tipo de residente y fechas): saber a qué unidad perteneces y qué cobros te corresponden.</li>
+      <li><strong>Gastos comunes y pagos</strong>: calcular, cobrar y registrar los gastos comunes, como exige la Ley 21.442 de copropiedad inmobiliaria.</li>
+      <li><strong>Reservas, incidentes, comunicados y notificaciones</strong>: el funcionamiento diario de la comunidad.</li>
+      <li><strong>Registros técnicos</strong> (inicios de sesión y, ante intentos fallidos, el correo usado y la dirección IP): proteger tu cuenta.</li>
+    </ul>
+    <p>Tus datos no se venden ni se usan para publicidad.</p>
+
+    <h2 class="h5 mt-4" id="conservacion">Por cuánto tiempo se conservan</h2>
+    <ul>
+      <li>Mientras tengas una relación con el condominio.</li>
+      <li>Después, solo lo que la administración deba conservar por obligaciones legales o contables, como la historia de cobros y pagos.</li>
+      <li>Los registros de intentos fallidos de inicio de sesión (correo y dirección IP) se borran después de 15 minutos, la próxima vez que alguien intenta entrar.</li>
+    </ul>
+
+    <h2 class="h5 mt-4" id="derechos">Tus derechos y cómo ejercerlos</h2>
+    <p>Puedes pedir <strong>acceso</strong> a tus datos, su <strong>rectificación</strong> si están mal, su
+      <strong>supresión</strong> u <strong>oponerte</strong> a que se usen para algún fin.</p>
+    <ul>
+      <li>Si tienes cuenta: entra a <strong>Mi perfil</strong> y usa <strong>Mis solicitudes de datos</strong>. La administración te responderá ahí y te avisaremos.</li>
+      <li>También en Mi perfil puedes <strong>descargar tus datos</strong> en un archivo (portabilidad).</li>
+      <li>Si no tienes cuenta, escríbele a la administración de tu condominio.</li>
+    </ul>
+    {% if user.is_authenticated %}
+    <div class="d-flex flex-wrap gap-2 mt-3">
+      {% if condominio_activo %}<a class="btn btn-primary" href="{% url 'privacidad:mis_solicitudes' %}"><i class="bi bi-envelope-paper"></i> Mis solicitudes de datos</a>{% endif %}
+      <a class="btn btn-outline-primary" href="{% url 'privacidad:descargar' %}"><i class="bi bi-download"></i> Descargar mis datos</a>
+    </div>
+    {% endif %}
+
+    <h2 class="h5 mt-4" id="reclamos">Si no quedas conforme</h2>
+    <p>Puedes reclamar ante la Agencia de Protección de Datos Personales.</p>
+  </div>
+</div>
+{% endblock %}

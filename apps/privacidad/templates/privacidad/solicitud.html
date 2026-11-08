@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titulo %}Solicitud de datos{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'privacidad:mis_solicitudes' %}">Mis solicitudes</a></li>
+  <li class="breadcrumb-item active" aria-current="page">Solicitud #{{ solicitud.pk }}</li>
+</ol></nav>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card"><div class="card-body">
+      <div class="d-flex justify-content-between gap-2 mb-2">
+        <h1 class="h5 mb-0">{{ solicitud.get_tipo_display }}</h1>
+        {% include "privacidad/_estado.html" %}
+      </div>
+      <p class="small text-muted">Enviada el {{ solicitud.creada|date:"d-m-Y H:i" }}</p>
+      <p class="mb-0">{{ solicitud.detalle|linebreaksbr }}</p>
+      {% if solicitud.esta_pendiente %}
+      <div class="alert alert-light border mt-3 mb-0">La administración aún no responde. Te avisaremos cuando lo haga.</div>
+      {% else %}
+      <hr>
+      <h2 class="h6">Respuesta de la administración <span class="text-muted fw-normal small">· {{ solicitud.cerrada|date:"d-m-Y" }}</span></h2>
+      <p class="mb-0">{{ solicitud.respuesta|linebreaksbr }}</p>
+      {% endif %}
+    </div></div>
+  </div>
+</div>
+{% endblock %}

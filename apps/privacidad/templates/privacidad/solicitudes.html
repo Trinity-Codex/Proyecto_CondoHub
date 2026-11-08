@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block titulo %}Solicitudes de datos personales{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'cuentas:usuarios' %}">Usuarios</a></li>
+  <li class="breadcrumb-item active" aria-current="page">Solicitudes de datos</li>
+</ol></nav>
+<h1 class="h3 mb-3"><i class="bi bi-envelope-paper"></i> Solicitudes de datos personales</h1>
+
+<div class="list-group">
+  {% for s in solicitudes %}
+  <a class="list-group-item list-group-item-action" href="{% url 'privacidad:responder' s.pk %}">
+    <div class="d-flex justify-content-between gap-2">
+      <span class="fw-semibold">{{ s.usuario }}</span>
+      {% include "privacidad/_estado.html" with solicitud=s %}
+    </div>
+    <div class="small">{{ s.get_tipo_display }}</div>
+    <div class="small text-muted">{{ s.creada|date:"d-m-Y" }}</div>
+  </a>
+  {% empty %}
+  <div class="list-group-item text-muted">No hay solicitudes en este condominio.</div>
+  {% endfor %}
+</div>
+{% endblock %}

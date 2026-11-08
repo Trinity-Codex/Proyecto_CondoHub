@@ -28,6 +28,19 @@
       <a class="btn btn-outline-primary" href="{% url 'cuentas:cambiar_clave' %}"><i class="bi bi-key"></i> Cambiar contraseña</a>
     </div></div>
 
+    {# Derechos sobre los datos personales (Issue #51, Ley 21.719). #}
+    <div class="card mt-3"><div class="card-body">
+      <div class="fw-semibold">Tus datos personales</div>
+      <div class="text-muted small mb-2">Descárgalos o pide acceso, rectificación, supresión u oposición.
+        Lo explicamos en el <a href="{% url 'privacidad:aviso' %}">aviso de privacidad</a>.</div>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-primary" href="{% url 'privacidad:descargar' %}"><i class="bi bi-download"></i> Descargar mis datos</a>
+        {% if condominio_activo %}
+        <a class="btn btn-outline-primary" href="{% url 'privacidad:mis_solicitudes' %}"><i class="bi bi-envelope-paper"></i> Mis solicitudes de datos</a>
+        {% endif %}
+      </div>
+    </div></div>
+
     {% if roles_texto %}
     <p class="text-muted small mt-3 mb-0"><i class="bi bi-building"></i> En {{ condominio_activo.nombre }} tienes el rol: {{ roles_texto }}.</p>
     {% endif %}
