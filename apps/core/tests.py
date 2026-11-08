@@ -281,7 +281,9 @@ class CargarDemoTest(TestCase):
         "espacios": 4,
         "reservas": {"CONFIRMADA": 1},
         "comunicados": 3,
-        "notificaciones": 21,
+        # 20 y no 21: el aviso de Pago.registrar solo llega a quien ve el cobro
+        # (residencia vigente); el residente recién llegado de demo.py no lo recibe.
+        "notificaciones": 20,
         "incidentes": {"EN_PROCESO": 1, "RECIBIDO": 1},
         "proveedores": {False: 1, True: 3},
         "periodos": {"ABIERTO": 1, "EMITIDO": 2},
