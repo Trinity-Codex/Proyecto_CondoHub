@@ -60,7 +60,7 @@ Se suscribe a la campana y al correo en `apps/notificaciones/apps.py`, como los 
 
 `DescargarMisDatosView` (con `LoginRequiredMixin`, como Mi perfil) arma un diccionario y lo entrega con `JsonResponse` y `Content-Disposition: attachment`.
 
-- **Incluye:** la cuenta (sin contraseña), las membresías, las residencias con sus fechas, las reservas que hizo, los incidentes que reportó, sus solicitudes, sus notificaciones y los cobros con sus pagos, filtrados con `cobros_visibles`.
+- **Incluye:** la cuenta (sin contraseña), las membresías, las residencias con sus fechas, las reservas que hizo, los incidentes que reportó, sus solicitudes, sus notificaciones y los cobros con sus pagos, filtrados con `cobros_visibles(..., incluir_bajas=True)`: una residencia dada de baja sigue contando dentro de sus fechas, porque esos cobros siguen siendo datos de la persona. La respuesta va sin caché (`no-store`).
 - **Fechas:** en ISO 8601; los montos, como enteros.
 - **Formato:** JSON porque es estructurado y de lectura automática. CSV obligaría a separar cada sección en un archivo distinto.
 - **Dónde vive:** la vista va en `apps/privacidad`, y Mi perfil solo enlaza.

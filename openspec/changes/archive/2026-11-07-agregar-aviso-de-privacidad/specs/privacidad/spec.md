@@ -41,7 +41,7 @@ El sistema SHALL permitir que una persona con sesión presente una solicitud de 
 - **THEN** el sistema responde 404
 
 ### Requirement: Descarga de mis datos
-El sistema SHALL permitir que una persona con sesión descargue desde Mi perfil un archivo en formato JSON con los datos de su cuenta y lo vinculado a ella en sus condominios: roles, residencias, reservas, incidentes, solicitudes, notificaciones y cobros, estos últimos solo de su período de residencia.
+El sistema SHALL permitir que una persona con sesión descargue desde Mi perfil un archivo en formato JSON con los datos de su cuenta y lo vinculado a ella en sus condominios: roles, residencias, reservas, incidentes, solicitudes, notificaciones y cobros, estos últimos solo de su período de residencia, incluidas las residencias ya dadas de baja. La respuesta MUST pedir que no se guarde en caché.
 
 #### Scenario: Descargar mis datos
 - **WHEN** un residente descarga sus datos
@@ -50,6 +50,10 @@ El sistema SHALL permitir que una persona con sesión descargue desde Mi perfil 
 #### Scenario: Cobros de antes de su llegada
 - **WHEN** un residente llegado en marzo descarga sus datos y su unidad tiene una deuda de febrero
 - **THEN** el archivo no incluye el cobro de febrero
+
+#### Scenario: Residencia dada de baja
+- **WHEN** una persona que fue dada de baja de su unidad descarga sus datos
+- **THEN** el archivo incluye los cobros de su período en esa unidad
 
 #### Scenario: Acceso por rol
 - **WHEN** una persona sin sesión intenta descargar datos
