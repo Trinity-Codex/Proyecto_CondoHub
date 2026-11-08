@@ -1,8 +1,11 @@
+Issue: #27 (`Refs #27` en este PR, `Closes #27` en el de la vista). MoSCoW: Must.
+Fuera de alcance: la vista, los eventos de pagos e incidentes y la protección a nivel de base de datos.
+
 ## Why
 
 CondoHub maneja dinero, roles y datos personales de residentes, pero hoy no guarda quién cambió qué ni cuándo.
 El comité y la administración necesitan esa trazabilidad para responder ante una discrepancia, y el Informe 1
-la exige como requisito Must (RNF11, SEG-05, NTI-09). La entrega del PMV es el 27 de noviembre de 2026.
+la exige como requisito Must (RNF11, SEG-05, NTI-09). Entrega PMV: 27 de noviembre de 2026.
 
 ## What Changes
 
@@ -12,7 +15,7 @@ la exige como requisito Must (RNF11, SEG-05, NTI-09). La entrega del PMV es el 2
   como único punto de entrada para registrar eventos (contrato C1 del plan del PMV).
 - Los registros son inmutables: no se pueden editar ni borrar desde el código ni desde el admin de Django.
 - Vista de auditoría filtrable (por fecha, usuario, acción y objeto) para el administrador y el comité.
-  Conserje y residente reciben 403. Esta vista llega en un segundo PR (`Closes #27`).
+  Conserje y residente reciben 403. Llega en un segundo PR.
 - Eventos mínimos: emisión de un período, registro y anulación de pagos (#53), alta de usuarios, cambios de
   rol o membresía, cambio de alícuota y cambio de estado de un incidente. Cada uno tiene su prueba.
 - Este cambio (PR núcleo, `Refs #27`) cubre el modelo, el servicio, la inmutabilidad y sus pruebas. Los eventos
@@ -34,8 +37,7 @@ Ninguna.
 - **Código:** `apps/auditoria/` (modelo, migración `0001`, `servicios.py`, pruebas en `tests.py`). Se reemplaza la
   página provisional de `AuditoriaInicioView` cuando llegue la vista, en el PR siguiente.
 - **Migraciones:** solo en `apps/auditoria`, una por PR. Nunca se edita una migración ya unida a `main`.
-- **Dependencias externas:** ninguna. No se agrega librería (se descarta `django-simple-history` para mantener el
-  modelo simple y sin versiones que fijar).
+- **Dependencias externas:** ninguna.
 - **Otros integrantes:** Walther usa `registrar()` en #8 (miércoles 18) y Maximiliano en los eventos de cuentas
   y condominios (viernes 13). Su firma no cambia sin aviso en el grupo.
 - **Datos demo:** se agregan en `apps/auditoria/demo.py` para que la vista se vea en la demo del PMV.
