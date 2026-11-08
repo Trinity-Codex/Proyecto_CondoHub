@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block titulo %}Importar planilla{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'condominios:unidades' %}">Unidades</a></li>
+  <li class="breadcrumb-item active" aria-current="page">Importar planilla</li>
+</ol></nav>
+
+<h1 class="h3 mb-3"><i class="bi bi-file-earmark-spreadsheet"></i> Importar unidades y residentes</h1>
+
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card"><div class="card-body">
+      <h2 class="h5">1. Sube la planilla</h2>
+      <p class="small text-muted mb-2">Una fila por residente: una unidad con dos residentes va en dos filas con los mismos datos de unidad, y una unidad sin residente va con el correo vacío. Si la planilla tiene cualquier error, no se importa nada.</p>
+      <p class="small"><a href="{% url 'condominios:importar_plantilla' %}"><i class="bi bi-download"></i> Descargar la plantilla de ejemplo</a></p>
+      <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        {% include "_formulario.html" with form=form %}
+        <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i> Revisar planilla</button>
+        <a class="btn btn-outline-secondary" href="{% url 'condominios:unidades' %}">Cancelar</a>
+      </form>
+      <details class="mt-3 small">
+        <summary>Columnas de la planilla</summary>
+        <ul class="mt-2 mb-0">
+          <li><strong>edificio, numero, alicuota</strong>: obligatorias. Alícuota como fracción: 0,0125 = 1,25 %.</li>
+          <li><strong>piso</strong> (si falta, 1) y <strong>tipo</strong>: Departamento, Casa, Local comercial, Estacionamiento o Bodega (si falta, Departamento).</li>
+          <li><strong>correo</strong> del residente y <strong>desde</strong> (AAAA-MM-DD o DD-MM-AAAA): desde ese mes verá sus cobros.</li>
+          <li><strong>tipo_residente</strong>: Propietario, Arrendatario o Familiar (si falta, Propietario).</li>
+          <li><strong>nombre, apellido, rut</strong>: solo si el correo aún no tiene cuenta. A una cuenta existente no se le cambian sus datos.</li>
+        </ul>
+      </details>
+    </div></div>
+  </div>
+
+  {% if resultado %}
+  {# En el celular el resultado va primero, para que se vea sin bajar. #}
+  <div class="col-lg-7 order-first order-lg-last">
+    <div class="card"><div class="card-body">
+      <h2 class="h5">2. Revisa y confirma</h2>
+      {% with r=resultado.resumen %}
+      <ul class="list-unstyled mb-3">
+        <li><strong>{{ resultado.filas|length }}</strong> filas leídas</li>
+        <li><strong>{{ r.edificios_nuevos }}</strong> edificios nuevos</li>
+        <li><strong>{{ r.unidades_nuevas }}</strong> unidades nuevas y <strong>{{ r.unidades_actualizadas }}</strong> que ya existían (se actualizan)</li>
+        <li><strong>{{ r.cuentas_nuevas }}</strong> cuentas nuevas</li>
+        <li><strong>{{ r.residentes_nuevos }}</strong> residentes nuevos y <strong>{{ r.residentes_existentes }}</strong> que ya estaban</li>
+        <li>Suma de alícuotas después de importar: <strong>{{ resultado.suma_alicuotas|floatformat:6 }}</strong></li>
+      </ul>
+      {% endwith %}
+
+      {% if resultado.valido %}
+      <div class="alert alert-success"><i class="bi bi-check-circle"></i> La planilla no tiene errores. Todavía no se guardó nada.</div>
+      <form method="post" action="{% url 'condominios:importar_confirmar' %}">
+        {% csrf_token %}
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" name="enviar_invitaciones" id="enviar_invitaciones" value="1"{% if resultado.resumen.cuentas_nuevas %} checked{% else %} disabled{% endif %}>
+          <label class="form-check-label" for="enviar_invitaciones">Enviar invitaciones a las cuentas nuevas</label>
+          <div class="form-text">Cada persona recibe un correo para crear su contraseña. Las cuentas que ya existían no reciben nada.</div>
+        </div>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-upload"></i> Importar</button>
+      </form>
+      {% else %}
+      <div class="alert alert-danger" role="alert">
+        <i class="bi bi-exclamation-triangle"></i> La planilla tiene errores y no se importará nada. Corrígelos en el archivo y vuelve a subirlo.
+        {% for error in resultado.errores_globales %}<div class="mt-2">{{ error }}</div>{% endfor %}
+      </div>
+      {% if resultado.filas_con_error %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead><tr><th scope="col">Fila</th><th scope="col">Unidad</th><th scope="col">Errores</th></tr></thead>
+          <tbody>
+            {% for fila in resultado.filas_con_error %}
+            <tr>
+              <td>{{ fila.linea }}</td>
+              <td class="text-nowrap">{{ fila.datos.edificio|default:"—" }} {{ fila.datos.numero }}</td>
+              <td><ul class="mb-0 ps-3">{% for error in fila.errores %}<li>{{ error }}</li>{% endfor %}</ul></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+      {% endif %}
+    </div></div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

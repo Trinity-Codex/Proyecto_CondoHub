@@ -9,6 +9,7 @@
       Suma de alícuotas: {{ suma_alicuotas|floatformat:4 }}
     </span>
     {% if es_admin %}
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'condominios:importar' %}"><i class="bi bi-file-earmark-spreadsheet"></i> Importar planilla</a>
     <a class="btn btn-primary btn-sm" href="{% url 'condominios:edificio_nuevo' %}"><i class="bi bi-plus-lg"></i> Nuevo edificio</a>
     {% endif %}
   </div>

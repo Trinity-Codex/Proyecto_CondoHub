@@ -18,4 +18,8 @@ urlpatterns = [
     # Residentes
     path("unidades/<int:unidad_pk>/residentes/nuevo/", views.ResidenteCreateView.as_view(), name="residente_nuevo"),
     path("residentes/<int:pk>/baja/", views.ResidenteBajaView.as_view(), name="residente_baja"),
+    # Importar desde planilla (#13)
+    path("unidades/importar/", views.ImportarView.as_view(), name="importar"),
+    path("unidades/importar/confirmar/", views.ConfirmarImportacionView.as_view(), name="importar_confirmar"),
+    path("unidades/importar/plantilla.csv", views.PlantillaImportacionView.as_view(), name="importar_plantilla"),
 ]

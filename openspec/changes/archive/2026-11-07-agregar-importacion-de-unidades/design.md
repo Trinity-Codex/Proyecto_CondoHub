@@ -48,7 +48,7 @@ El código vive en `apps/condominios/importacion.py`, separado de las vistas: `l
 
 - Edificio: se busca por nombre (sin importar mayúsculas) en el condominio; si no existe, se crea.
 - Unidad: se busca por edificio y número; si existe, se actualizan piso, tipo y alícuota.
-- Cuenta: se busca por correo. Si existe, no se modifican sus datos. Si no, se crea sin contraseña usable.
+- Cuenta: se busca por correo. Si existe, no se modifican sus datos. Si no, se crea con una clave aleatoria que nadie conoce, como en el alta de usuarios (#11): la persona define la suya con la invitación.
 - Residente: la misma lógica de `ResidenteForm.save()`: se crea o se reactiva y se actualizan tipo y `desde`.
 
 Para no hacer una consulta por fila, la validación carga antes los edificios, unidades y cuentas involucrados.
@@ -86,3 +86,5 @@ Crear cuentas y dar roles es un dato personal y un cambio de roles. Cuando C1 (#
 - **El archivo en la sesión:** hasta 1 MB en la sesión de la base de datos. Un condominio de 200 unidades ocupa unos 20 KB.
 - **Datos demo:** no hace falta agregar datos; la plantilla sirve como ejemplo para probar en la demo.
 - **Alícuotas exactas:** la suma debe dar exactamente 1, como ya exige el aviso de la página Unidades.
+- **Reimportar un archivo antiguo reactiva a quien se dio de baja después:** importar solo agrega y actualiza, y el archivo manda. La vista previa lo muestra, porque cuenta a esas personas como «residentes nuevos».
+- **Columnas y valores:** una columna desconocida rechaza el archivo y una fila con más valores que columnas es un error, para que una coma decimal sin comillas no deje una alícuota en 0 sin aviso.

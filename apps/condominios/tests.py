@@ -2,19 +2,24 @@
 from datetime import date, timedelta
 from decimal import Decimal
 from importlib import import_module
+from unittest import mock
 
 from django.apps import apps as registro_apps
+from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.pruebas import crear_escenario, crear_usuario
+from apps.cuentas.models import Usuario
 from apps.gastos.models import DetalleGastoComun, PeriodoGasto
 from apps.gastos.reportes import generar_reporte
 from apps.reservas.models import Reserva
 
-from .models import Edificio, Membresia, Residente, Unidad
+from . import importacion
+from .models import Condominio, Edificio, Membresia, Residente, Unidad
 from .residencias import cobros_visibles
 
 
@@ -489,3 +494,292 @@ class ResidenciaEnPantallasTest(TestCase):
         self.client.force_login(self.e.comite)
         self.assertEqual(list(self.client.get(reverse("pagos:estado_cuenta")).context["cobros"]), [self.marzo])
         self.assertEqual(self.client.get(reverse("pagos:cuenta_unidad", args=[self.e.a101.pk])).context["total_adeudado"], 84000)
+
+
+# --------------------------------------------------------------------------
+# Importar desde planilla (Issue #13)
+# --------------------------------------------------------------------------
+ENCABEZADOS = "edificio;numero;piso;tipo;alicuota;correo;nombre;apellido;rut;tipo_residente;desde"
+# Reemplaza las 3 unidades del escenario (suman 1) y agrega una torre nueva: la suma sigue en 1.
+PLANILLA = "\n".join([
+    ENCABEZADOS,
+    "Torre A;A101;1;Departamento;0,3;residente@prueba.cl;;;;Propietario;2020-01-01",
+    "Torre A;A102;2;Departamento;0,2;nueva@prueba.cl;Nueva;Persona;11.111.111-1;Arrendatario;01-03-2024",
+    "Torre A;A102;2;Departamento;0,2;hijo@prueba.cl;Hijo;Persona;22.222.222-2;Familiar;2024-03-01",
+    "Torre B;B101;1;Departamento;0,3;;;;;;",
+    "Torre C;C101;1;Bodega;0,2;;;;;;",
+])
+
+
+class ImportacionTest(TestCase):
+    """Leer, validar y aplicar la planilla, sin pasar por las vistas."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+
+    def validar(self, texto):
+        return importacion.validar(importacion.leer(texto), self.e.condominio)
+
+    def errores(self, *filas):
+        resultado = self.validar("\n".join([ENCABEZADOS, *filas]))
+        return [e for f in resultado.filas for e in f.errores], resultado
+
+    def importar(self, texto=PLANILLA):
+        resultado = self.validar(texto)
+        self.assertTrue(resultado.valido, [f.errores for f in resultado.filas] + resultado.errores_globales)
+        return importacion.aplicar(resultado, self.e.condominio)
+
+    def foto(self):
+        """Todo lo que la importación puede crear o cambiar, para comparar antes y después."""
+        return (
+            sorted(Edificio.objects.values_list("condominio_id", "nombre")),
+            sorted(Unidad.objects.values_list("edificio__nombre", "numero", "piso", "tipo", "alicuota")),
+            sorted(Residente.objects.values_list("usuario__email", "unidad__numero", "tipo", "activo", "desde")),
+            sorted(Membresia.objects.values_list("usuario__email", "condominio_id", "rol", "activo")),
+            sorted(Usuario.objects.values_list("email", flat=True)),
+        )
+
+    def test_lee_coma_y_punto_y_coma_y_ambas_codificaciones(self):
+        texto = 'edificio,numero,alicuota\nTorre Ñ,1,"0,5"'
+        for contenido in (texto.encode("utf-8"), ("﻿" + texto).encode("utf-8"), texto.encode("cp1252")):
+            with self.subTest(contenido=contenido[:4]):
+                fila = importacion.leer(importacion.decodificar(contenido))[0]
+                self.assertEqual((fila["edificio"], fila["alicuota"]), ("Torre Ñ", "0,5"))
+        # Encabezados con tildes y mayúsculas, como los escribiría una persona.
+        self.assertEqual(importacion.leer("Edificio;Número;Alícuota\nT;1;0,5")[0]["numero"], "1")
+
+    def test_rechaza_un_archivo_sin_los_encabezados_o_sin_filas(self):
+        for texto in ("", "nombre;correo\nAna;a@b.cl", ENCABEZADOS):
+            with self.subTest(texto=texto[:10]), self.assertRaises(importacion.ArchivoInvalido):
+                importacion.leer(texto)
+
+    def test_vista_previa_con_resumen_y_sin_guardar(self):
+        resultado = self.validar(PLANILLA)
+        self.assertTrue(resultado.valido)
+        self.assertEqual(
+            resultado.resumen,
+            {
+                "edificios_nuevos": 1, "unidades_nuevas": 1, "unidades_actualizadas": 3,
+                "cuentas_nuevas": 2, "residentes_nuevos": 2, "residentes_existentes": 1,
+            },
+        )
+        self.assertFalse(Edificio.objects.filter(nombre="Torre C").exists())
+
+    def test_errores_por_fila(self):
+        casos = {
+            "Torre A;A101;1;;0,4;x@prueba.cl;X;Y;12.345.678-9;;2024-01-01": "El RUT «12.345.678-9» no es válido.",
+            "Torre A;A101;1;;0,4;x@prueba.cl;X;Y;;;2024-01-01": "Falta el dato «rut»",
+            "Torre A;A101;uno;;0,4;;;;;;": "no es un número entero",
+            "Torre A;A101;1;Castillo;0,4;;;;;;": "El tipo «Castillo» no existe",
+            "Torre A;A101;1;;mucho;;;;;;": "La alícuota «mucho» no es un número",
+            "Torre A;A101;1;;1,5;;;;;;": "entre 0 y 1",
+            "Torre A;A101;1;;0,1234567;;;;;;": "hasta 6 decimales",
+            "Torre A;A101;1;;0,4;residente@prueba.cl;;;;Dueño;2024-01-01": "El tipo de residente «Dueño» no existe",
+            "Torre A;A101;1;;0,4;residente@prueba.cl;;;;;31-02-2024": "La fecha «31-02-2024» no es válida",
+            "Torre A;A101;1;;0,4;residente@prueba.cl;;;;;": "Falta la fecha desde",
+            "Torre A;A101;1;;0,4;no-es-correo;;;;;2024-01-01": "El correo «no-es-correo» no es válido.",
+            ";A101;1;;0,4;;;;;;": "Falta el dato «edificio»",
+        }
+        for fila, error in casos.items():
+            with self.subTest(fila=fila):
+                errores, resultado = self.errores(fila)
+                self.assertFalse(resultado.valido)
+                self.assertTrue(any(error in e for e in errores), errores)
+                self.assertEqual(resultado.filas_con_error[0].linea, 2)
+
+    def test_coma_decimal_sin_comillas_no_se_pierde(self):
+        resultado = self.validar("edificio,numero,alicuota\nTorre A,A101,0,4")
+        self.assertIn("más valores que columnas", resultado.filas[0].errores[0])
+
+    def test_rechaza_columnas_desconocidas(self):
+        with self.assertRaisesMessage(importacion.ArchivoInvalido, "correo electronico"):
+            importacion.leer("edificio;numero;alicuota;correo electronico\nT;1;0,5;a@b.cl")
+
+    def test_cuenta_desactivada(self):
+        self.e.residente.is_active = False
+        self.e.residente.save()
+        errores, _ = self.errores("Torre A;A101;1;;0,4;residente@prueba.cl;;;;;2020-01-01")
+        self.assertIn("La cuenta de residente@prueba.cl está desactivada. Reactívala antes de importarla.", errores)
+
+    def test_fecha_futura(self):
+        manana = (timezone.localdate() + timedelta(days=1)).isoformat()
+        errores, _ = self.errores(f"Torre A;A101;1;;0,4;residente@prueba.cl;;;;;{manana}")
+        self.assertIn("La fecha desde no puede ser futura.", errores)
+
+    def test_rut_de_otra_cuenta(self):
+        self.e.comite.rut = "11.111.111-1"
+        self.e.comite.save()
+        errores, _ = self.errores("Torre A;A101;1;;0,4;x@prueba.cl;X;Y;11111111-1;;2024-01-01")
+        self.assertIn("El RUT 11111111-1 ya pertenece a otra cuenta.", errores)
+
+    def test_errores_entre_filas(self):
+        ana = "Torre A;A101;1;;0,4;x@prueba.cl;Ana;Uno;11.111.111-1;;2024-01-01"
+        casos = [
+            (["Torre A;A101;1;;0,4;;;;;;", "torre a;a101;2;;0,4;;;;;;"], "ya aparece en la fila 2 con otro piso"),
+            (["Torre A;A101;1;;0,4;residente@prueba.cl;;;;;2020-01-01"] * 2, "ya aparece como residente de esta unidad"),
+            ([ana, "Torre A;A102;1;;0,3;x@prueba.cl;Ana;Otra;11.111.111-1;;2024-01-01"], "con otro nombre, apellido o RUT"),
+            ([ana, "Torre A;A102;1;;0,3;y@prueba.cl;Bea;Dos;11.111.111-1;;2024-01-01"], "ya aparece con otro correo"),
+        ]
+        for filas, error in casos:
+            with self.subTest(error=error):
+                errores, _ = self.errores(*filas)
+                self.assertTrue(any(error in e for e in errores), errores)
+
+    def test_una_persona_puede_vivir_en_dos_unidades(self):
+        errores, _ = self.errores(
+            "Torre A;A101;1;;0,4;x@prueba.cl;Ana;Uno;11.111.111-1;;2024-01-01",
+            "Torre A;A102;1;;0,3;x@prueba.cl;Ana;Uno;11.111.111-1;;2024-01-01",
+        )
+        self.assertEqual(errores, [])
+
+    def test_alicuotas_que_no_suman_1(self):
+        resultado = self.validar(f"{ENCABEZADOS}\nTorre C;C1;1;;0,5;;;;;;")  # 1 + 0,5
+        self.assertFalse(resultado.valido)
+        self.assertIn("sumarían 1,500000 y deben sumar 1. Revisa", resultado.errores_globales[0])
+
+    def test_importa_unidades_cuentas_y_residentes_con_su_fecha(self):
+        nuevas = self.importar()
+        self.assertEqual(sorted(u.email for u in nuevas), ["hijo@prueba.cl", "nueva@prueba.cl"])
+        self.assertTrue(Unidad.objects.filter(edificio__nombre="Torre C", numero="C101", tipo=Unidad.Tipo.BODEGA).exists())
+        self.assertEqual(Unidad.objects.get(numero="A102").piso, 2)
+        nueva = Residente.objects.get(usuario__email="nueva@prueba.cl")
+        self.assertEqual(
+            (nueva.unidad.numero, nueva.tipo, nueva.desde), ("A102", Residente.Tipo.ARRENDATARIO, date(2024, 3, 1))
+        )
+        self.assertEqual(nueva.usuario.rut, "11111111-1")
+        self.assertTrue(nueva.usuario.has_usable_password())  # clave aleatoria: la invitación funciona
+        self.assertTrue(
+            Membresia.objects.filter(
+                usuario=nueva.usuario, condominio=self.e.condominio, rol=Membresia.Rol.RESIDENTE, activo=True
+            ).exists()
+        )
+        self.assertEqual(self.e.condominio.suma_alicuotas(), 1)
+
+    def test_no_cambia_los_datos_de_una_cuenta_existente(self):
+        self.importar(PLANILLA.replace("residente@prueba.cl;;;", "residente@prueba.cl;Otro;Nombre;"))
+        self.e.residente.refresh_from_db()
+        self.assertEqual(self.e.residente.first_name, "residente")
+
+    def test_reimportar_no_duplica(self):
+        self.importar()
+        despues_de_la_primera = self.foto()
+        self.assertEqual(self.importar(), [])  # sin cuentas nuevas
+        self.assertEqual(self.foto(), despues_de_la_primera)
+
+    def test_reactiva_a_un_residente_dado_de_baja(self):
+        Residente.objects.get(usuario=self.e.residente).dar_de_baja()
+        self.importar()
+        residente = Residente.objects.get(usuario=self.e.residente)
+        self.assertTrue(residente.activo)
+        self.assertIsNone(residente.hasta)
+
+    def test_si_falla_una_fila_no_queda_nada(self):
+        antes = self.foto()
+        guardar = Residente.save
+        llamadas = []
+
+        def falla_la_tercera(residente, *args, **kwargs):
+            llamadas.append(residente)
+            if len(llamadas) == 3:
+                raise IntegrityError("falla simulada")
+            return guardar(residente, *args, **kwargs)
+
+        with mock.patch.object(Residente, "save", falla_la_tercera), self.assertRaises(IntegrityError):
+            self.importar()
+        self.assertEqual(self.foto(), antes)
+
+    def test_la_plantilla_se_importa(self):
+        vacio = Condominio.objects.create(nombre="Vacío", direccion="x", comuna="y")
+        texto = importacion.decodificar(importacion.plantilla().encode("utf-8"))
+        resultado = importacion.validar(importacion.leer(texto), vacio)
+        self.assertTrue(resultado.valido, [f.errores for f in resultado.filas] + resultado.errores_globales)
+        self.assertEqual((resultado.resumen["unidades_nuevas"], resultado.resumen["cuentas_nuevas"]), (2, 2))
+
+
+class ImportacionVistasTest(TestCase):
+    def setUp(self):
+        self.e = crear_escenario()
+        self.url = reverse("condominios:importar")
+
+    def subir(self, texto=PLANILLA, usuario=None):
+        self.client.force_login(usuario or self.e.administrador)
+        archivo = SimpleUploadedFile("unidades.csv", texto.encode("utf-8"), content_type="text/csv")
+        return self.client.post(self.url, {"archivo": archivo})
+
+    def confirmar(self, invitar=False):
+        return self.client.post(reverse("condominios:importar_confirmar"), {"enviar_invitaciones": "1"} if invitar else {})
+
+    def test_vista_previa_no_guarda_y_confirmar_importa(self):
+        respuesta = self.subir()
+        self.assertContains(respuesta, "La planilla no tiene errores")
+        self.assertFalse(Edificio.objects.filter(nombre="Torre C").exists())
+        self.assertRedirects(self.confirmar(), reverse("condominios:unidades"))
+        self.assertTrue(Edificio.objects.filter(nombre="Torre C").exists())
+        self.assertNotIn("importacion_unidades", self.client.session)
+
+    def test_con_errores_muestra_la_fila_y_no_se_puede_confirmar(self):
+        respuesta = self.subir(f"{ENCABEZADOS}\nTorre A;A101;1;;0,4;x@prueba.cl;X;Y;12.345.678-9;;2024-01-01")
+        self.assertContains(respuesta, "no se importará nada")
+        self.assertContains(respuesta, "<td>2</td>", html=True)
+        self.assertNotContains(respuesta, reverse("condominios:importar_confirmar"))
+        self.assertRedirects(self.confirmar(), self.url)
+        self.assertFalse(Usuario.objects.filter(email="x@prueba.cl").exists())
+
+    def test_archivo_ilegible_o_muy_grande(self):
+        self.assertContains(self.subir("hola;mundo\n1;2"), "Faltan las columnas")
+        self.assertContains(self.subir(PLANILLA + "\n" + ";" * 1_000_000), "pesa más de 1 MB")
+
+    def test_confirmar_revalida(self):
+        self.subir()
+        Unidad.objects.create(edificio=self.e.torre_b, numero="B102", alicuota=Decimal("0.1"))  # ahora sumarían 1,1
+        respuesta = self.confirmar()
+        self.assertContains(respuesta, "Los datos cambiaron desde la vista previa")
+        self.assertFalse(Edificio.objects.filter(nombre="Torre C").exists())
+
+    def test_invitaciones_solo_a_las_cuentas_nuevas(self):
+        self.subir()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.confirmar(invitar=True)
+        self.assertEqual(sorted(m.to[0] for m in mail.outbox), ["hijo@prueba.cl", "nueva@prueba.cl"])
+
+    def test_sin_la_casilla_no_se_envian_correos(self):
+        self.subir()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.confirmar()
+        self.assertEqual(mail.outbox, [])
+
+    def test_la_planilla_revisada_en_otro_condominio_no_sirve(self):
+        self.subir()
+        sesion = self.client.session
+        sesion["importacion_unidades"] = {**sesion["importacion_unidades"], "condominio": self.e.ajeno.pk}
+        sesion.save()
+        self.assertRedirects(self.confirmar(), self.url)
+        self.assertFalse(Edificio.objects.filter(nombre="Torre C").exists())
+
+    def test_si_otra_persona_crea_lo_mismo_a_la_vez_no_hay_error_500(self):
+        self.subir()
+        with mock.patch.object(importacion, "aplicar", side_effect=IntegrityError("duplicado")):
+            respuesta = self.confirmar()
+        self.assertRedirects(respuesta, self.url)
+
+    def test_plantilla_descargable(self):
+        self.client.force_login(self.e.administrador)
+        respuesta = self.client.get(reverse("condominios:importar_plantilla"))
+        self.assertEqual(respuesta["Content-Type"], "text/csv; charset=utf-8")
+        self.assertIn("attachment", respuesta["Content-Disposition"])
+        self.assertTrue(respuesta.content.decode("utf-8").startswith("﻿edificio;numero"))
+
+    def test_solo_el_administrador(self):
+        for usuario in (self.e.comite, self.e.conserje, self.e.residente):
+            self.client.force_login(usuario)
+            for url in (self.url, reverse("condominios:importar_plantilla")):
+                with self.subTest(usuario=usuario, url=url):
+                    self.assertEqual(self.client.get(url).status_code, 403)
+            with self.subTest(usuario=usuario, url="confirmar"):
+                self.assertEqual(self.confirmar().status_code, 403)
+
+    def test_la_pagina_unidades_enlaza_la_importacion(self):
+        self.client.force_login(self.e.administrador)
+        self.assertContains(self.client.get(reverse("condominios:unidades")), self.url)
+        self.client.force_login(self.e.comite)
+        self.assertNotContains(self.client.get(reverse("condominios:unidades")), self.url)
