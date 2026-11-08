@@ -63,5 +63,11 @@ modificados, no el objeto completo. Esto limita la cantidad de datos personales 
 
 ## Migration Plan
 
-- Una migración nueva en `apps/auditoria` (`0001_inicial`). No hay datos previos que migrar.
+- Una migración nueva en `apps/auditoria` (`0001_initial`). No hay datos previos que migrar.
+- Como `condominio_id` no es FK, la vista del PR siguiente no puede usar `CondominioQuerysetMixin`
+  tal cual (filtra con el objeto del condominio). Debe filtrar con `condominio_id=request.condominio.pk`
+  y llevar su prueba de que no se ven registros de otro condominio.
+- Riesgo aceptado: los registros de un condominio borrado quedan con su id antiguo. Si la base
+  reutilizara ese id (MySQL anterior a 8 reinicia el AUTO_INCREMENT al reiniciar), otro condominio
+  los vería. En MySQL 8 el contador persiste, así que no ocurre en producción.
 - Rollback: revertir la migración borra la tabla. Antes del PMV no hay registros reales, así que no hay pérdida.

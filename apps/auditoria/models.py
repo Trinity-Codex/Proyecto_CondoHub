@@ -29,7 +29,9 @@ class RegistroAuditoria(models.Model):
     # El condominio y el usuario se guardan como número y texto, sin clave foránea.
     # Así el registro sigue existiendo aunque se borre la cuenta o el condominio, y
     # `usuario_nombre` conserva cómo se llamaba la persona en ese momento.
-    condominio_id = models.PositiveBigIntegerField(db_index=False)
+    # Al no ser FK, CondominioQuerysetMixin no sirve tal cual: la vista debe filtrar con
+    # `condominio_id=request.condominio.pk` (ver design.md).
+    condominio_id = models.PositiveBigIntegerField()
     usuario_id = models.PositiveBigIntegerField(null=True, blank=True)
     usuario_nombre = models.CharField(max_length=150)
     accion = models.CharField(max_length=40)
@@ -54,7 +56,9 @@ class RegistroAuditoria(models.Model):
 
     def save(self, *args, **kwargs):
         # Si la fila ya existe, es una edición: se rechaza. Solo se permite insertar.
-        if not self._state.adding:
+        # También se rechaza un objeto nuevo con id puesto a mano: Django haría un UPDATE
+        # sobre la fila con ese id y reemplazaría el registro original.
+        if not self._state.adding or self.pk is not None:
             raise RegistroInmutable("Los registros de auditoría no se pueden modificar.")
         super().save(*args, **kwargs)
 

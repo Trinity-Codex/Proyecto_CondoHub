@@ -7,7 +7,7 @@ Este cambio es el PR núcleo del Issue #27 (`Refs #27`). La vista y los eventos 
 - [x] 1.1 Crear `RegistroAuditoria` en `apps/auditoria/models.py` con los campos `condominio_id` (número, sin FK, según la firma aprobada), `usuario_id`, `usuario_nombre`, `accion`, `objeto_tipo`, `objeto_id`, `antes` (JSON, nulo), `despues` (JSON, nulo) y `creado`. Verificación: `python manage.py makemigrations auditoria` genera `0001_initial` (el nombre que usan todas las apps).
 - [x] 1.2 Agregar `QuerySet` propio con `update()` y `delete()` que lanzan `RegistroInmutable`, y `save()` y `delete()` del modelo con la misma excepción si la fila ya existe. Verificación: prueba que intenta modificar y borrar un registro y comprueba que la fila no cambió.
 - [x] 1.3 Registrar el modelo en el admin de Django sin permisos de cambio ni de borrado. Verificación: prueba que el admin devuelve `False` para `has_change_permission` y `has_delete_permission`.
-- [x] 1.4 Crear la migración `0001_inicial` y verificar con `python manage.py makemigrations --check`.
+- [x] 1.4 Crear la migración `0001_initial` y verificar con `python manage.py makemigrations --check`.
 
 ## 2. Servicio `registrar()`
 

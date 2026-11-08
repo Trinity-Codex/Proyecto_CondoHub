@@ -67,6 +67,16 @@ class RegistroInmutableTest(TestCase):
             RegistroAuditoria.objects.filter(pk=self.registro.pk).delete()
         self.assertEqual(RegistroAuditoria.objects.get(pk=self.registro.pk).accion, Accion.MODIFICAR)
 
+    def test_no_se_puede_reemplazar_con_un_objeto_nuevo_con_el_mismo_id(self):
+        # Un objeto nuevo con el id de otro haría un UPDATE y reemplazaría el original.
+        copia = RegistroAuditoria(
+            pk=self.registro.pk, condominio_id=self.e.condominio.pk, usuario_nombre="x",
+            accion="otra", objeto_tipo="x", objeto_id="1",
+        )
+        with self.assertRaises(RegistroInmutable):
+            copia.save()
+        self.assertEqual(RegistroAuditoria.objects.get(pk=self.registro.pk).accion, Accion.MODIFICAR)
+
     def test_el_admin_no_ofrece_cambiar_ni_borrar(self):
         ma = admin_django.site._registry[RegistroAuditoria]
         peticion = type("Peticion", (), {"user": self.e.administrador})()
@@ -89,7 +99,7 @@ class RegistrarTest(TestCase):
         self.assertEqual(registro.usuario_id, self.e.administrador.pk)
         self.assertEqual(registro.usuario_nombre, self.e.administrador.get_full_name() or self.e.administrador.get_username())
         self.assertEqual(registro.accion, Accion.CAMBIAR_ROL)
-        self.assertEqual(registro.objeto_tipo, "condominio")
+        self.assertEqual(registro.objeto_tipo, self.e.condominio._meta.label_lower)
         self.assertEqual(registro.objeto_id, str(self.e.condominio.pk))
         self.assertGreaterEqual(registro.creado, antes_del_registro)
 
@@ -126,6 +136,45 @@ class RegistrarTest(TestCase):
         )
         registro.refresh_from_db()
         self.assertEqual(registro.despues["fecha"], "2026-11-08")
+
+    def test_si_nada_cambio_los_valores_quedan_nulos(self):
+        registro = registrar(
+            self.e.administrador, self.e.condominio, Accion.MODIFICAR, self.e.condominio,
+            antes={"nombre": "Prueba"}, despues={"nombre": "Prueba"},
+        )
+        self.assertIsNone(registro.antes)
+        self.assertIsNone(registro.despues)
+
+    def test_un_dato_borrado_queda_registrado(self):
+        # Pasar de "sin clave" a None (o al revés) es un cambio: borra un dato personal.
+        registro = registrar(
+            self.e.administrador, self.e.condominio, Accion.MODIFICAR, self.e.condominio,
+            antes={"rut": "11.111.111-1"}, despues={"rut": None},
+        )
+        self.assertEqual(registro.despues, {"rut": None})
+        registro = registrar(
+            self.e.administrador, self.e.condominio, Accion.MODIFICAR, self.e.condominio,
+            antes={}, despues={"rut": None},
+        )
+        self.assertEqual(registro.despues, {"rut": None})
+
+    def test_objeto_sin_id_se_rechaza(self):
+        # Después de delete() Django deja pk=None; se guardaría "None" como id.
+        sin_id = type(self.e.condominio)(nombre="Sin guardar")
+        with self.assertRaises(ValueError):
+            registrar(self.e.administrador, self.e.condominio, Accion.ELIMINAR, sin_id)
+        self.assertFalse(RegistroAuditoria.objects.exists())
+
+    def test_accion_desconocida_se_rechaza(self):
+        with self.assertRaises(ValueError):
+            registrar(self.e.administrador, self.e.condominio, "anulado", self.e.condominio)
+
+    def test_nombre_largo_se_recorta(self):
+        self.e.administrador.first_name = "A" * 150
+        self.e.administrador.last_name = "B" * 150
+        registro = registrar(self.e.administrador, self.e.condominio, Accion.CREAR, self.e.condominio)
+        registro.refresh_from_db()
+        self.assertEqual(len(registro.usuario_nombre), 150)
 
     def test_el_registro_sobrevive_si_se_borra_el_usuario(self):
         registro = registrar(self.e.administrador, self.e.condominio, Accion.CREAR, self.e.condominio)

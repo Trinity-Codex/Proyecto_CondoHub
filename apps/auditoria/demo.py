@@ -13,11 +13,12 @@ def cargar(datos):
     admin = datos["usuarios"]["administrador"]
     vista_verde = datos["vista_verde"]
 
+    # Primero la creación, para que la línea de tiempo de la vista quede en orden.
+    # Es un evento sin valores anteriores, hecho por un comando (sin usuario).
+    registrar(None, vista_verde, Accion.CREAR, vista_verde)
     # Un cambio con valores anteriores y nuevos: solo queda registrado el campo que cambió.
     registrar(
         admin, vista_verde, Accion.MODIFICAR, vista_verde,
         antes={"direccion": "Calle Antigua 100"},
         despues={"direccion": vista_verde.direccion},
     )
-    # Un evento sin valores anteriores, hecho por un comando (sin usuario).
-    registrar(None, vista_verde, Accion.CREAR, vista_verde)
