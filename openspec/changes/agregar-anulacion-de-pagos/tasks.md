@@ -13,7 +13,7 @@
 ## 3. Sumas que ignoran anulados
 
 - [ ] 3.1 "Mi cuenta" y el panel de inicio usan `vigentes()`.
-- [ ] 3.2 `anotar_pagado` en `apps/gastos/reportes.py`: una línea con `vigentes()`. Avisar a Walther al unir.
+- [ ] 3.2 `anotar_pagado` en `apps/gastos/reportes.py`: cambiar `Sum("pagos__monto")` por `Sum("pagos__monto", filter=Q(pagos__anulado=False))`. No usar `vigentes()` dentro del `Sum`: un queryset no es una expresión de agregado. Avisar a Walther al unir.
 
 ## 4. Pruebas y demo
 

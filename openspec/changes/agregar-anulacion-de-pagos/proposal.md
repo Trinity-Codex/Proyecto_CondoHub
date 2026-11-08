@@ -15,4 +15,4 @@ Issue: Closes #53. MoSCoW: Must, hito PMV 27-nov. Depende de #27 (contrato C1, `
 - Editar un pago. Solo se anula y, si hace falta, se registra uno nuevo.
 - Anular pagos desde el comité o el residente.
 - Cambiar la forma de calcular la deuda total del cobro.
-- Una línea en `apps/gastos/reportes.py` (`anotar_pagado`). Se avisa a Walther al unir, porque es su archivo.
+- Una línea en `apps/gastos/reportes.py` (`anotar_pagado`): el `Sum` filtra `pagos__anulado=False`. Se avisa a Walther al unir, porque es su archivo.
