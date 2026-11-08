@@ -10,16 +10,20 @@ Permisos:
 Todo se trabaja desde la página Unidades: las acciones vuelven a ella.
 """
 from django.contrib import messages
+from django.db import IntegrityError, transaction
 from django.db.models import Prefetch
-from django.shortcuts import get_object_or_404, redirect
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 from django.views.generic import CreateView, DeleteView, FormView, ListView, UpdateView
 
 from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, RolRequeridoMixin
+from apps.cuentas.views import enviar_invitacion
 
-from .forms import EdificioForm, ResidenteForm, UnidadForm
-from .models import Edificio, Residente, Unidad
+from . import importacion
+from .forms import EdificioForm, ImportarForm, ResidenteForm, UnidadForm
+from .models import Edificio, Membresia, Residente, Unidad
 
 
 def url_unidades(edificio=None):
@@ -249,3 +253,82 @@ class ResidenteBajaView(RolRequeridoMixin, View):
         residente.dar_de_baja()
         messages.success(request, f"{residente.usuario} ya no es residente de {residente.unidad}.")
         return redirect(url_unidades(residente.unidad.edificio))
+
+
+# --------------------------------------------------------------------------
+# Importar desde planilla (Issue #13)
+# --------------------------------------------------------------------------
+CLAVE_SESION = "importacion_unidades"
+
+
+class ImportarView(RolRequeridoMixin, FormView):
+    """
+    Paso 1: subir el CSV y ver la vista previa. No guarda nada en la base de datos: si el
+    archivo no tiene errores, su texto queda en la sesión para confirmarlo en el paso 2.
+    """
+
+    roles_permitidos = [ADMINISTRADOR]
+    form_class = ImportarForm
+    template_name = "condominios/importar.html"
+
+    def form_valid(self, form):
+        self.request.session.pop(CLAVE_SESION, None)
+        texto = importacion.decodificar(form.cleaned_data["archivo"].read())
+        try:
+            resultado = importacion.validar(importacion.leer(texto), self.request.condominio)
+        except importacion.ArchivoInvalido as error:
+            form.add_error("archivo", str(error))
+            return self.form_invalid(form)
+        if resultado.valido:
+            self.request.session[CLAVE_SESION] = {"condominio": self.request.condominio.pk, "texto": texto}
+        return self.render_to_response(self.get_context_data(form=form, resultado=resultado))
+
+
+class ConfirmarImportacionView(RolRequeridoMixin, View):
+    """Paso 2: vuelve a validar el archivo de la sesión (los datos pudieron cambiar) y lo importa todo o nada."""
+
+    roles_permitidos = [ADMINISTRADOR]
+
+    def post(self, request):
+        guardado = request.session.get(CLAVE_SESION)
+        if not guardado or guardado["condominio"] != request.condominio.pk:
+            messages.error(request, "No hay una planilla revisada para importar. Súbela de nuevo.")
+            return redirect("condominios:importar")
+        resultado = importacion.validar(importacion.leer(guardado["texto"]), request.condominio)
+        if not resultado.valido:
+            request.session.pop(CLAVE_SESION)
+            messages.error(request, "Los datos cambiaron desde la vista previa y la planilla ya tiene errores. Revísala de nuevo.")
+            contexto = {"form": ImportarForm(), "resultado": resultado}
+            return render(request, "condominios/importar.html", contexto)
+        try:
+            with transaction.atomic():
+                cuentas_nuevas = importacion.aplicar(resultado, request.condominio)
+                if request.POST.get("enviar_invitaciones"):
+                    for usuario in cuentas_nuevas:
+                        # on_commit: si la importación se revierte, no sale ningún correo.
+                        transaction.on_commit(lambda u=usuario: enviar_invitacion(request, u, Membresia.Rol.RESIDENTE))
+        except IntegrityError:
+            # Alguien creó la misma cuenta o unidad mientras tanto: no quedó nada guardado.
+            messages.error(request, "Otra persona cambió los datos mientras importabas y no se guardó nada. Sube la planilla de nuevo.")
+            return redirect("condominios:importar")
+        request.session.pop(CLAVE_SESION)
+        r = resultado.resumen
+        mensaje = (
+            f"Planilla importada: {r['unidades_nuevas']} unidades nuevas, {r['unidades_actualizadas']} actualizadas, "
+            f"{r['cuentas_nuevas']} cuentas nuevas y {r['residentes_nuevos']} residentes nuevos."
+        )
+        if cuentas_nuevas and request.POST.get("enviar_invitaciones"):
+            mensaje += " Enviamos las invitaciones a las cuentas nuevas."
+        messages.success(request, mensaje)
+        return redirect("condominios:unidades")
+
+
+class PlantillaImportacionView(RolRequeridoMixin, View):
+    """Plantilla CSV de ejemplo, con las mismas columnas que acepta la importación."""
+
+    roles_permitidos = [ADMINISTRADOR]
+
+    def get(self, request):
+        respuesta = HttpResponse(importacion.plantilla(), content_type="text/csv; charset=utf-8")
+        respuesta["Content-Disposition"] = 'attachment; filename="plantilla-unidades-condohub.csv"'
+        return respuesta

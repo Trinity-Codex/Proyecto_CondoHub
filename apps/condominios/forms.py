@@ -5,6 +5,7 @@ from django.utils import timezone
 from apps.core.formularios import CampoFecha, FormularioBootstrap, ModeloFormularioBootstrap
 from apps.cuentas.models import Usuario
 
+from .importacion import MAX_BYTES
 from .models import Edificio, Residente, Unidad
 
 
@@ -116,3 +117,19 @@ class ResidenteForm(FormularioBootstrap):
         residente.activo = True
         residente.save()
         return residente
+
+
+class ImportarForm(FormularioBootstrap):
+    """Subir la planilla CSV de unidades y residentes (Issue #13)."""
+
+    archivo = forms.FileField(
+        label="Planilla CSV",
+        help_text="En Excel: Archivo > Guardar como > CSV. Máximo 1 MB.",
+        widget=forms.ClearableFileInput(attrs={"accept": ".csv,text/csv"}),
+    )
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data["archivo"]
+        if archivo.size > MAX_BYTES:
+            raise forms.ValidationError("El archivo pesa más de 1 MB.")
+        return archivo
