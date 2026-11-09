@@ -25,7 +25,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
 
-from apps.core.exportar import celda_segura, respuesta_csv  # noqa: F401  (celda_segura se sigue importando desde aquí)
+from apps.core.exportar import celda_segura, porcentaje_csv, respuesta_csv  # noqa: F401  (celda_segura se sigue importando desde aquí)
 from apps.core.listados import FiltrosGetMixin, leer_opcion
 from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, RolRequeridoMixin
 from apps.core.templatetags.condohub import pesos
@@ -384,10 +384,9 @@ class ReporteCsvBase(ReporteBase):
         r = self.reporte
         # Si se filtró "solo con deuda", la fila Total sigue siendo de todas las unidades: se aclara.
         etiqueta = "Total" if len(self.filas) == len(r.filas) else "Total (todas las unidades)"
-        porcentaje = str(r.porcentaje_recaudacion).replace(".", ",")  # coma decimal, como en Excel en español
         filas.append(
             [etiqueta, "", str(periodo), r.total_emitido, r.total_recaudado, r.saldo_periodo, r.deuda_anterior,
-             r.deuda_total, f"{porcentaje} % recaudado"]
+             r.deuda_total, f"{porcentaje_csv(r.porcentaje_recaudacion)} % recaudado"]
         )
         return respuesta_csv(f"morosidad-{periodo.anio}-{periodo.mes:02d}.csv", encabezados, filas)
 

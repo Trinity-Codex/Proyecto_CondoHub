@@ -40,7 +40,7 @@ Pruebas en `apps/cartera/tests.py` salvo que se indique otra cosa. Escenarios co
 
 - [x] 7.1 Correr `python manage.py makemigrations --check`, `python manage.py test apps` completo y `openspec validate --all --strict`, todos sin errores.
 - [x] 7.2 Verificación visual con el servidor en el puerto 8054: con el administrador general demo, medir en el DOM a 375 y 1440 px la cartera y el reporte desde ella (`document.documentElement.scrollWidth <= innerWidth`, sin desborde horizontal de la página); guardar capturas en el scratchpad de la sesión y cerrar el servidor.
-- [ ] 7.3 Ejecutar `/code-review high` sobre la rama y corregir o justificar cada hallazgo en el PR.
+- [x] 7.3 Ejecutar `/code-review high` sobre la rama y corregir o justificar cada hallazgo en el PR.
 
 ## Workflow follow-up
 

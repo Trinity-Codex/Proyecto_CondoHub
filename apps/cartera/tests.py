@@ -101,6 +101,11 @@ class AdminCarteraTest(CarteraBase):
                 with self.subTest(usuario=usuario.email, url=url):
                     self.assertEqual(self.client.get(url).status_code, esperado)
 
+    def test_el_formulario_avisa_que_el_borrado_en_cascada_no_se_audita(self):
+        self.client.force_login(self.super)
+        pagina = self.client.get(reverse("admin:cartera_asignacioncartera_add"))
+        self.assertContains(pagina, "NO queda en el registro de auditoría")
+
     def test_la_asignacion_se_ve_en_solo_lectura(self):
         """Sin edición: al abrirla no hay botón de guardar ni se acepta un POST."""
         self.asignar(self.e.condominio)
@@ -275,6 +280,11 @@ class ConsolidadoTest(EscenarioCartera):
         self.assertEqual(cartera.total_emitido, 126000)  # solo Prueba suma
         pagina = self.abrir(mes="2026-09")
         self.assertContains(pagina, "Sin período emitido")
+
+    def test_un_mes_sin_periodos_da_porcentaje_cero_decimal(self):
+        cartera = armar_cartera(condominios_de_cartera(self.gerente), 2026, 11)
+        self.assertEqual((cartera.total_emitido, cartera.porcentaje_recaudacion), (0, 0.0))
+        self.assertIsInstance(cartera.porcentaje_recaudacion, float)
 
     def test_un_periodo_abierto_no_cuenta(self):
         PeriodoGasto.objects.create(condominio=self.e.condominio, anio=2026, mes=11)  # ABIERTO

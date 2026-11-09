@@ -14,7 +14,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import TemplateView, View
 
-from apps.core.exportar import respuesta_csv
+from apps.core.exportar import porcentaje_csv, respuesta_csv
 from apps.gastos.views import ReporteBase, ReporteCsvBase, ReportePaginaBase
 
 from .consolidado import armar_cartera, meses_disponibles
@@ -65,19 +65,15 @@ class CarteraCsvView(MesCarteraMixin, View):
         filas = [self.fila_csv(fila) for fila in cartera.filas]
         filas.append(
             ["Total", nombre_mes(cartera.anio, cartera.mes), cartera.total_emitido, cartera.total_recaudado,
-             self.porcentaje(cartera.porcentaje_recaudacion), cartera.deuda_anterior, cartera.unidades_morosas]
+             porcentaje_csv(cartera.porcentaje_recaudacion), cartera.deuda_anterior, cartera.unidades_morosas]
         )
         return respuesta_csv(f"cartera-{clave_mes(cartera.anio, cartera.mes)}.csv", self.ENCABEZADOS, filas)
-
-    @staticmethod
-    def porcentaje(valor):
-        return str(valor).replace(".", ",")  # coma decimal, como en Excel en español
 
     def fila_csv(self, fila):
         if not fila.tiene_periodo:
             return [fila.condominio.nombre, "Sin período emitido", "", "", "", "", ""]
         return [fila.condominio.nombre, str(fila.periodo), fila.emitido, fila.recaudado,
-                self.porcentaje(fila.porcentaje_recaudacion), fila.deuda_anterior, fila.unidades_morosas]
+                porcentaje_csv(fila.porcentaje_recaudacion), fila.deuda_anterior, fila.unidades_morosas]
 
 
 class CondominioDeCarteraMixin(CarteraRequeridaMixin, ReporteBase):

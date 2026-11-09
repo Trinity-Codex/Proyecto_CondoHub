@@ -61,10 +61,6 @@ class Cartera:
     filas: list = field(default_factory=list)
 
     @property
-    def filas_con_periodo(self):
-        return [fila for fila in self.filas if fila.tiene_periodo]
-
-    @property
     def total_emitido(self):
         return sum(fila.emitido for fila in self.filas)
 
@@ -82,9 +78,9 @@ class Cartera:
 
     @property
     def porcentaje_recaudacion(self):
-        """Recaudado total × 100 / emitido total, con un decimal, igual que el reporte. Sin emitido, 0."""
+        """Recaudado total × 100 / emitido total, con un decimal, igual que el reporte. Sin emitido, 0,0."""
         if not self.total_emitido:
-            return 0
+            return 0.0
         return round(self.total_recaudado * 100 / self.total_emitido, 1)
 
 

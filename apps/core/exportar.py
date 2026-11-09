@@ -23,6 +23,11 @@ def celda_segura(valor):
     return valor
 
 
+def porcentaje_csv(valor):
+    """Un porcentaje como lo lee Excel en español: coma decimal (56.5 -> «56,5»)."""
+    return str(valor).replace(".", ",")
+
+
 def respuesta_csv(nombre, encabezados, filas):
     """
     HttpResponse con un CSV para descargar: `encabezados` y cada fila de `filas` son listas de celdas.
@@ -30,7 +35,7 @@ def respuesta_csv(nombre, encabezados, filas):
     """
     respuesta = HttpResponse(content_type="text/csv; charset=utf-8")
     respuesta["Content-Disposition"] = f'attachment; filename="{nombre}"'
-    respuesta.write("﻿")  # BOM: le dice a Excel que el archivo es UTF-8
+    respuesta.write("\ufeff")  # BOM: le dice a Excel que el archivo es UTF-8
     escritor = csv.writer(respuesta, delimiter=";")
     escritor.writerow([celda_segura(celda) for celda in encabezados])
     for fila in filas:

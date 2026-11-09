@@ -6,11 +6,11 @@ asigna los dos condominios demo, con su evento de auditoría (hecho por el coman
 `cargar_demo --reiniciar` los condominios se borran y las asignaciones se van con ellos (en cascada); el usuario
 se reutiliza y las asignaciones se crean de nuevo. Deja la cuenta en datos["usuarios"]["gerencia"].
 """
-from apps.auditoria.servicios import Accion, registrar
 from apps.cuentas.demo import CLAVE_DEMO
 from apps.cuentas.models import Usuario
 
 from .models import AsignacionCartera
+from .servicios import registrar_cambio_de_acceso
 
 # correo, nombre, apellido, RUT ficticio válido
 GERENCIA = ("gerencia@condohub.cl", "Gabriela", "Vidal", "18.273.645-7")
@@ -29,7 +29,4 @@ def cargar(datos):
     for condominio in (datos["vista_verde"], datos["los_aromos"]):
         asignacion, nueva = AsignacionCartera.objects.get_or_create(usuario=gerencia, condominio=condominio)
         if nueva:
-            registrar(
-                None, condominio, Accion.CAMBIAR_ROL, asignacion,
-                antes={"administrador_general": None}, despues={"administrador_general": gerencia.pk},
-            )
+            registrar_cambio_de_acceso(None, asignacion, asignada=True)

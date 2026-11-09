@@ -11,17 +11,14 @@ excepcionales del superusuario; el borrado de un usuario o de un condominio ya e
 from django.contrib import admin
 from django.db import transaction
 
-from apps.auditoria.servicios import Accion, registrar
-
 from .models import AsignacionCartera
+from .servicios import registrar_cambio_de_acceso
 
 
-def _registrar_cambio(usuario_que_cambia, asignacion, *, antes, despues):
-    """Guarda el id de la persona afectada, nunca su nombre ni su RUT (RNF08), en el condominio de la asignación."""
-    registrar(
-        usuario_que_cambia, asignacion.condominio, Accion.CAMBIAR_ROL, asignacion,
-        antes={"administrador_general": antes}, despues={"administrador_general": despues},
-    )
+AVISO_CASCADA = (
+    "Si se borra la persona o el condominio, sus accesos se quitan en cascada y ese borrado NO queda en el "
+    "registro de auditoría. Para quitar un acceso con registro, bórralo desde aquí."
+)
 
 
 @admin.register(AsignacionCartera)
@@ -30,6 +27,7 @@ class AsignacionCarteraAdmin(admin.ModelAdmin):
     list_filter = ("condominio",)
     search_fields = ("usuario__email", "condominio__nombre")
     autocomplete_fields = ["usuario", "condominio"]
+    fieldsets = [(None, {"fields": ("usuario", "condominio"), "description": AVISO_CASCADA})]
 
     # --- permisos: solo el superusuario; sin edición (alta y baja) ---
     def _es_superusuario(self, request):
@@ -54,16 +52,16 @@ class AsignacionCarteraAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         with transaction.atomic():
             super().save_model(request, obj, form, change)
-            _registrar_cambio(request.user, obj, antes=None, despues=obj.usuario_id)
+            registrar_cambio_de_acceso(request.user, obj, asignada=True)
 
     def delete_model(self, request, obj):
         with transaction.atomic():
-            _registrar_cambio(request.user, obj, antes=obj.usuario_id, despues=None)  # antes de borrar: después no hay pk
+            registrar_cambio_de_acceso(request.user, obj, asignada=False)  # antes de borrar: después no hay pk
             super().delete_model(request, obj)
 
     def delete_queryset(self, request, queryset):
         """La acción «Eliminar seleccionados»: una línea de auditoría por asignación."""
         with transaction.atomic():
             for asignacion in queryset.select_related("condominio"):
-                _registrar_cambio(request.user, asignacion, antes=asignacion.usuario_id, despues=None)
+                registrar_cambio_de_acceso(request.user, asignacion, asignada=False)
             super().delete_queryset(request, queryset)
