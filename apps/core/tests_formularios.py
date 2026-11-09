@@ -126,6 +126,17 @@ class ComponenteCampoTest(SimpleTestCase):
         self.assertIn('aria-describedby="id_tipo_helptext id_tipo_error"', html)
         self.assertEqual(html.count('type="radio"'), 2)
 
+    def test_varios_errores_quedan_dentro_del_elemento_enlazado(self):
+        form = FormularioEjemplo({"nombre": "x"})
+        form.add_error("nombre", "Primer error.")
+        form.add_error("nombre", "Segundo error.")
+        html = dibujar(CAMPO, campo=form["nombre"])
+        self.assertEqual(html.count('id="id_nombre_error"'), 1)
+        self.assertNotIn("id_nombre_error_2", html)
+        elemento = html.split('id="id_nombre_error"')[1].split("</div></div>")[0]
+        self.assertIn("Primer error.", elemento)
+        self.assertIn("Segundo error.", elemento)
+
     def test_radio_obligatorio_conserva_required(self):
         html = dibujar(CAMPO, campo=FormularioEjemplo()["tipo"])
         self.assertEqual(html.count(" required"), 2)
