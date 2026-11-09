@@ -237,6 +237,20 @@ En las plantillas tienes disponibles: `es_admin`, `es_comite`, `es_residente`, `
 `condominio_activo` y `user` (vienen de `apps/core/context_processors.py`).
 Íconos: https://icons.getbootstrap.com/ · Componentes: https://getbootstrap.com/docs/5.3/
 
+### Campos accesibles (contrato C6)
+
+`{% include "_formulario.html" with form=form %}` dibuja cada campo con `templates/_campo.html`: etiqueta, control,
+ayuda y errores enlazados con `aria-describedby` y `aria-invalid`, asterisco `aria-hidden` en los obligatorios y
+placeholder con contraste AA. Si necesitas una grilla o un prefijo, incluye el campo suelto:
+
+```django
+<div class="col-md-6">{% include "_campo.html" with campo=form.monto prefijo="$" %}</div>
+```
+
+Los `RadioSelect` y `CheckboxSelectMultiple` salen en un `fieldset` con `legend` (`_opciones.html`, lo elige `_campo.html`).
+Los filtros `control` y `es_casilla` están en `{% load formularios %}`. Las listas desplegables muestran «Seleccione…»
+(lo hace `BootstrapMixin`; tu `empty_label` propio se respeta).
+
 ## Paso 7. El enlace en el menú
 
 En `templates/base.html`, dentro de `<ul class="navbar-nav me-auto">`:

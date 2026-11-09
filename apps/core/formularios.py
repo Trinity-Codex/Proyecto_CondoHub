@@ -10,6 +10,26 @@ código extra (ver docs/GUIA_NUEVA_FEATURE.md).
 from django import forms
 
 
+VACIO_DJANGO = "---------"
+VACIO_CHOICES = "Seleccione…"
+
+
+def rotular_vacios(formulario):
+    """
+    Cambia el «---------» de Django por «Seleccione…» en las listas desplegables.
+    Respeta los textos propios («Sin proveedor», «Todos los edificios») y `empty_label=None`.
+    """
+    for campo in formulario.fields.values():
+        if isinstance(campo, forms.ModelChoiceField):
+            if campo.empty_label == VACIO_DJANGO:
+                campo.empty_label = VACIO_CHOICES
+        elif isinstance(campo, forms.ChoiceField) and not isinstance(campo, forms.MultipleChoiceField):
+            campo.choices = [
+                (valor, VACIO_CHOICES if valor == "" and texto == VACIO_DJANGO else texto)
+                for valor, texto in campo.choices
+            ]
+
+
 class BootstrapMixin:
     """Agrega las clases CSS de Bootstrap a todos los campos del formulario."""
 
@@ -24,6 +44,7 @@ class BootstrapMixin:
             else:
                 clase = "form-control"
             widget.attrs["class"] = f"{widget.attrs.get('class', '')} {clase}".strip()
+        rotular_vacios(self)
 
 
 class FormularioBootstrap(BootstrapMixin, forms.Form):

@@ -26,20 +26,13 @@
 <form method="get" class="card card-body mb-4">
   <div class="row g-3 align-items-end">
     <div class="col-sm-6 col-lg-4">
-      <label class="form-label" for="{{ form.periodo.id_for_label }}">{{ form.periodo.label }}</label>
-      {{ form.periodo }}
-      {% for error in form.periodo.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+      {% include "_campo.html" with campo=form.periodo %}
     </div>
     <div class="col-sm-6 col-lg-4">
-      <label class="form-label" for="{{ form.edificio.id_for_label }}">{{ form.edificio.label }}</label>
-      {{ form.edificio }}
-      {% for error in form.edificio.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+      {% include "_campo.html" with campo=form.edificio %}
     </div>
     <div class="col-sm-6 col-lg-2">
-      <div class="form-check">
-        {{ form.solo_deuda }}
-        <label class="form-check-label" for="{{ form.solo_deuda.id_for_label }}">{{ form.solo_deuda.label }}</label>
-      </div>
+      {% include "_campo.html" with campo=form.solo_deuda %}
     </div>
     <div class="col-sm-6 col-lg-2 d-grid">
       <button class="btn btn-primary"><i class="bi bi-funnel"></i> Filtrar</button>

@@ -2,7 +2,7 @@
   Dibuja los campos de cualquier formulario con el estilo de Bootstrap.
   Uso (dentro de un <form>):
       {% include "_formulario.html" with form=form %}
-  Muestra los errores generales arriba y, en cada campo, su etiqueta, ayuda y errores.
+  Muestra los errores generales arriba y cada campo con _campo.html (contrato C6).
 {% endcomment %}
 {% if form.non_field_errors %}
 <div class="alert alert-danger">
@@ -13,19 +13,5 @@
 {% for campo in form.hidden_fields %}{{ campo }}{% endfor %}
 
 {% for campo in form.visible_fields %}
-<div class="mb-3">
-  {% if campo.field.widget.input_type == "checkbox" %}
-  <div class="form-check">
-    {{ campo }}
-    <label class="form-check-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
-  </div>
-  {% else %}
-  <label class="form-label" for="{{ campo.id_for_label }}">
-    {{ campo.label }}{% if campo.field.required %} <span class="text-danger">*</span>{% endif %}
-  </label>
-  {{ campo }}
-  {% endif %}
-  {% if campo.help_text %}<div class="form-text">{{ campo.help_text }}</div>{% endif %}
-  {% for error in campo.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-</div>
+<div class="mb-3">{% include "_campo.html" with campo=campo %}</div>
 {% endfor %}
