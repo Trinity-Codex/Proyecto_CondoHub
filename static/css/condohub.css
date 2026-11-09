@@ -22,6 +22,28 @@
   --condohub-verde: #81bc46;
   --condohub-fondo: #f4f7f9;
 
+  /* Colores por estado (Issue #79; #80 los reutiliza en insignias y chips).
+     --estado-X: borde y punto (3:1 mínimo, elemento gráfico); --estado-X-texto sobre --estado-X-fondo (4,5:1 mínimo).
+     Contrastes sobre blanco calculados con la fórmula WCAG 2.x. El color nunca va solo: siempre lleva el nombre. */
+  --estado-al-dia: #4f8a1e;          /* 4,21:1 */
+  --estado-al-dia-texto: #2e5a0f;
+  --estado-al-dia-fondo: #e9f5de;
+  --estado-con-deuda: #c55a12;       /* 4,33:1 */
+  --estado-con-deuda-texto: #8a3d08;
+  --estado-con-deuda-fondo: #fdeee2;
+  --estado-moroso: #b42318;          /* 6,57:1 */
+  --estado-moroso-texto: #8f1d14;
+  --estado-moroso-fondo: #fdeceb;
+  --estado-recibido: #113358;        /* 12,82:1 */
+  --estado-recibido-texto: #113358;
+  --estado-recibido-fondo: #e6edf5;
+  --estado-en-proceso: #0d7a7f;      /* 5,11:1 */
+  --estado-en-proceso-texto: #0a5b5f;
+  --estado-en-proceso-fondo: #e2f4f5;
+  --estado-reserva: #5c6b7a;         /* 5,47:1 */
+  --estado-reserva-texto: #2f3b47;
+  --estado-reserva-fondo: #eef1f4;
+
   /* Bootstrap usa estas variables para "primary", enlaces, foco, etc. */
   --bs-primary: #113358;
   --bs-primary-rgb: 17, 51, 88;
@@ -141,9 +163,37 @@ h1, h2, h3, .h1, .h2, .h3, .h4, .h5, .marca {
 .tarjeta-indicador {
   border-left: 4px solid var(--condohub-teal);
 }
-.col-6:nth-child(2) > .tarjeta-indicador { border-left-color: var(--condohub-azul); }
-.col-6:nth-child(3) > .tarjeta-indicador { border-left-color: var(--condohub-naranjo); }
-.col-6:nth-child(4) > .tarjeta-indicador { border-left-color: var(--condohub-verde); }
+.tarjeta-indicador-azul { border-left-color: var(--condohub-azul); }
+
+/* Tarjeta por estado (Issue #79): un enlace entero con nombre, cantidad y frase. */
+.kpi {
+  --kpi-acento: var(--condohub-teal-texto);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  height: 100%;
+  padding: 0.875rem 1rem;
+  background: #fff;
+  border: 1px solid #e3e9ef;
+  border-top: 4px solid var(--kpi-acento);
+  border-radius: var(--bs-border-radius);
+  color: #1f2d3d;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.kpi:hover { box-shadow: 0 2px 8px rgba(17, 51, 88, 0.12); color: #1f2d3d; }
+.kpi:focus-visible { outline: 3px solid var(--condohub-azul); outline-offset: 2px; }
+.kpi-nombre { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; color: var(--condohub-azul); }
+.kpi-punto { flex: none; width: 0.625rem; height: 0.625rem; border-radius: 50%; background: var(--kpi-acento); }
+.kpi-cantidad { font-size: 1.75rem; font-weight: 600; line-height: 1.1; color: var(--condohub-azul); }
+.kpi-unidad { font-size: 0.875rem; font-weight: 400; color: #1f2d3d; }
+.kpi-frase { font-size: 0.8125rem; color: #4a5866; }
+.kpi-al-dia { --kpi-acento: var(--estado-al-dia); }
+.kpi-con-deuda { --kpi-acento: var(--estado-con-deuda); }
+.kpi-moroso { --kpi-acento: var(--estado-moroso); }
+.kpi-recibido { --kpi-acento: var(--estado-recibido); }
+.kpi-en-proceso { --kpi-acento: var(--estado-en-proceso); }
+.kpi-reserva { --kpi-acento: var(--estado-reserva); }
 
 /* Comunicado fijado */
 .icono-fijado {

@@ -1,8 +1,11 @@
 """Vistas generales: panel de inicio, cambio de condominio y página "sin condominio"."""
+from collections import Counter
 from datetime import date
 
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
@@ -22,8 +25,9 @@ class InicioView(RolRequeridoMixin, TemplateView):
     Panel de inicio. Cada rol ve tarjetas distintas:
       - todos:        últimos comunicados
       - residente:    su deuda, sus próximas reservas y sus incidentes abiertos
-      - admin/comité/conserje: resumen del condominio (unidades, incidentes, reservas de hoy)
-      - admin/comité:  indicadores de cobranza del último período emitido (Issue #57)
+      - admin/comité/conserje: resumen (unidades y residentes) y tarjetas por estado (Issue #79)
+      - admin/comité:  indicadores de cobranza del último período emitido (Issue #57) y las
+                       tarjetas de unidades al día, con deuda y morosas, sacadas de ese reporte
     """
 
     template_name = "core/inicio.html"
@@ -54,13 +58,8 @@ class InicioView(RolRequeridoMixin, TemplateView):
             contexto["resumen"] = {
                 "unidades": unidades.count(),
                 "residentes": Residente.objects.filter(unidad__in=unidades, activo=True).count(),
-                "incidentes_abiertos": Incidente.objects.filter(condominio=condominio)
-                .exclude(estado=Incidente.Estado.RESUELTO)
-                .count(),
-                "reservas_hoy": Reserva.objects.filter(
-                    espacio__condominio=condominio, fecha=hoy, estado=Reserva.Estado.CONFIRMADA
-                ).count(),
             }
+            tarjetas = []
             # Indicadores de cobranza (Issue #57): solo administrador y comité (el conserje no ve
             # dinero). Del último período emitido, el mismo que el reporte muestra por defecto,
             # y con generar_reporte, para que los números coincidan siempre con el reporte.
@@ -68,6 +67,12 @@ class InicioView(RolRequeridoMixin, TemplateView):
                 ultimo = PeriodoGasto.objects.filter(condominio=condominio, estado=PeriodoGasto.Estado.EMITIDO).first()
                 contexto["cobranza"] = generar_reporte(ultimo) if ultimo else None
                 contexto["ve_cobranza"] = True
+                if contexto["cobranza"]:
+                    tarjetas += _tarjetas_de_unidades(contexto["cobranza"])
+            tarjetas += _tarjetas_de_incidentes_y_reservas(condominio, hoy)
+            contexto["tarjetas"] = tarjetas
+            # El conserje ve tres tarjetas (sin unidades); administrador y comité, seis: la grilla se ajusta.
+            contexto["tarjetas_por_fila"] = 6 if len(tarjetas) > 3 else 3
             # Aviso si las alícuotas no suman 100 % (el prorrateo quedaría descuadrado).
             contexto["suma_alicuotas"] = condominio.suma_alicuotas()
             # Incidentes por atender, para el equipo del condominio.
@@ -77,6 +82,54 @@ class InicioView(RolRequeridoMixin, TemplateView):
                 .select_related("unidad__edificio")[:5]
             )
         return contexto
+
+
+def _tarjeta(clave, nombre, cantidad, singular, plural, frase, url):
+    return {
+        "clave": clave, "nombre": nombre, "cantidad": cantidad,
+        "etiqueta": singular if cantidad == 1 else plural, "frase": frase, "url": url,
+    }
+
+
+def _tarjetas_de_unidades(reporte):
+    """
+    Unidades al día / con deuda / morosas del reporte de #57, sin recalcular la morosidad: se cuenta
+    la `situacion` de cada fila, así las tres cifras suman las unidades del período y coinciden con el reporte.
+    TODO(#80): sumar `?situacion=al_dia|pendiente|morosa` cuando el reporte acepte ese filtro.
+    """
+    por_situacion = Counter(fila.situacion for fila in reporte.filas)
+    url = f"{reverse('gastos:reporte')}?periodo={reporte.periodo.pk}"
+    periodo = str(reporte.periodo)
+    return [
+        _tarjeta("al-dia", "Unidades al día", por_situacion["Al día"], "unidad", "unidades",
+                 f"Sin deuda en {periodo}", url),
+        _tarjeta("con-deuda", "Unidades con deuda", por_situacion["Pendiente"], "unidad", "unidades",
+                 f"Deben solo {periodo}", url),
+        _tarjeta("moroso", "Unidades morosas", por_situacion["Morosa"], "unidad", "unidades",
+                 f"Con deuda anterior a {periodo}", url),
+    ]
+
+
+def _tarjetas_de_incidentes_y_reservas(condominio, hoy):
+    """Incidentes recibidos y en proceso (una consulta) y reservas confirmadas desde hoy (otra)."""
+    por_estado = dict(
+        Incidente.objects.filter(condominio=condominio).values_list("estado").annotate(total=Count("pk"))
+    )
+    reservas = Reserva.objects.filter(
+        espacio__condominio=condominio, fecha__gte=hoy, estado=Reserva.Estado.CONFIRMADA
+    ).aggregate(proximas=Count("pk"), de_hoy=Count("pk", filter=Q(fecha=hoy)))
+    lista = reverse("incidentes:lista")
+    recibidos = por_estado.get(Incidente.Estado.RECIBIDO, 0)
+    en_proceso = por_estado.get(Incidente.Estado.EN_PROCESO, 0)
+    de_hoy = reservas["de_hoy"]
+    return [
+        _tarjeta("recibido", "Incidentes recibidos", recibidos, "incidente", "incidentes",
+                 "Esperan atención", f"{lista}?estado={Incidente.Estado.RECIBIDO}"),
+        _tarjeta("en-proceso", "Incidentes en proceso", en_proceso, "incidente", "incidentes",
+                 "Se están atendiendo", f"{lista}?estado={Incidente.Estado.EN_PROCESO}"),
+        _tarjeta("reserva", "Reservas próximas", reservas["proximas"], "reserva", "reservas",
+                 f"{de_hoy} para hoy", reverse("reservas:todas")),
+    ]
 
 
 @login_required

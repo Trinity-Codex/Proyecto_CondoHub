@@ -21,19 +21,27 @@
 
 {# ---- Resumen del condominio (administrador, comité y conserje) ---- #}
 {% if resumen %}
+<h2 class="h6 text-uppercase text-muted mb-2">Resumen</h2>
 <div class="row g-3 mb-4">
   <div class="col-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
     <div class="text-muted small">Unidades</div><div class="fs-3 fw-semibold">{{ resumen.unidades }}</div>
   </div></div></div>
-  <div class="col-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
+  <div class="col-6 col-lg-3"><div class="card tarjeta-indicador tarjeta-indicador-azul h-100"><div class="card-body">
     <div class="text-muted small">Residentes</div><div class="fs-3 fw-semibold">{{ resumen.residentes }}</div>
   </div></div></div>
-  <div class="col-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
-    <div class="text-muted small">Incidentes abiertos</div><div class="fs-3 fw-semibold">{{ resumen.incidentes_abiertos }}</div>
-  </div></div></div>
-  <div class="col-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
-    <div class="text-muted small">Reservas hoy</div><div class="fs-3 fw-semibold">{{ resumen.reservas_hoy }}</div>
-  </div></div></div>
+</div>
+{# ---- Tarjetas por estado (Issue #79): cada una es un enlace entero al listado ---- #}
+<h2 class="h6 text-uppercase text-muted mb-2">Qué requiere atención</h2>
+<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xxl-{{ tarjetas_por_fila }} g-3 mb-4">
+  {% for t in tarjetas %}
+  <div class="col">
+    <a class="kpi kpi-{{ t.clave }}" href="{{ t.url }}">
+      <span class="kpi-nombre"><span class="kpi-punto" aria-hidden="true"></span>{{ t.nombre }}</span>
+      <span class="kpi-cantidad">{{ t.cantidad }} <span class="kpi-unidad">{{ t.etiqueta }}</span></span>
+      <span class="kpi-frase">{{ t.frase }}</span>
+    </a>
+  </div>
+  {% endfor %}
 </div>
 {# ---- Indicadores de cobranza (administrador y comité, Issue #57) ---- #}
 {% if ve_cobranza %}
@@ -44,19 +52,15 @@
   </div>
   {% if cobranza %}
   <div class="card-body">
-    {# En el celular, un indicador por fila (el monto no cabe en tres columnas); desde md, tres columnas. #}
+    {# En el celular, un indicador por fila; desde md, dos columnas. Las unidades morosas están en su tarjeta (#79). #}
     <div class="row g-2 text-md-center">
-      <div class="col-12 col-md-4 d-flex d-md-block justify-content-between align-items-baseline">
+      <div class="col-12 col-md-6 d-flex d-md-block justify-content-between align-items-baseline">
         <div class="text-muted small">Recaudación</div>
         <div class="fs-4 fw-semibold">{{ cobranza.porcentaje_recaudacion|floatformat:1 }} %</div>
       </div>
-      <div class="col-12 col-md-4 d-flex d-md-block justify-content-between align-items-baseline">
+      <div class="col-12 col-md-6 d-flex d-md-block justify-content-between align-items-baseline">
         <div class="text-muted small">Deuda total</div>
         <div class="fs-4 fw-semibold text-nowrap">{{ cobranza.deuda_total|pesos }}</div>
-      </div>
-      <div class="col-12 col-md-4 d-flex d-md-block justify-content-between align-items-baseline">
-        <div class="text-muted small">Unidades morosas</div>
-        <div class="fs-4 fw-semibold {% if cobranza.unidades_morosas %}text-danger{% endif %}">{{ cobranza.unidades_morosas|length }}</div>
       </div>
     </div>
   </div>

@@ -1,5 +1,6 @@
 """Pruebas de core: condominio activo, permisos por rol, residentes, PDF y datos demo."""
 import tempfile
+from datetime import date, time, timedelta
 from decimal import Decimal
 from io import BytesIO, StringIO
 from pathlib import Path
@@ -8,9 +9,11 @@ from unittest import mock
 from django import forms
 from django.conf import settings
 from django.core.management import call_command
+from django.db import connection
 from django.db.models import Count, Sum
 from django.template.loader import render_to_string
 from django.test import SimpleTestCase, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from pypdf import PdfReader
 
@@ -360,6 +363,163 @@ class IndicadoresCobranzaTest(TestCase):
                 respuesta = self.inicio(usuario)
                 self.assertNotIn("cobranza", respuesta.context)
                 self.assertNotContains(respuesta, "Unidades morosas")
+
+
+class TarjetasPorEstadoTest(TestCase):
+    """Tarjetas por estado del panel (Issue #79): cantidades, roles, enlaces y aislamiento."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+        febrero = PeriodoGasto.objects.create(
+            condominio=self.e.condominio, anio=2026, mes=2, estado=PeriodoGasto.Estado.EMITIDO
+        )
+        self.marzo = PeriodoGasto.objects.create(
+            condominio=self.e.condominio, anio=2026, mes=3, estado=PeriodoGasto.Estado.EMITIDO
+        )
+        # A101 debe febrero y marzo (morosa), A102 solo marzo (con deuda) y B101 pagó (al día).
+        DetalleGastoComun.objects.create(periodo=febrero, unidad=self.e.a101, monto=40000, monto_fondo_reserva=0)
+        for unidad in (self.e.a101, self.e.a102, self.e.b101):
+            cobro = DetalleGastoComun.objects.create(periodo=self.marzo, unidad=unidad, monto=40000, monto_fondo_reserva=0)
+            if unidad == self.e.b101:
+                Pago.registrar(cobro, monto=40000, registrado_por=self.e.administrador)
+        hoy = date.today()
+        for estado, cuantos in ((Incidente.Estado.RECIBIDO, 1), (Incidente.Estado.EN_PROCESO, 2), (Incidente.Estado.RESUELTO, 4)):
+            for _ in range(cuantos):
+                self.incidente(self.e.condominio, estado)
+        self.reservar(self.e.quincho, self.e.a101, hoy)
+        self.reservar(self.e.quincho, self.e.a102, hoy + timedelta(days=1), hora=time(10))
+        self.reservar(self.e.quincho, self.e.b101, hoy + timedelta(days=2), estado=Reserva.Estado.CANCELADA)
+        self.reservar(self.e.quincho, self.e.b101, hoy - timedelta(days=1))
+
+    def incidente(self, condominio, estado):
+        return Incidente.objects.create(
+            condominio=condominio, reportado_por=self.e.residente, categoria=Incidente.Categoria.OTRO,
+            titulo="Algo", descripcion="x", estado=estado,
+        )
+
+    def reservar(self, espacio, unidad, fecha, hora=time(9), estado=Reserva.Estado.CONFIRMADA):
+        return Reserva.objects.create(
+            espacio=espacio, unidad=unidad, solicitante=self.e.residente, fecha=fecha,
+            hora_inicio=hora, hora_fin=time(hora.hour + 1), estado=estado,
+        )
+
+    def tarjetas(self, usuario):
+        self.client.force_login(usuario)
+        respuesta = self.client.get(reverse("core:inicio"))
+        return respuesta, {t["clave"]: t for t in respuesta.context.get("tarjetas", [])}
+
+    def test_cantidades_de_unidades_coinciden_con_el_reporte_y_suman_el_periodo(self):
+        reporte = generar_reporte(self.marzo)
+        for usuario in (self.e.administrador, self.e.comite):
+            with self.subTest(usuario=usuario):
+                _, t = self.tarjetas(usuario)
+                self.assertEqual(t["moroso"]["cantidad"], len(reporte.unidades_morosas))
+                self.assertEqual(t["con-deuda"]["cantidad"], len(reporte.unidades_con_deuda) - len(reporte.unidades_morosas))
+                self.assertEqual(t["al-dia"]["cantidad"], len(reporte.filas) - len(reporte.unidades_con_deuda))
+                suma = t["al-dia"]["cantidad"] + t["con-deuda"]["cantidad"] + t["moroso"]["cantidad"]
+                self.assertEqual(suma, len(reporte.filas))
+                self.assertEqual((t["al-dia"]["cantidad"], t["con-deuda"]["cantidad"], t["moroso"]["cantidad"]), (1, 1, 1))
+
+    def test_cantidades_de_incidentes_y_reservas(self):
+        _, t = self.tarjetas(self.e.administrador)
+        self.assertEqual(t["recibido"]["cantidad"], 1)  # los resueltos no cuentan
+        self.assertEqual(t["en-proceso"]["cantidad"], 2)
+        self.assertEqual(t["reserva"]["cantidad"], 2)  # hoy y mañana; ni la cancelada ni la pasada
+        self.assertEqual(t["reserva"]["frase"], "1 para hoy")
+
+    def test_administrador_y_comite_ven_seis_tarjetas_y_el_conserje_tres(self):
+        seis = ["al-dia", "con-deuda", "moroso", "recibido", "en-proceso", "reserva"]
+        for usuario in (self.e.administrador, self.e.comite):
+            self.assertEqual(list(self.tarjetas(usuario)[1]), seis)
+        respuesta, t = self.tarjetas(self.e.conserje)
+        self.assertEqual(list(t), ["recibido", "en-proceso", "reserva"])
+        self.assertNotContains(respuesta, "Unidades morosas")
+        self.assertNotContains(respuesta, "$")
+        self.assertContains(respuesta, "row-cols-xxl-3")
+
+    def test_residente_sin_tarjetas_por_estado(self):
+        respuesta, t = self.tarjetas(self.e.residente)
+        self.assertEqual(t, {})
+        self.assertNotContains(respuesta, 'class="kpi ')
+        self.assertContains(respuesta, "Mi deuda")
+
+    def test_sin_periodo_emitido_no_hay_tarjetas_de_unidades(self):
+        PeriodoGasto.objects.update(estado=PeriodoGasto.Estado.ABIERTO)
+        respuesta, t = self.tarjetas(self.e.administrador)
+        self.assertEqual(list(t), ["recibido", "en-proceso", "reserva"])
+        self.assertContains(respuesta, "Aún no hay gastos comunes emitidos")
+
+    def test_cada_tarjeta_enlaza_a_su_url(self):
+        respuesta, t = self.tarjetas(self.e.administrador)
+        lista = reverse("incidentes:lista")
+        reporte = f"{reverse('gastos:reporte')}?periodo={self.marzo.pk}"
+        esperado = {
+            "al-dia": reporte, "con-deuda": reporte, "moroso": reporte,
+            "recibido": f"{lista}?estado=RECIBIDO", "en-proceso": f"{lista}?estado=EN_PROCESO",
+            "reserva": reverse("reservas:todas"),
+        }
+        for clave, url in esperado.items():
+            with self.subTest(clave=clave):
+                self.assertEqual(t[clave]["url"], url)
+                self.assertContains(respuesta, f'<a class="kpi kpi-{clave}" href="{url}">')
+        # Los enlaces de incidentes llevan a una lista que ya filtra por ese estado.
+        self.client.force_login(self.e.administrador)
+        en_proceso = self.client.get(t["en-proceso"]["url"])
+        self.assertEqual(len(en_proceso.context["object_list"]), 2)
+
+    def test_la_tarjeta_es_un_enlace_con_nombre_y_cantidad(self):
+        respuesta, _ = self.tarjetas(self.e.administrador)
+        html = respuesta.content.decode()
+        self.assertEqual(html.count('<a class="kpi '), 6)
+        self.assertIn("Unidades morosas", html)
+        self.assertIn('class="kpi-punto" aria-hidden="true"', html)
+
+    def test_singular_y_plural(self):
+        _, t = self.tarjetas(self.e.administrador)
+        self.assertEqual((t["moroso"]["cantidad"], t["moroso"]["etiqueta"]), (1, "unidad"))
+        self.assertEqual((t["en-proceso"]["cantidad"], t["en-proceso"]["etiqueta"]), (2, "incidentes"))
+        self.assertEqual((t["recibido"]["cantidad"], t["recibido"]["etiqueta"]), (1, "incidente"))
+        self.assertEqual((t["reserva"]["cantidad"], t["reserva"]["etiqueta"]), (2, "reservas"))
+        Reserva.objects.filter(fecha=date.today() + timedelta(days=1)).delete()
+        _, t = self.tarjetas(self.e.administrador)
+        self.assertEqual((t["reserva"]["etiqueta"], t["reserva"]["frase"]), ("reserva", "1 para hoy"))
+        Reserva.objects.all().delete()
+        _, t = self.tarjetas(self.e.administrador)
+        self.assertEqual((t["reserva"]["cantidad"], t["reserva"]["etiqueta"], t["reserva"]["frase"]), (0, "reservas", "0 para hoy"))
+
+    def test_las_cantidades_no_incluyen_otro_condominio(self):
+        ajeno = self.e.ajeno
+        for estado in (Incidente.Estado.RECIBIDO, Incidente.Estado.EN_PROCESO):
+            for _ in range(3):
+                self.incidente(ajeno, estado)
+        espacio = EspacioComun.objects.create(condominio=ajeno, nombre="Sala", capacidad=5)
+        for _ in range(3):
+            self.reservar(espacio, self.e.unidad_ajena, date.today())
+        periodo = PeriodoGasto.objects.create(condominio=ajeno, anio=2026, mes=4, estado=PeriodoGasto.Estado.EMITIDO)
+        DetalleGastoComun.objects.create(periodo=periodo, unidad=self.e.unidad_ajena, monto=1000, monto_fondo_reserva=0)
+        _, t = self.tarjetas(self.e.administrador)
+        self.assertEqual([t[c]["cantidad"] for c in ("al-dia", "con-deuda", "moroso")], [1, 1, 1])
+        self.assertEqual([t[c]["cantidad"] for c in ("recibido", "en-proceso", "reserva")], [1, 2, 2])
+
+    def test_numero_de_consultas_no_depende_de_los_datos(self):
+        """Las unidades salen del reporte ya generado y los incidentes y reservas son una consulta agregada
+        cada uno: más datos no suman consultas, y las tarjetas reemplazan a los conteos del resumen."""
+        self.client.force_login(self.e.administrador)
+
+        def consultas():
+            with CaptureQueriesContext(connection) as c:
+                self.client.get(reverse("core:inicio"))
+            return c
+
+        consultas()  # la primera visita abre la sesión; se mide desde la segunda
+        antes = len(consultas())
+        for _ in range(5):
+            self.incidente(self.e.condominio, Incidente.Estado.RECIBIDO)
+            self.reservar(self.e.quincho, self.e.a101, date.today() + timedelta(days=3), hora=time(12))
+        c = consultas()
+        self.assertEqual(len(c), antes)
+        agrupadas = [q for q in c.captured_queries if "GROUP BY" in q["sql"] and "incidentes_incidente" in q["sql"]]
+        self.assertEqual(len(agrupadas), 1)
 
 
 class FormatoMontoTest(SimpleTestCase):
