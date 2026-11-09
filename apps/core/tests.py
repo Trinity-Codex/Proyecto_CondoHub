@@ -707,3 +707,35 @@ class ListadosHelperTest(SimpleTestCase):
         from apps.core.listados import url_limpiar
         self.assertEqual(url_limpiar(self.get("estado=A&q=x&periodo=5&page=2"), self.validos), "?periodo=5")
         self.assertEqual(url_limpiar(self.get("estado=A"), self.validos), "?")
+        self.assertEqual(url_limpiar(self.get("q=perez&periodo=5"), self.validos), "?periodo=5")
+
+    def test_q_cuenta_como_filtro_solo_si_el_listado_declara_busqueda(self):
+        """Issue #82: `hay_filtros` cuenta `q` solo con `busqueda=True`; vacío o con espacios no cuenta."""
+        from apps.core.listados import hay_filtros
+        self.assertFalse(hay_filtros(self.get("q=perez"), self.validos))
+        self.assertTrue(hay_filtros(self.get("q=perez"), self.validos, busqueda=True))
+        self.assertFalse(hay_filtros(self.get("q=%20%20"), self.validos, busqueda=True))
+        self.assertFalse(hay_filtros(self.get(""), self.validos, busqueda=True))
+
+    def test_normalizar_busqueda(self):
+        from apps.core.listados import normalizar_busqueda
+        self.assertEqual(normalizar_busqueda("  ana   pérez "), "ana pérez")
+        self.assertEqual(normalizar_busqueda("a b c d e f g"), "a b c d e")
+        self.assertEqual(len(normalizar_busqueda("x" * 300)), 100)
+        self.assertEqual(normalizar_busqueda(None), "")
+
+
+class BusquedaEnOtrosListadosTest(TestCase):
+    """Issue #82: un listado que no declara `busqueda` (incidentes) ignora `?q=` y no ofrece «Limpiar filtros»."""
+
+    def test_q_en_incidentes_no_tiene_efecto(self):
+        e = crear_escenario()
+        Incidente.objects.create(
+            condominio=e.condominio, reportado_por=e.residente, categoria=Incidente.Categoria.OTRO,
+            titulo="Fuga", descripcion="x",
+        )
+        self.client.force_login(e.administrador)
+        respuesta = self.client.get(reverse("incidentes:lista"), {"q": "nada-que-coincida"})
+        self.assertEqual(len(respuesta.context["incidentes"]), 1)
+        self.assertFalse(respuesta.context["hay_filtros"])
+        self.assertNotContains(respuesta, "Limpiar filtros")

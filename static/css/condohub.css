@@ -426,3 +426,41 @@ footer {
   color: #5c6773;  /* 5,6:1 sobre blanco */
   font-size: 0.9rem;
 }
+
+/* Búsqueda predictiva (#82): lista de sugerencias bajo el campo (static/js/busqueda.js). */
+.busqueda { position: relative; min-width: 0; }
+.busqueda-lista {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 1050;
+  max-height: 18rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  background-color: #fff;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  box-shadow: var(--bs-box-shadow);
+}
+.busqueda-opcion {
+  display: flex;
+  flex-direction: column;
+  padding: 0.4rem 0.75rem;
+  border-left: 4px solid transparent;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.busqueda-opcion-titulo { font-weight: 600; color: #1f2d3d; }
+.busqueda-opcion-detalle { font-size: 0.875rem; color: #4a5866; }  /* 7,3:1 sobre blanco y 6,8:1 sobre el fondo del hover */
+.busqueda-opcion:hover { background-color: var(--condohub-fondo); }
+/* Opción activa: fondo y borde izquierdo (indicador que no depende solo del color).
+   #113358 sobre #e6edf5: 10,9:1; #34424f sobre #e6edf5: 8,7:1. */
+.busqueda-opcion[aria-selected="true"] {
+  background-color: var(--estado-recibido-fondo);
+  border-left-color: var(--condohub-azul);
+}
+.busqueda-opcion[aria-selected="true"] .busqueda-opcion-titulo { color: var(--condohub-azul); }
+.busqueda-opcion[aria-selected="true"] .busqueda-opcion-detalle { color: #34424f; }

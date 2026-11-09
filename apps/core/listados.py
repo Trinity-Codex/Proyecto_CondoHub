@@ -14,11 +14,21 @@ Reglas:
   - Un valor desconocido se ignora (no hay error): `leer_opcion` devuelve "".
   - Los enlaces de los chips y de la paginación conservan el resto de la URL y quitan `page`.
   - «Limpiar filtros» quita solo los parámetros de filtro (y `page`).
-  - `q` (búsqueda, Issue #82) queda reservado: se conserva en los enlaces y «Limpiar filtros» lo quita,
-    pero todavía no cuenta como filtro activo ni se interpreta aquí.
+  - `q` es la búsqueda (Issue #82): se conserva en los enlaces y «Limpiar filtros» lo quita. Solo cuenta
+    como filtro activo en los listados que declaran `busqueda = True` (hoy, Unidades); en los demás un
+    `?q=` no tiene efecto. Qué columnas busca lo decide cada app (ej. `apps/condominios/busqueda.py`).
 """
 PARAMETRO_BUSQUEDA = "q"
 PARAMETRO_PAGINA = "page"
+# Límites del texto de búsqueda: acotan el costo de la consulta (cada palabra es una condición más).
+LARGO_MAXIMO_BUSQUEDA = 100
+PALABRAS_MAXIMAS_BUSQUEDA = 5
+
+
+def normalizar_busqueda(texto):
+    """Texto de `?q=` listo para buscar: sin espacios sobrantes, hasta 100 caracteres y 5 palabras."""
+    palabras = (texto or "")[:LARGO_MAXIMO_BUSQUEDA].split()
+    return " ".join(palabras[:PALABRAS_MAXIMAS_BUSQUEDA])
 
 
 def leer_opcion(get, nombre, validos):
@@ -47,7 +57,10 @@ def parametros_de_url(get, parametros_filtro):
     return _conservados(get, parametros_filtro).urlencode()
 
 
-def hay_filtros(get, parametros_filtro):
+def hay_filtros(get, parametros_filtro, busqueda=False):
+    """True si hay algún filtro válido activo; con `busqueda`, también si `q` trae texto."""
+    if busqueda and normalizar_busqueda(get.get(PARAMETRO_BUSQUEDA, "")):
+        return True
     return any(leer_opcion(get, nombre, validos) for nombre, validos in parametros_filtro.items())
 
 
@@ -94,12 +107,22 @@ class FiltrosGetMixin:
     Para vistas de clase (ListView, DetailView, TemplateView): lee los filtros declarados en
     `parametros_filtro` ({nombre: valores válidos}) y deja en el contexto `filtros_url`, `hay_filtros`
     y `url_limpiar`.
+
+    `busqueda = True` declara que el listado acepta `?q=`: `texto_busqueda()` devuelve el texto
+    normalizado y `hay_filtros` lo cuenta. La vista decide qué buscar con ese texto.
     """
 
     parametros_filtro = {}
+    busqueda = False
 
     def filtro(self, nombre):
         return leer_opcion(self.request.GET, nombre, self.parametros_filtro[nombre])
+
+    def texto_busqueda(self):
+        """Texto normalizado de `?q=` ("" si el listado no declara `busqueda`)."""
+        if not self.busqueda:
+            return ""
+        return normalizar_busqueda(self.request.GET.get(PARAMETRO_BUSQUEDA, ""))
 
     def chips(self, parametro, opciones, cantidades, **kwargs):
         return armar_chips(self.request.GET, self.parametros_filtro, parametro, opciones, cantidades, **kwargs)
@@ -109,7 +132,7 @@ class FiltrosGetMixin:
         get = self.request.GET
         contexto.update(
             filtros_url=parametros_de_url(get, self.parametros_filtro),
-            hay_filtros=hay_filtros(get, self.parametros_filtro),
+            hay_filtros=hay_filtros(get, self.parametros_filtro, busqueda=self.busqueda),
             url_limpiar=url_limpiar(get, self.parametros_filtro),
         )
         return contexto
