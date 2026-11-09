@@ -1,0 +1,3 @@
+{% comment %}Ayuda y errores de un campo (ids <id>_helptext y <id>_error). Lo incluyen _campo.html y _opciones.html.{% endcomment %}
+{% if campo.help_text %}<div class="form-text" id="{{ campo.auto_id }}_helptext">{{ campo.help_text }}</div>{% endif %}
+{% for error in campo.errors %}<div class="invalid-feedback d-block" id="{{ campo.auto_id }}_error{% if not forloop.first %}_{{ forloop.counter }}{% endif %}">{{ error }}</div>{% endfor %}

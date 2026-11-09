@@ -126,6 +126,10 @@ class ComponenteCampoTest(SimpleTestCase):
         self.assertIn('aria-describedby="id_tipo_helptext id_tipo_error"', html)
         self.assertEqual(html.count('type="radio"'), 2)
 
+    def test_radio_obligatorio_conserva_required(self):
+        html = dibujar(CAMPO, campo=FormularioEjemplo()["tipo"])
+        self.assertEqual(html.count(" required"), 2)
+
     def test_grupo_de_casillas_va_en_fieldset(self):
         html = dibujar(CAMPO, campo=FormularioEjemplo()["dias"])
         self.assertIn("<fieldset", html)

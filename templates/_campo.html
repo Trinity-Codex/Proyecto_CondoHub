@@ -10,14 +10,12 @@
 <div class="form-check">
   {{ campo|control }}
   <label class="form-check-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
-  {% if campo.help_text %}<div class="form-text" id="{{ campo.auto_id }}_helptext">{{ campo.help_text }}</div>{% endif %}
-  {% for error in campo.errors %}<div class="invalid-feedback d-block" id="{{ campo.auto_id }}_error{% if not forloop.first %}_{{ forloop.counter }}{% endif %}">{{ error }}</div>{% endfor %}
+  {% include "_campo_mensajes.html" %}
 </div>
 {% else %}
 <div>
   <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}{% if campo.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
   {% if prefijo %}<div class="input-group"><span class="input-group-text" data-prefijo>{{ prefijo }}</span>{{ campo|control }}</div>{% else %}{{ campo|control }}{% endif %}
-  {% if campo.help_text %}<div class="form-text" id="{{ campo.auto_id }}_helptext">{{ campo.help_text }}</div>{% endif %}
-  {% for error in campo.errors %}<div class="invalid-feedback d-block" id="{{ campo.auto_id }}_error{% if not forloop.first %}_{{ forloop.counter }}{% endif %}">{{ error }}</div>{% endfor %}
+  {% include "_campo_mensajes.html" %}
 </div>
 {% endif %}
