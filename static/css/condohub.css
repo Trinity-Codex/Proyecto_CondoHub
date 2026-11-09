@@ -234,19 +234,33 @@ h1, h2, h3, .h1, .h2, .h3, .h4, .h5, .marca {
   align-items: center;
   justify-content: space-between;
   padding: 0.875rem 0;
-  border-left: 2px solid var(--bs-border-color);
+  position: relative;
   color: var(--kpi-acento); /* acento siempre visible: elemento gráfico, 3:1 mínimo sobre blanco y sobre --estado-*-fondo */
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease;
+}
+/* Barra divisoria: no toca los bordes de la tarjeta (queda a 0,75 rem de arriba y de abajo). */
+.kpi-lateral::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.75rem;
+  bottom: 0.75rem;
+  width: 2px;
+  background-color: var(--bs-border-color);
+  transition: background-color 0.15s ease;
 }
 .kpi-icono { font-size: 1.5rem; line-height: 1; }
 .kpi-flecha { font-size: 1.125rem; line-height: 1; }
 .kpi:hover .kpi-lateral,
 .kpi:focus-visible .kpi-lateral {
   background-color: var(--kpi-fondo);
-  border-left-color: var(--kpi-acento);
+}
+.kpi:hover .kpi-lateral::before,
+.kpi:focus-visible .kpi-lateral::before {
+  background-color: var(--kpi-acento);
 }
 @media (prefers-reduced-motion: reduce) {
-  .kpi, .kpi-lateral { transition: none; }
+  .kpi, .kpi-lateral, .kpi-lateral::before { transition: none; }
 }
 .kpi-nombre { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; color: var(--condohub-azul); }
 .kpi-punto { flex: none; width: 0.625rem; height: 0.625rem; border-radius: 50%; background: var(--kpi-acento); }
