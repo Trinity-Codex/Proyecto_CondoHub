@@ -783,3 +783,27 @@ class ImportacionVistasTest(TestCase):
         self.assertContains(self.client.get(reverse("condominios:unidades")), self.url)
         self.client.force_login(self.e.comite)
         self.assertNotContains(self.client.get(reverse("condominios:unidades")), self.url)
+
+
+class RutResidenteEnUnidadesTest(TestCase):
+    """Issue #77: el RUT del residente se ve con puntos solo para el administrador."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.e.residente.rut = "12345678-5"
+        self.e.residente.save()
+
+    def test_administrador_lo_ve_con_puntos(self):
+        self.client.force_login(self.e.administrador)
+        self.assertContains(self.client.get(reverse("condominios:unidades")), "12.345.678-5")
+
+    def test_comite_no_lo_ve(self):
+        self.client.force_login(self.e.comite)
+        respuesta = self.client.get(reverse("condominios:unidades"))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertNotContains(respuesta, "12.345.678-5")
+        self.assertNotContains(respuesta, "12345678-5")
+
+    def test_residente_recibe_403(self):
+        self.client.force_login(self.e.residente)
+        self.assertEqual(self.client.get(reverse("condominios:unidades")).status_code, 403)

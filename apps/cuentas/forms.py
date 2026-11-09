@@ -14,11 +14,12 @@ from django.contrib.auth.forms import (
 from django.db import transaction
 
 from apps.condominios.models import Membresia
+from apps.core.campos import RutField
 from apps.core.formularios import BootstrapMixin, FormularioBootstrap, ModeloFormularioBootstrap
 
 from . import limite_intentos
 from .models import Usuario
-from .validadores import normalizar_rut, validar_rut
+from .validadores import normalizar_rut
 
 
 class LimiteIntentosMixin:
@@ -121,7 +122,7 @@ class FormularioAltaUsuario(FormularioBootstrap):
     email = forms.EmailField(label="Correo electrónico")
     first_name = forms.CharField(label="Nombre", max_length=150)
     last_name = forms.CharField(label="Apellido", max_length=150)
-    rut = forms.CharField(label="RUT", max_length=12, validators=[validar_rut], help_text="Ejemplo: 12.345.678-5")
+    rut = RutField(label="RUT", help_text="Ejemplo: 12.345.678-5")
     rol = forms.ChoiceField(
         choices=Membresia.Rol.choices,
         help_text="Para que un residente quede en su unidad, asígnalo luego desde la página Unidades.",
@@ -195,6 +196,7 @@ class FormularioPerfil(ModeloFormularioBootstrap):
         # recibir_correos: avisos por correo (Issue #14).
         fields = ["first_name", "last_name", "rut", "telefono", "recibir_correos"]
         labels = {"first_name": "Nombre", "last_name": "Apellido"}
+        field_classes = {"rut": RutField}
         help_texts = {"rut": "Ejemplo: 12.345.678-5", "telefono": "Ejemplo: +56 9 1234 5678"}
 
     def clean_rut(self):

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load condohub %}
 {% block titulo %}Proveedores{% endblock %}
 
 {% block contenido %}
@@ -19,7 +20,7 @@
       {% for p in proveedores %}
       <tr class="{% if not p.activo %}text-muted{% endif %}">
         <td>{{ p.razon_social }}</td>
-        <td>{{ p.rut }}</td>
+        <td>{{ p.rut|rut }}</td>
         <td>{{ p.rubro }}</td>
         <td>
           {{ p.contacto|default:"—" }}

@@ -30,7 +30,7 @@ def control(campo):
     """
     Dibuja el widget con la clase de Bootstrap que le corresponde. Es idempotente: no duplica
     las clases que ya puso BootstrapMixin. Con error agrega `is-invalid`, `aria-invalid="true"`
-    y `aria-describedby` con los ids de la ayuda y del error. Sin error no agrega `aria-invalid`.
+    y `aria-describedby` con los ids de la ayuda y del error (y del aviso en vivo si el widget lo pide). Sin error no agrega `aria-invalid`.
     """
     widget = campo.field.widget
     clases = [c for c in widget.attrs.get("class", "").split() if c not in _CLASES_BASE]
@@ -39,6 +39,9 @@ def control(campo):
     descripciones = []
     if campo.help_text:
         descripciones.append(f"{campo.auto_id}_helptext")
+    # Región aria-live que dibuja _campo.html (RutInput.aviso_vivo): va entre la ayuda y el error.
+    if getattr(widget, "aviso_vivo", False):
+        descripciones.append(f"{campo.auto_id}_aviso")
     if campo.errors:
         clases.append("is-invalid")
         atributos["aria-invalid"] = "true"
