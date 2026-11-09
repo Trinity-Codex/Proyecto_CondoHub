@@ -80,6 +80,13 @@ class RutField(forms.CharField):
         kwargs.setdefault("validators", [validar_rut])
         super().__init__(*args, **kwargs)
 
+    def widget_attrs(self, widget):
+        # Sin maxlength: el navegador descartaría en silencio el carácter 13 (o una inserción en un RUT con puntos).
+        # El largo máximo se sigue validando en el servidor.
+        atributos = super().widget_attrs(widget)
+        atributos.pop("maxlength", None)
+        return atributos
+
     def to_python(self, value):
         valor = super().to_python(value)
         return normalizar_rut(valor) if valor else valor

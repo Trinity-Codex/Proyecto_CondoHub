@@ -154,3 +154,10 @@ class AvisoVivoTest(SimpleTestCase):
         self.assertNotIn("aviso", html)
         self.assertNotIn("aria-live", html)
         self.assertIn('aria-describedby="id_nombre_helptext id_nombre_error"', html)
+
+
+class SinMaxlengthTest(SimpleTestCase):
+    def test_el_input_no_lleva_maxlength_pero_el_servidor_sigue_limitando(self):
+        self.assertNotIn("maxlength", dibujar("{{ campo|control }}", campo=FormularioRut()["rut"]))
+        with self.assertRaises(forms.ValidationError):
+            RutField().clean("1" * 13)

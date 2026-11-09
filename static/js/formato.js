@@ -199,7 +199,7 @@
     rut: {
       enVivo: reagruparRut,
       alSalir: formatearRut,
-      esValido: rutValido,
+      esValido: rutFormateable, /* solo se usa en alEntrar: marca manual lo que el JS no sabe formatear */
       significativo: esSignificativoRut,
       pideDetenerse: rutPideDetenerse,
       avisar: avisarRut

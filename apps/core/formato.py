@@ -74,9 +74,5 @@ def formatear_rut(valor):
     if not coincide:
         return valor
     cuerpo, dv = coincide.groups()
-    # Se agrupa de a tres desde la derecha, por texto: sin int(), para no perder ceros.
-    grupos = []
-    while cuerpo:
-        grupos.insert(0, cuerpo[-3:])
-        cuerpo = cuerpo[:-3]
-    return ".".join(grupos) + "-" + dv
+    # Se agrupa de a tres desde la derecha, por texto (sin int(), para no perder ceros); igual que formato.js.
+    return re.sub(r"\B(?=(?:\d{3})+$)", ".", cuerpo) + "-" + dv
