@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Filtro de egresos por categoría
-El sistema SHALL filtrar los egresos de un período con `?categoria=<categoría>` y mostrar chips con la cantidad de egresos de cada categoría del período, ordenados del más reciente al más antiguo. Administrador y comité ven el listado; el filtro no da acceso a períodos de otro condominio.
+El sistema SHALL filtrar los egresos de un período con `?categoria=<categoría>` y mostrar chips con la cantidad de egresos de cada categoría del período, conservando su orden actual (fecha y luego id, del más antiguo al más reciente). Administrador y comité ven el listado; el filtro no da acceso a períodos de otro condominio.
 
 #### Scenario: Egresos de una categoría
 - **WHEN** el comité abre el período con `?categoria=` de una categoría que tiene egresos

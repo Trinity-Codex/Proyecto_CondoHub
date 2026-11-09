@@ -7,8 +7,9 @@ from unittest import mock
 from django.apps import apps as registro_apps
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -807,3 +808,79 @@ class RutResidenteEnUnidadesTest(TestCase):
     def test_residente_recibe_403(self):
         self.client.force_login(self.e.residente)
         self.assertEqual(self.client.get(reverse("condominios:unidades")).status_code, 403)
+
+
+class FiltroOcupacionTest(TestCase):
+    """Chips y ?ocupacion= del listado de unidades (Issue #80)."""
+
+    def setUp(self):
+        # A101 y B101 tienen un residente activo; A102 no tiene ninguno.
+        self.e = crear_escenario()
+        self.url = reverse("condominios:unidades")
+        self.client.force_login(self.e.administrador)
+
+    def numeros(self, respuesta):
+        return [u.numero for edificio in respuesta.context["edificios"] for u in edificio.unidades.all()]
+
+    def cantidades(self, respuesta):
+        return {c["valor"]: c["cantidad"] for c in respuesta.context["chips"]}
+
+    def test_cada_valor_filtra_y_los_chips_cuentan_ambos_grupos(self):
+        respuesta = self.client.get(self.url, {"ocupacion": "sin_residentes"})
+        self.assertEqual(self.numeros(respuesta), ["A102"])
+        self.assertEqual(self.cantidades(respuesta), {"": 3, "con_residentes": 2, "sin_residentes": 1})
+        respuesta = self.client.get(self.url, {"ocupacion": "con_residentes"})
+        self.assertEqual(self.numeros(respuesta), ["A101", "B101"])
+        self.assertContains(respuesta, "Limpiar filtros")
+
+    def test_valor_desconocido_se_ignora(self):
+        respuesta = self.client.get(self.url, {"ocupacion": "xyz"})
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(self.numeros(respuesta), ["A101", "A102", "B101"])
+        self.assertNotContains(respuesta, "Limpiar filtros")
+
+    def test_el_orden_de_las_unidades_no_cambia(self):
+        self.assertEqual(self.numeros(self.client.get(self.url)), ["A101", "A102", "B101"])
+
+    def test_una_unidad_con_dos_residentes_cuenta_una_vez(self):
+        Residente.objects.create(usuario=self.e.comite, unidad=self.e.a101, desde=date(2020, 1, 1))
+        respuesta = self.client.get(self.url)
+        self.assertEqual(self.cantidades(respuesta), {"": 3, "con_residentes": 2, "sin_residentes": 1})
+
+    def test_un_residente_dado_de_baja_no_cuenta_como_ocupacion(self):
+        Residente.objects.filter(unidad=self.e.b101).update(activo=False, hasta=date(2024, 1, 1))
+        respuesta = self.client.get(self.url, {"ocupacion": "sin_residentes"})
+        self.assertEqual(self.numeros(respuesta), ["A102", "B101"])
+
+    def test_cuadra_con_el_panel_de_inicio(self):
+        """Los residentes vigentes del panel son los de las unidades «Con residentes» del listado."""
+        Residente.objects.create(usuario=self.e.comite, unidad=self.e.a101, desde=date(2020, 1, 1))
+        Residente.objects.filter(unidad=self.e.b101).update(activo=False, hasta=date(2024, 1, 1))
+        panel = self.client.get(reverse("core:inicio")).context["resumen"]
+        lista = self.client.get(self.url, {"ocupacion": "con_residentes"})
+        residentes_listados = sum(len(u.residentes.all()) for e in lista.context["edificios"] for u in e.unidades.all())
+        self.assertEqual(panel["residentes"], residentes_listados)
+        self.assertEqual(panel["unidades"], self.cantidades(lista)[""])
+        self.assertEqual(
+            self.cantidades(lista)["con_residentes"] + self.cantidades(lista)["sin_residentes"], panel["unidades"]
+        )
+        self.assertEqual(self.cantidades(lista)["con_residentes"], 1)  # solo A101 sigue ocupada
+
+    def test_aislamiento_otro_condominio_no_suma(self):
+        respuesta = self.client.get(self.url)
+        self.assertEqual(self.cantidades(respuesta)[""], 3)
+        self.assertNotContains(respuesta, "Torre única")
+
+    def test_una_sola_consulta_cuenta_las_ocupaciones(self):
+        self.client.get(self.url)  # calienta cachés
+        with CaptureQueriesContext(connection) as con_filtro:
+            self.client.get(self.url, {"ocupacion": "sin_residentes"})
+        with CaptureQueriesContext(connection) as sin_filtro:
+            self.client.get(self.url)
+        self.assertEqual(len(con_filtro), len(sin_filtro))
+        self.assertEqual(len([q for q in sin_filtro if "GROUP BY" in q["sql"]]), 1)
+
+    def test_conserje_y_residente_reciben_403_con_filtros(self):
+        for usuario in (self.e.conserje, self.e.residente):
+            self.client.force_login(usuario)
+            self.assertEqual(self.client.get(self.url, {"ocupacion": "sin_residentes"}).status_code, 403)

@@ -16,6 +16,9 @@
   </div>
 </div>
 
+{# Filtro por ocupación (GET: ?ocupacion=sin_residentes), Issue #80 #}
+{% include "_chips.html" with etiqueta="Filtrar unidades por ocupación" %}
+
 {% for edificio in edificios %}
 <div class="card mb-4" id="edificio-{{ edificio.pk }}">
   <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -63,7 +66,7 @@
           {% endif %}
         </tr>
         {% empty %}
-        <tr><td colspan="{% if es_admin %}6{% else %}5{% endif %}" class="text-muted">Sin unidades.</td></tr>
+        <tr><td colspan="{% if es_admin %}6{% else %}5{% endif %}" class="text-muted">{% if hay_filtros %}Ninguna unidad con este filtro.{% else %}Sin unidades.{% endif %}</td></tr>
         {% endfor %}
       </tbody>
     </table>

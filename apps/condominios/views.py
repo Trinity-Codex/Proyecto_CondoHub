@@ -11,13 +11,14 @@ Todo se trabaja desde la página Unidades: las acciones vuelven a ella.
 """
 from django.contrib import messages
 from django.db import IntegrityError, transaction
-from django.db.models import Prefetch
+from django.db.models import Count, Exists, OuterRef, Prefetch
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 from django.views.generic import CreateView, DeleteView, FormView, ListView, UpdateView
 
+from apps.core.listados import FiltrosGetMixin
 from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, RolRequeridoMixin
 from apps.cuentas.views import enviar_invitacion
 
@@ -43,24 +44,49 @@ def avisar_si_alicuotas_descuadradas(request):
         )
 
 
-class UnidadesView(RolRequeridoMixin, CondominioQuerysetMixin, ListView):
-    """Edificios del condominio con sus unidades y residentes."""
+OCUPACIONES = {"con_residentes": "Con residentes", "sin_residentes": "Sin residentes"}
+
+
+class UnidadesView(FiltrosGetMixin, RolRequeridoMixin, CondominioQuerysetMixin, ListView):
+    """Edificios del condominio con sus unidades y residentes, filtrables por ocupación (Issue #80)."""
 
     roles_permitidos = [ADMINISTRADOR, COMITE]
     model = Edificio
     template_name = "condominios/unidades.html"
     context_object_name = "edificios"
+    parametros_filtro = {"ocupacion": list(OCUPACIONES)}
+
+    @staticmethod
+    def _con_residente_activo():
+        """Criterio de residencia vigente: el mismo del panel de inicio y de los residentes que lista la página."""
+        return Exists(Residente.objects.filter(unidad=OuterRef("pk"), activo=True))
 
     def get_queryset(self):
         # prefetch_related trae unidades y residentes en pocas consultas (no una por unidad).
         residentes = Residente.objects.filter(activo=True).select_related("usuario")
+        unidades = Unidad.objects.all()
+        ocupacion = self.filtro("ocupacion")
+        if ocupacion:
+            ocupada = self._con_residente_activo()
+            unidades = unidades.filter(ocupada if ocupacion == "con_residentes" else ~ocupada)
         return super().get_queryset().prefetch_related(
-            "unidades", Prefetch("unidades__residentes", queryset=residentes)
+            Prefetch("unidades", queryset=unidades), Prefetch("unidades__residentes", queryset=residentes)
         )
 
     def get_context_data(self, **kwargs):
         contexto = super().get_context_data(**kwargs)
         contexto["suma_alicuotas"] = self.request.condominio.suma_alicuotas()
+        # Una consulta cuenta las unidades de ambos grupos, antes de filtrar y solo del condominio activo.
+        edificios = super().get_queryset()
+        por_ocupacion = (
+            Unidad.objects.filter(edificio__in=edificios).annotate(ocupada=self._con_residente_activo())
+            .order_by().values("ocupada").annotate(n=Count("pk"))
+        )
+        cantidades = {
+            ("con_residentes" if fila["ocupada"] else "sin_residentes"): fila["n"] for fila in por_ocupacion
+        }
+        opciones = [("con_residentes", "Con residentes", "al-dia"), ("sin_residentes", "Sin residentes", "reserva")]
+        contexto["chips"] = self.chips("ocupacion", opciones, cantidades, singular="unidad", plural="unidades")
         return contexto
 
 

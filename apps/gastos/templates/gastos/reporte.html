@@ -24,6 +24,7 @@
 
 {# ---- Filtros (GET: la URL guarda los filtros y se puede compartir) ---- #}
 <form method="get" class="card card-body mb-4">
+  {% if situacion %}<input type="hidden" name="situacion" value="{{ situacion }}">{% endif %}
   <div class="row g-3 align-items-end">
     <div class="col-sm-6 col-lg-4">
       {% include "_campo.html" with campo=form.periodo %}
@@ -78,6 +79,9 @@
   </div>
 </div>
 
+{# ---- Chips por situación (GET: ?situacion=morosa), Issue #80 ---- #}
+{% include "_chips.html" with etiqueta="Filtrar por situación de la unidad" %}
+
 {# ---- Detalle por unidad ---- #}
 {% comment %}
   En el celular (RNF03) se ocultan Total, Pagado, Deuda anterior y la columna Situación
@@ -112,7 +116,7 @@
           <td class="d-none d-md-table-cell">{% include "gastos/_situacion.html" %}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" class="text-center text-muted py-4">No hay unidades con deuda en este período. ¡Todo al día!</td></tr>
+        <tr><td colspan="7" class="text-center text-muted py-4">{% if hay_filtros %}No hay unidades con esta situación en el período.{% else %}No hay unidades con deuda en este período. ¡Todo al día!{% endif %}</td></tr>
         {% endfor %}
       </tbody>
       {% if filas %}

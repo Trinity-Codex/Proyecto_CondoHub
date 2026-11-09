@@ -30,7 +30,7 @@ que abren el listado filtrado, `/proveedores/` sin desborde y base lista para #8
 | Unidades | `ocupacion` | `con_residentes`, `sin_residentes` | nuevo |
 
 Las unidades no tienen estado propio; «al día / con deuda / morosa» es del reporte. Para el listado de unidades el grupo útil
-en la gestión es la ocupación (¿qué unidad aún no tiene residente?). **Decisión a aprobar:** `ocupacion` en lugar de inventar un estado.
+en la gestión es la ocupación (¿qué unidad aún no tiene residente?). **Aprobado por Walther:** `ocupacion` en lugar de inventar un estado.
 Proveedores no recibe chips (el Issue solo pide corregir su desborde).
 
 **2. Validación: lista blanca, nunca error.** Un helper `leer_opcion(request, nombre, validos)` en `apps/core/listados.py` devuelve el valor o `""`.
@@ -42,6 +42,7 @@ No se usa un `Form` para `situacion` porque `FiltroReporteForm` invalida el repo
 - Incidentes: `self.get_queryset()` de `IncidentesVisiblesMixin` (el residente cuenta solo los suyos) y `values("estado").annotate(n=Count("pk"))`.
 - Egresos: `self.object.egresos` (el período ya sale de `CondominioQuerysetMixin`); `values("categoria").annotate(n=Count("pk"), subtotal=Sum("monto"))` reutiliza la consulta que hoy calcula el subtotal por categoría.
 - Unidades: `Unidad.objects.filter(edificio__in=<queryset de la vista>)` con `aggregate(con=Count("pk", filter=Q(residentes__activo=True), distinct=True), total=Count("pk", distinct=True))`; se cuenta por unidad distinta para no duplicar por residente.
+  Criterio de residencia: el mismo del panel de inicio («Residentes · Con residencia vigente») y de los residentes que muestra la lista, es decir `Residente.activo=True`. Se verificó en el código que el panel (`InicioView`) no compara `desde`/`hasta` con la fecha de hoy: el contrato C2 (`cobros_visibles`) filtra cobros por período, no unidades. Dar de baja marca `activo=False` y completa `hasta`. Una prueba de igualdad exige que «Con residentes» sume lo mismo que el panel.
 - Reporte: `Counter(f.situacion for f in reporte.filas)` en memoria, como #79; ya respeta período y edificio y es independiente de `situacion` y de `solo_deuda`.
 
 Nunca `Modelo.objects.all()`. Prueba con `assertNumQueries` por listado.
@@ -52,12 +53,12 @@ armado para todos. La URL de cada chip conserva los demás parámetros (también
 reemplaza el suyo y elimina `page`. «Limpiar filtros» quita solo los parámetros de filtro y `page`, y conserva `periodo` y `edificio` del reporte.
 El reporte (un `TemplateView`) usa las mismas funciones sobre `request.GET`.
 Interacción con `solo_deuda`: si hay `situacion` válida, manda `situacion`; `solo_deuda` sigue funcionando cuando no hay chip.
-**Decisión a aprobar** (alternativa: intersectarlos, lo que deja «Al día» + «solo deuda» vacío).
+**Aprobado por Walther** (alternativa descartada: intersectarlos, lo que deja «Al día» + «solo deuda» vacío).
 
 **5. Orden por urgencia (primero lo que requiere acción) y desempate.**
 - Incidentes: `RECIBIDO` (nadie lo ha tomado) → `EN_PROCESO` → `RESUELTO`. Se ordena con `Case/When` (rango 0, 1, 2); dentro de los abiertos el **más antiguo** primero (lleva más tiempo esperando) y entre los resueltos el **más reciente**. Desempate final por `-pk`. Sin migración.
 - Reporte: `morosa` → `pendiente` → `al día`; dentro de cada grupo, mayor `deuda_total` primero y desempate por el orden actual de la unidad (el orden de Python es estable). Solo la página: el CSV conserva su orden por edificio y unidad, pero sí respeta `situacion`.
-- Egresos: no tienen urgencia; del más reciente al más antiguo (`-fecha`, `-pk`), como se busca una boleta. **Decisión a aprobar:** hoy van del más antiguo al más reciente.
+- Egresos: no tienen urgencia y **conservan su orden actual** (`fecha`, `pk`, del más antiguo al más reciente). **Rechazado por Walther** invertirlo.
 - Unidades: sin cambio (edificio, piso, número); es un inventario y reordenarlo por ocupación rompería la lectura por edificio.
 
 **6. Componente de chips: `templates/_chips.html`.** Recibe `chips` (lista de diccionarios `{valor, texto, cantidad, singular, plural, url, activo, clave_color}`) y `etiqueta` para el `aria-label`;
@@ -88,6 +89,5 @@ La búsqueda NO se implementa aquí.
 ## Risks / Trade-offs
 
 - Cambio transversal: toca carpetas de Winderson (incidentes) y Maximiliano (condominios); se les avisa al unir.
-- Invertir el orden de egresos cambia lo que ya ven los usuarios; está marcado para aprobación.
-- Chips de unidades por ocupación es una decisión de producto (el Issue habla de «estado»).
+- Chips de unidades por ocupación es una decisión de producto (el Issue habla de «estado»); aprobada.
 - `.table-responsive { position: relative; }` es global: si otra tabla dependiera del comportamiento anterior, la medición a 375 px lo detecta.
