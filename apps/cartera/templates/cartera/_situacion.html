@@ -1,0 +1,3 @@
+{# Insignia de un condominio en la cartera (Issue #54). Uso: {% include "cartera/_situacion.html" %} (con "fila") #}
+{% if fila.unidades_morosas %}<span class="insignia insignia-moroso">Con morosas</span>
+{% else %}<span class="insignia insignia-al-dia">Sin morosas</span>{% endif %}

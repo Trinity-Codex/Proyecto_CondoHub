@@ -15,18 +15,17 @@ lo que pagará cada unidad y, al confirmar, usa servicios.emitir_periodo().
 Reporte de morosidad (Issue #5, administrador y comité): ReporteView lo muestra
 y ReporteCsvView lo descarga para Excel. El cálculo está en reportes.py.
 """
-import csv
 from collections import Counter
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import Count, Sum
-from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
 
+from apps.core.exportar import celda_segura, respuesta_csv  # noqa: F401  (celda_segura se sigue importando desde aquí)
 from apps.core.listados import FiltrosGetMixin, leer_opcion
 from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, RolRequeridoMixin
 from apps.core.templatetags.condohub import pesos
@@ -282,17 +281,30 @@ class EgresoDeleteView(RolRequeridoMixin, EgresoDelPeriodoMixin, PeriodoAbiertoM
 # --------------------------------------------------------------------------
 # Reporte de gastos comunes y morosidad (Issue #5, RF11)
 # --------------------------------------------------------------------------
-class ReporteMixin(RolRequeridoMixin):
+class ReporteBase:
     """
-    Lo que comparten la página del reporte y su descarga en CSV: leer los
-    filtros de la URL (?periodo=..&edificio=..&solo_deuda=on) y generar el reporte.
+    Lo que comparten la página del reporte y su descarga en CSV, SIN permisos: leer los filtros de la URL
+    (?periodo=..&edificio=..&solo_deuda=on) y generar el reporte de UN condominio.
+
+    Quien la use pone antes su propio control de acceso. `ReporteMixin` (abajo) exige un rol en el condominio
+    activo; la cartera (apps/cartera, Issue #54) exige un condominio asignado y entrega el suyo en
+    `get_condominio_reporte()`. Las URL de la página y del CSV también son ganchos, para que los enlaces
+    y las redirecciones vuelvan a donde se abrió el reporte.
     """
 
-    roles_permitidos = [ADMINISTRADOR, COMITE]
+    def get_condominio_reporte(self):
+        """El condominio del reporte: por defecto, el condominio activo de la sesión."""
+        return self.request.condominio
+
+    def get_url_reporte(self):
+        return reverse("gastos:reporte")
+
+    def get_url_csv(self):
+        return reverse("gastos:reporte_csv")
 
     def preparar_reporte(self):
         """Deja en self: form, reporte (o None), filas a mostrar y la consulta para el enlace CSV."""
-        condominio = self.request.condominio
+        condominio = self.get_condominio_reporte()
         datos = self.request.GET.copy()  # copy(): request.GET no se puede modificar
         # Sin período elegido se muestra el último emitido (ordering del modelo: más reciente primero).
         if not datos.get("periodo"):
@@ -314,16 +326,29 @@ class ReporteMixin(RolRequeridoMixin):
         self.consulta = datos.urlencode()
 
 
-class ReporteView(FiltrosGetMixin, ReporteMixin, TemplateView):
+class ReporteMixin(RolRequeridoMixin, ReporteBase):
+    """El reporte de gastos comunes: administrador y comité, del condominio activo."""
+
+    roles_permitidos = [ADMINISTRADOR, COMITE]
+
+
+class ReportePaginaBase(FiltrosGetMixin, ReporteBase):
+    """La página del reporte, sin permisos. Con `TemplateView` detrás, ver `ReporteView` y la cartera."""
+
     template_name = "gastos/reporte.html"
     parametros_filtro = {"situacion": list(SITUACIONES)}
+
+    def get_migas(self):
+        """Enlaces anteriores de la ruta de migas, como (texto, url); la página actual se agrega sola."""
+        return [("Gastos comunes", reverse("gastos:periodos"))]
 
     def get_context_data(self, **kwargs):
         self.preparar_reporte()
         contexto = super().get_context_data(**kwargs)
         # La tabla va por urgencia (morosas primero); el CSV conserva su orden por edificio y unidad.
         contexto.update(form=self.form, reporte=self.reporte, filas=ordenar_por_urgencia(self.filas),
-                        consulta=self.consulta, situacion=self.situacion)
+                        consulta=self.consulta, situacion=self.situacion,
+                        migas=self.get_migas(), url_csv=self.get_url_csv())
         if self.reporte:
             # Cantidades del período y edificio elegidos, sin importar la situación ni "solo con deuda".
             cantidades = Counter(fila.situacion for fila in self.reporte.filas)
@@ -335,49 +360,37 @@ class ReporteView(FiltrosGetMixin, ReporteMixin, TemplateView):
         return contexto
 
 
-def celda_segura(valor):
-    """
-    Evita la "inyección de fórmulas" en Excel: un texto que empieza con = + - @
-    (o con tabulación o retorno de carro, según OWASP) se ejecutaría como
-    fórmula al abrir el archivo. Se le antepone un apóstrofo.
-    Los números se dejan tal cual para que Excel pueda sumarlos.
-    """
-    if isinstance(valor, str) and valor[:1] in ("=", "+", "-", "@", "\t", "\r"):
-        return "'" + valor
-    return valor
+class ReporteView(ReporteMixin, ReportePaginaBase, TemplateView):
+    pass
 
 
-class ReporteCsvView(ReporteMixin, View):
-    """Descarga el reporte en CSV para Excel: separador ";" y UTF-8 con BOM (así Excel lee bien las tildes)."""
+class ReporteCsvBase(ReporteBase):
+    """Descarga el reporte en CSV para Excel (`respuesta_csv`), sin permisos. Con `View` detrás."""
 
     def get(self, request, *args, **kwargs):
         self.preparar_reporte()
         if self.reporte is None:
             messages.error(request, "Elige un período emitido para descargar el reporte.")
-            return redirect(f"{reverse('gastos:reporte')}?{self.consulta}")
+            return redirect(f"{self.get_url_reporte()}?{self.consulta}")
 
         periodo = self.reporte.periodo
-        respuesta = HttpResponse(content_type="text/csv; charset=utf-8")
-        respuesta["Content-Disposition"] = f'attachment; filename="morosidad-{periodo.anio}-{periodo.mes:02d}.csv"'
-        respuesta.write("\ufeff")  # BOM: le dice a Excel que el archivo es UTF-8
-        escritor = csv.writer(respuesta, delimiter=";")  # Excel en español usa ";" (la coma es el decimal)
-        escritor.writerow(
-            ["Edificio", "Unidad", "Período", "Total cobrado", "Pagado", "Saldo del período",
-             "Deuda anterior", "Deuda total", "Situación"]
-        )
-        for fila in self.filas:
-            escritor.writerow(
-                [celda_segura(v) for v in (
-                    fila.unidad.edificio.nombre, fila.unidad.numero, str(periodo), fila.total, fila.pagado,
-                    fila.saldo, fila.deuda_anterior, fila.deuda_total, fila.situacion,
-                )]
-            )
+        encabezados = ["Edificio", "Unidad", "Período", "Total cobrado", "Pagado", "Saldo del período",
+                       "Deuda anterior", "Deuda total", "Situación"]
+        filas = [
+            [fila.unidad.edificio.nombre, fila.unidad.numero, str(periodo), fila.total, fila.pagado,
+             fila.saldo, fila.deuda_anterior, fila.deuda_total, fila.situacion]
+            for fila in self.filas
+        ]
         r = self.reporte
         # Si se filtró "solo con deuda", la fila Total sigue siendo de todas las unidades: se aclara.
         etiqueta = "Total" if len(self.filas) == len(r.filas) else "Total (todas las unidades)"
         porcentaje = str(r.porcentaje_recaudacion).replace(".", ",")  # coma decimal, como en Excel en español
-        escritor.writerow(
+        filas.append(
             [etiqueta, "", str(periodo), r.total_emitido, r.total_recaudado, r.saldo_periodo, r.deuda_anterior,
              r.deuda_total, f"{porcentaje} % recaudado"]
         )
-        return respuesta
+        return respuesta_csv(f"morosidad-{periodo.anio}-{periodo.mes:02d}.csv", encabezados, filas)
+
+
+class ReporteCsvView(ReporteMixin, ReporteCsvBase, View):
+    """El CSV del reporte: separador ";" y UTF-8 con BOM (así Excel lee bien las tildes)."""
