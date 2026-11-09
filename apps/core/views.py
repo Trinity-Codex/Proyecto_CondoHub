@@ -12,6 +12,7 @@ from django.views.generic import TemplateView
 from apps.comunicados.models import Comunicado
 from apps.condominios.models import Residente, Unidad
 from apps.incidentes.models import Incidente
+from apps.gastos.filtros import SITUACIONES
 from apps.pagos.consultas import cobros_del_residente, reporte_del_ultimo_periodo, total_adeudado
 from apps.reservas.models import Reserva
 
@@ -92,18 +93,18 @@ def _tarjetas_de_unidades(reporte):
     """
     Unidades al día / con deuda / morosas del reporte de #57, sin recalcular la morosidad: se cuenta
     la `situacion` de cada fila, así las tres cifras suman las unidades del período y coinciden con el reporte.
-    TODO(#80): sumar `?situacion=al_dia|pendiente|morosa` cuando el reporte acepte ese filtro.
+    Cada tarjeta abre el reporte ya filtrado con `?situacion=` (Issue #80), con los mismos chips y cantidades.
     """
     por_situacion = Counter(fila.situacion for fila in reporte.filas)
-    url = f"{reverse('gastos:reporte')}?periodo={reporte.periodo.pk}"
+    base = f"{reverse('gastos:reporte')}?periodo={reporte.periodo.pk}&situacion="
     periodo = str(reporte.periodo)
     return [
-        _tarjeta("al-dia", "bi-check-circle", "Unidades al día", por_situacion["Al día"], "unidad", "unidades",
-                 f"Sin deuda en {periodo}", url),
-        _tarjeta("con-deuda", "bi-hourglass-split", "Unidades con deuda", por_situacion["Pendiente"], "unidad", "unidades",
-                 f"Deben solo {periodo}", url),
-        _tarjeta("moroso", "bi-exclamation-triangle", "Unidades morosas", por_situacion["Morosa"], "unidad", "unidades",
-                 f"Con deuda anterior a {periodo}", url),
+        _tarjeta("al-dia", "bi-check-circle", "Unidades al día", por_situacion[SITUACIONES["al_dia"]], "unidad", "unidades",
+                 f"Sin deuda en {periodo}", base + "al_dia"),
+        _tarjeta("con-deuda", "bi-hourglass-split", "Unidades con deuda", por_situacion[SITUACIONES["pendiente"]],
+                 "unidad", "unidades", f"Deben solo {periodo}", base + "pendiente"),
+        _tarjeta("moroso", "bi-exclamation-triangle", "Unidades morosas", por_situacion[SITUACIONES["morosa"]],
+                 "unidad", "unidades", f"Con deuda anterior a {periodo}", base + "morosa"),
     ]
 
 

@@ -426,3 +426,59 @@ class MigracionVencimientoTest(TransactionTestCase):
         self.assertEqual(periodo_nuevo.objects.get(pk=noviembre.pk).fecha_vencimiento, date(2025, 12, 10))
         self.assertEqual(periodo_nuevo.objects.get(pk=diciembre.pk).fecha_vencimiento, date(2026, 1, 10))
         self.assertEqual(periodo_nuevo.objects.get(pk=diciembre.pk).referencia_reglamento, "")
+
+
+class FiltroEgresosTest(TestCase):
+    """Chips y ?categoria= del detalle del período (Issue #80): el orden de los egresos no cambia."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.periodo = crear_periodo(self.e.condominio)
+        admin = self.e.administrador
+        self.aseo_tarde = crear_egreso(self.periodo, admin, monto=30000, fecha=date(2026, 10, 20))
+        self.luz = crear_egreso(
+            self.periodo, admin, monto=50000, categoria=Egreso.Categoria.CONSUMOS, fecha=date(2026, 10, 10)
+        )
+        self.aseo_temprano = crear_egreso(self.periodo, admin, monto=20000, fecha=date(2026, 10, 2))
+        self.url = reverse("gastos:periodo_detalle", args=[self.periodo.pk])
+        self.client.force_login(admin)
+
+    def test_filtra_por_categoria_y_el_total_no_cambia(self):
+        respuesta = self.client.get(self.url, {"categoria": "ASEO"})
+        self.assertEqual([e.pk for e in respuesta.context["egresos"]], [self.aseo_temprano.pk, self.aseo_tarde.pk])
+        self.assertEqual(respuesta.context["total"], 100000)
+        cantidades = {c["valor"]: c["cantidad"] for c in respuesta.context["chips"]}
+        self.assertEqual(cantidades, {"": 3, "CONSUMOS": 1, "ASEO": 2})
+        self.assertContains(respuesta, "(todas las categorías)")
+        self.assertContains(respuesta, "Limpiar filtros")
+
+    def test_categoria_desconocida_se_ignora(self):
+        respuesta = self.client.get(self.url, {"categoria": "XYZ"})
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(len(respuesta.context["egresos"]), 3)
+        self.assertNotContains(respuesta, "Limpiar filtros")
+
+    def test_el_orden_de_los_egresos_sigue_siendo_fecha_y_pk(self):
+        respuesta = self.client.get(self.url)
+        self.assertEqual(
+            [e.pk for e in respuesta.context["egresos"]], [self.aseo_temprano.pk, self.luz.pk, self.aseo_tarde.pk]
+        )
+
+    def test_aislamiento_egresos_de_otro_condominio_no_suman(self):
+        ajeno = crear_periodo(self.e.ajeno)
+        crear_egreso(ajeno, self.e.administrador, monto=999)
+        respuesta = self.client.get(self.url)
+        self.assertEqual(respuesta.context["chips"][0]["cantidad"], 3)
+        self.assertEqual(respuesta.context["total"], 100000)
+
+    def test_periodo_de_otro_condominio_da_404_con_filtro(self):
+        ajeno = crear_periodo(self.e.ajeno)
+        respuesta = self.client.get(reverse("gastos:periodo_detalle", args=[ajeno.pk]), {"categoria": "ASEO"})
+        self.assertEqual(respuesta.status_code, 404)
+
+    def test_residente_recibe_403(self):
+        self.client.force_login(self.e.residente)
+        self.assertEqual(self.client.get(self.url, {"categoria": "ASEO"}).status_code, 403)
+
+    def test_insignia_del_periodo(self):
+        self.assertContains(self.client.get(reverse("gastos:periodos")), "insignia insignia-en-proceso")

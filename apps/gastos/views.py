@@ -16,6 +16,7 @@ Reporte de morosidad (Issue #5, administrador y comité): ReporteView lo muestra
 y ReporteCsvView lo descarga para Excel. El cálculo está en reportes.py.
 """
 import csv
+from collections import Counter
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -26,9 +27,11 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
 
+from apps.core.listados import FiltrosGetMixin, leer_opcion
 from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, RolRequeridoMixin
 from apps.core.templatetags.condohub import pesos
 
+from .filtros import COLOR_SITUACION, SITUACIONES, ordenar_por_urgencia
 from .forms import EgresoForm, FiltroReporteForm, PeriodoForm
 from .models import Egreso, PeriodoGasto
 from .reportes import generar_reporte
@@ -97,30 +100,44 @@ class PeriodoUpdateView(RolRequeridoMixin, CondominioQuerysetMixin, PeriodoFormM
         return super().form_valid(form)
 
 
-class PeriodoDetailView(RolRequeridoMixin, CondominioQuerysetMixin, DetailView):
-    """Detalle del período: egresos, total y subtotal por categoría."""
+class PeriodoDetailView(FiltrosGetMixin, RolRequeridoMixin, CondominioQuerysetMixin, DetailView):
+    """Detalle del período: egresos (filtrables por categoría), total y subtotal por categoría."""
 
     roles_permitidos = [ADMINISTRADOR, COMITE]
     model = PeriodoGasto
     template_name = "gastos/periodo_detalle.html"
     context_object_name = "periodo"
+    parametros_filtro = {"categoria": Egreso.Categoria.values}
 
     def get_context_data(self, **kwargs):
         contexto = super().get_context_data(**kwargs)
-        egresos = self.object.egresos.select_related("creado_por", "proveedor")
-        total = self.object.total_egresos()
+        # Una sola consulta da cantidad y subtotal de cada categoría, sobre todos los egresos del período.
+        nombres = dict(Egreso.Categoria.choices)
+        resumen = list(
+            self.object.egresos.order_by().values("categoria").annotate(n=Count("pk"), subtotal=Sum("monto"))
+            .order_by("-subtotal")
+        )
+        total = sum(fila["subtotal"] for fila in resumen)
+        categoria = self.filtro("categoria")
+        egresos = self.object.egresos.select_related("creado_por", "proveedor")  # orden del modelo: fecha, pk
+        if categoria:
+            egresos = egresos.filter(categoria=categoria)
         contexto["egresos"] = egresos
         contexto["total"] = total
+        contexto["filtrado"] = bool(categoria)
         # Subtotal por categoría, con su nombre legible y su porcentaje del total.
-        nombres = dict(Egreso.Categoria.choices)
         contexto["por_categoria"] = [
             {
                 "categoria": nombres[fila["categoria"]],
                 "subtotal": fila["subtotal"],
                 "porcentaje": round(fila["subtotal"] * 100 / total, 1) if total else 0,
             }
-            for fila in egresos.values("categoria").annotate(subtotal=Sum("monto")).order_by("-subtotal")
+            for fila in resumen
         ]
+        # Chips: solo las categorías que tienen egresos en este período.
+        cantidades = {fila["categoria"]: fila["n"] for fila in resumen}
+        opciones = [(valor, nombres[valor], "reserva") for valor in Egreso.Categoria.values if valor in cantidades]
+        contexto["chips"] = self.chips("categoria", opciones, cantidades, singular="egreso", plural="egresos")
         # Si ya se emitió: lo que paga cada unidad (DetalleGastoComun).
         if not self.object.esta_abierto:
             cobros = self.object.detalles.select_related("unidad__edificio").order_by(
@@ -283,22 +300,38 @@ class ReporteMixin(RolRequeridoMixin):
             if ultimo:
                 datos["periodo"] = ultimo.pk
         self.form = FiltroReporteForm(datos, condominio=condominio)
-        self.reporte, self.filas = None, []
+        self.reporte, self.filas, self.situacion = None, [], ""
         if datos.get("periodo") and self.form.is_valid():
             filtros = self.form.cleaned_data
             self.reporte = generar_reporte(filtros["periodo"], filtros["edificio"])
-            # "Solo con deuda" filtra la TABLA; los totales siguen siendo de todas las unidades.
-            self.filas = self.reporte.unidades_con_deuda if filtros["solo_deuda"] else self.reporte.filas
+            # "Solo con deuda" y la situación filtran la TABLA; los totales siguen siendo de todas las unidades.
+            # Si llegan las dos, manda la situación (Issue #80). Una situación desconocida se ignora.
+            self.situacion = leer_opcion(self.request.GET, "situacion", SITUACIONES)
+            if self.situacion:
+                self.filas = [f for f in self.reporte.filas if f.situacion == SITUACIONES[self.situacion]]
+            else:
+                self.filas = self.reporte.unidades_con_deuda if filtros["solo_deuda"] else self.reporte.filas
         self.consulta = datos.urlencode()
 
 
-class ReporteView(ReporteMixin, TemplateView):
+class ReporteView(FiltrosGetMixin, ReporteMixin, TemplateView):
     template_name = "gastos/reporte.html"
+    parametros_filtro = {"situacion": list(SITUACIONES)}
 
     def get_context_data(self, **kwargs):
         self.preparar_reporte()
         contexto = super().get_context_data(**kwargs)
-        contexto.update(form=self.form, reporte=self.reporte, filas=self.filas, consulta=self.consulta)
+        # La tabla va por urgencia (morosas primero); el CSV conserva su orden por edificio y unidad.
+        contexto.update(form=self.form, reporte=self.reporte, filas=ordenar_por_urgencia(self.filas),
+                        consulta=self.consulta, situacion=self.situacion)
+        if self.reporte:
+            # Cantidades del período y edificio elegidos, sin importar la situación ni "solo con deuda".
+            cantidades = Counter(fila.situacion for fila in self.reporte.filas)
+            opciones = [(clave, texto, COLOR_SITUACION[clave]) for clave, texto in SITUACIONES.items()]
+            contexto["chips"] = self.chips(
+                "situacion", opciones, {c: cantidades[t] for c, t in SITUACIONES.items()},
+                singular="unidad", plural="unidades",
+            )
         return contexto
 
 

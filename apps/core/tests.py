@@ -485,20 +485,32 @@ class TarjetasPorEstadoTest(TestCase):
     def test_cada_tarjeta_enlaza_a_su_url(self):
         respuesta, t = self.tarjetas(self.e.administrador)
         lista = reverse("incidentes:lista")
-        reporte = f"{reverse('gastos:reporte')}?periodo={self.marzo.pk}"
+        reporte = f"{reverse('gastos:reporte')}?periodo={self.marzo.pk}&situacion="
         esperado = {
-            "al-dia": reporte, "con-deuda": reporte, "moroso": reporte,
+            "al-dia": reporte + "al_dia", "con-deuda": reporte + "pendiente", "moroso": reporte + "morosa",
             "recibido": f"{lista}?estado=RECIBIDO", "en-proceso": f"{lista}?estado=EN_PROCESO",
             "reserva": reverse("reservas:todas"),
         }
         for clave, url in esperado.items():
             with self.subTest(clave=clave):
                 self.assertEqual(t[clave]["url"], url)
-                self.assertContains(respuesta, f'<a class="kpi kpi-{clave}" href="{url}">')
+                href = url.replace("&", "&amp;")  # el HTML escapa el &
+                self.assertContains(respuesta, f'<a class="kpi kpi-{clave}" href="{href}">')
         # Los enlaces de incidentes llevan a una lista que ya filtra por ese estado.
         self.client.force_login(self.e.administrador)
         en_proceso = self.client.get(t["en-proceso"]["url"])
         self.assertEqual(len(en_proceso.context["object_list"]), 2)
+
+    def test_las_tarjetas_de_unidades_abren_el_reporte_filtrado_y_cuadran_con_los_chips(self):
+        _, t = self.tarjetas(self.e.administrador)
+        for clave in ("al-dia", "con-deuda", "moroso"):
+            with self.subTest(clave=clave):
+                respuesta = self.client.get(t[clave]["url"])
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertEqual(len(respuesta.context["filas"]), t[clave]["cantidad"])
+                activos = [c for c in respuesta.context["chips"] if c["activo"]]
+                self.assertEqual(len(activos), 1)
+                self.assertEqual(activos[0]["cantidad"], t[clave]["cantidad"])
 
     def test_la_tarjeta_es_un_enlace_con_nombre_y_cantidad(self):
         respuesta, _ = self.tarjetas(self.e.administrador)
@@ -648,3 +660,50 @@ class PrefijoMontoTest(SimpleTestCase):
     def test_el_prefijo_explicito_manda(self):
         html = render_to_string("_campo.html", {"campo": self.Formulario()["monto"], "prefijo": "UF"})
         self.assertIn("data-prefijo>UF", html)
+
+
+class ListadosHelperTest(SimpleTestCase):
+    """Filtros por GET y chips (Issue #80): valores desconocidos, `page` y los demás parámetros."""
+
+    validos = {"estado": ["A", "B"]}
+
+    def get(self, consulta):
+        from django.http import QueryDict
+        return QueryDict(consulta)
+
+    def test_valor_desconocido_se_ignora(self):
+        from apps.core.listados import leer_opcion
+        self.assertEqual(leer_opcion(self.get("estado=A"), "estado", ["A", "B"]), "A")
+        self.assertEqual(leer_opcion(self.get("estado=XYZ"), "estado", ["A", "B"]), "")
+        self.assertEqual(leer_opcion(self.get(""), "estado", ["A", "B"]), "")
+
+    def chips(self, consulta):
+        from apps.core.listados import armar_chips
+        return armar_chips(
+            self.get(consulta), self.validos, "estado", [("A", "Uno", "recibido"), ("B", "Dos", "resuelto")],
+            {"A": 1, "B": 2}, singular="cosa", plural="cosas",
+        )
+
+    def test_chips_cantidades_y_activo(self):
+        todos, a, b = self.chips("estado=B")
+        self.assertEqual((todos["cantidad"], a["cantidad"], b["cantidad"]), (3, 1, 2))
+        self.assertEqual((todos["activo"], a["activo"], b["activo"]), (False, False, True))
+        self.assertEqual((a["descripcion"], b["descripcion"]), ("1 cosa", "2 cosas"))
+
+    def test_chip_conserva_otros_parametros_y_quita_page(self):
+        todos, a, _ = self.chips("estado=B&periodo=5&page=3")
+        self.assertEqual(a["url"], "?estado=A&periodo=5")
+        self.assertEqual(todos["url"], "?periodo=5")
+
+    def test_valor_desconocido_deja_todos_activo_y_no_se_conserva(self):
+        from apps.core.listados import hay_filtros, parametros_de_url
+        todos, _, _ = self.chips("estado=XYZ&periodo=5")
+        self.assertTrue(todos["activo"])
+        self.assertEqual(parametros_de_url(self.get("estado=XYZ&periodo=5&page=2"), self.validos), "periodo=5")
+        self.assertFalse(hay_filtros(self.get("estado=XYZ"), self.validos))
+        self.assertTrue(hay_filtros(self.get("estado=A"), self.validos))
+
+    def test_limpiar_quita_filtros_y_q_pero_conserva_el_resto(self):
+        from apps.core.listados import url_limpiar
+        self.assertEqual(url_limpiar(self.get("estado=A&q=x&periodo=5&page=2"), self.validos), "?periodo=5")
+        self.assertEqual(url_limpiar(self.get("estado=A"), self.validos), "?")

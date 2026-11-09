@@ -8,9 +8,11 @@ Permisos:
   - Cambiar estado:                 administrador y conserje
 """
 from django.contrib import messages
+from django.db.models import Case, Count, F, IntegerField, Q, When
 from django.shortcuts import redirect
 from django.views.generic import CreateView, DetailView, ListView
 
+from apps.core.listados import FiltrosGetMixin
 from apps.core.permisos import (
     ADMINISTRADOR,
     COMITE,
@@ -35,26 +37,56 @@ class IncidentesVisiblesMixin(CondominioQuerysetMixin):
         return qs.filter(reportado_por=self.request.user)
 
 
-class IncidenteListView(RolRequeridoMixin, IncidentesVisiblesMixin, ListView):
+def por_urgencia():
+    """
+    Orden de la lista (Issue #80): primero lo que requiere acción. Recibidos, en proceso y resueltos;
+    entre los abiertos el más antiguo primero (lleva más tiempo esperando) y entre los resueltos el más reciente.
+    """
+    rango = Case(
+        When(estado=Incidente.Estado.RECIBIDO, then=0),
+        When(estado=Incidente.Estado.EN_PROCESO, then=1),
+        default=2,
+        output_field=IntegerField(),
+    )
+    # Cada grupo usa solo una de las dos fechas (la otra es NULL en todo el grupo), así se mezclan sin choques.
+    abiertos = Case(When(~Q(estado=Incidente.Estado.RESUELTO), then=F("fecha_reporte")))
+    resueltos = Case(When(estado=Incidente.Estado.RESUELTO, then=F("fecha_reporte")))
+    return [rango, abiertos.asc(), resueltos.desc(), "-pk"]
+
+
+# (valor, texto, clave de color) de cada chip; el color sale de la paleta --estado-*.
+COLORES_ESTADO = {
+    Incidente.Estado.RECIBIDO: "recibido",
+    Incidente.Estado.EN_PROCESO: "en-proceso",
+    Incidente.Estado.RESUELTO: "resuelto",
+}
+
+
+class IncidenteListView(FiltrosGetMixin, RolRequeridoMixin, IncidentesVisiblesMixin, ListView):
     model = Incidente
     template_name = "incidentes/lista.html"
     context_object_name = "incidentes"
     paginate_by = 15
+    parametros_filtro = {"estado": Incidente.Estado.values}
+
+    def visibles(self):
+        """Lo que el rol puede ver en el condominio activo, sin filtrar ni ordenar."""
+        return super().get_queryset()
 
     def get_queryset(self):
-        """Filtro opcional por estado: /incidentes/?estado=RECIBIDO"""
-        qs = super().get_queryset()
-        estado = self.request.GET.get("estado")
-        if estado in Incidente.Estado.values:
+        """Filtro opcional por estado (/incidentes/?estado=RECIBIDO) y orden por urgencia."""
+        qs = self.visibles()
+        estado = self.filtro("estado")
+        if estado:
             qs = qs.filter(estado=estado)
-        return qs
+        return qs.order_by(*por_urgencia())
 
     def get_context_data(self, **kwargs):
         contexto = super().get_context_data(**kwargs)
-        contexto["estados"] = Incidente.Estado.choices
-        contexto["estado_actual"] = self.request.GET.get("estado", "")
-        # Para que la paginación conserve el filtro (ver templates/_paginacion.html).
-        contexto["filtros_url"] = f"estado={contexto['estado_actual']}" if contexto["estado_actual"] else ""
+        # Una sola consulta cuenta todos los estados, antes de filtrar y sobre lo que este rol puede ver.
+        cantidades = dict(self.visibles().order_by().values_list("estado").annotate(n=Count("pk")))
+        opciones = [(valor, texto, COLORES_ESTADO[valor]) for valor, texto in Incidente.Estado.choices]
+        contexto["chips"] = self.chips("estado", opciones, cantidades, singular="incidente", plural="incidentes")
         return contexto
 
 

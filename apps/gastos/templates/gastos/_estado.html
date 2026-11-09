@@ -1,6 +1,6 @@
-{# Etiqueta del estado de un período. Uso: {% include "gastos/_estado.html" with periodo=p %} #}
+{# Insignia del estado de un período (Issue #80). Uso: {% include "gastos/_estado.html" with periodo=p %} #}
 {% if periodo.esta_abierto %}
-<span class="badge text-bg-warning">Abierto</span>
+<span class="insignia insignia-en-proceso">Abierto</span>
 {% else %}
-<span class="badge text-bg-success">Emitido</span>
+<span class="insignia insignia-al-dia">Emitido</span>
 {% endif %}
