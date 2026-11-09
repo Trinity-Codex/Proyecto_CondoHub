@@ -2,14 +2,16 @@
 from datetime import date, timedelta
 from decimal import Decimal
 from importlib import import_module
-from unittest import mock
+from unittest import mock, skipUnless
 
 from django.apps import apps as registro_apps
+from django.conf import settings
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
+from django.shortcuts import resolve_url
 from django.urls import reverse
 from django.utils import timezone
 
@@ -884,3 +886,325 @@ class FiltroOcupacionTest(TestCase):
         for usuario in (self.e.conserje, self.e.residente):
             self.client.force_login(usuario)
             self.assertEqual(self.client.get(self.url, {"ocupacion": "sin_residentes"}).status_code, 403)
+
+
+class BusquedaBase(TestCase):
+    """
+    Escenario de la búsqueda (Issue #82), con datos ficticios:
+      - A101: Ana Pérez (RUT 12345678-5);  B101: Juan Torres (RUT 10000013-K);  A102: sin residentes.
+      - Torre B: unidades «504» y «1504» sin residentes; Torre A: «TORRES1» sin residentes.
+      - Otro condominio (Ajeno): unidad «504» con un residente y su propia «Ana Pérez» (RUT 11111111-1).
+    """
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.nombrar(self.e.residente, "Ana", "Pérez", "12345678-5")
+        self.nombrar(self.e.residente_b, "Juan", "Torres", "10000013-K")
+        for edificio, numero in ((self.e.torre_b, "504"), (self.e.torre_b, "1504"), (self.e.torre_a, "TORRES1")):
+            Unidad.objects.create(edificio=edificio, numero=numero, alicuota=Decimal("0"))
+        self.nombrar(self.e.residente_ajeno, "Ana", "Pérez", "11111111-1")
+        ajena_504 = Unidad.objects.create(edificio=self.e.torre_ajena, numero="504", alicuota=Decimal("0"))
+        Residente.objects.create(usuario=crear_usuario("ajena.dos@prueba.cl"), unidad=ajena_504, desde=date(2020, 1, 1))
+
+    @staticmethod
+    def nombrar(usuario, nombre, apellido, rut):
+        usuario.first_name, usuario.last_name, usuario.rut = nombre, apellido, rut
+        usuario.save()
+
+
+class FiltrarUnidadesTest(BusquedaBase):
+    """La regla de `apps/condominios/busqueda.py`, sobre las unidades del condominio activo."""
+
+    def buscar(self, texto, ver_rut=True):
+        from .busqueda import filtrar_unidades
+        unidades = Unidad.objects.filter(edificio__condominio=self.e.condominio)
+        return sorted(filtrar_unidades(unidades, texto, ver_rut=ver_rut).values_list("numero", flat=True))
+
+    def test_por_numero(self):
+        self.assertEqual(self.buscar("504"), ["1504", "504"])
+        self.assertEqual(self.buscar("a10"), ["A101", "A102"])
+
+    def test_por_nombre_apellido_y_varias_palabras_en_cualquier_orden(self):
+        for texto in ("Ana", "pérez", "Ana Pérez", "pérez ana", "  ANA   pérez  "):
+            with self.subTest(texto=texto):
+                self.assertEqual(self.buscar(texto), ["A101"])
+        self.assertEqual(self.buscar("ana torres"), [])  # cada palabra debe coincidir
+
+    def test_palabras_combinan_numero_y_nombre(self):
+        self.assertEqual(self.buscar("torres"), ["B101", "TORRES1"])
+        self.assertEqual(self.buscar("torres b1"), ["B101"])
+
+    def test_rut_con_y_sin_puntos_y_por_prefijo_para_el_administrador(self):
+        for texto in ("12.345.678-5", "12345678-5", "123456785", "12345", "12.345"):
+            with self.subTest(texto=texto):
+                self.assertEqual(self.buscar(texto), ["A101"])
+        for texto in ("10.000.013-k", "10000013K"):
+            with self.subTest(texto=texto):
+                self.assertEqual(self.buscar(texto), ["B101"])
+
+    def test_rut_es_por_prefijo_no_por_contenido(self):
+        self.assertEqual(self.buscar("345678"), [])
+
+    def test_el_comite_no_busca_por_rut(self):
+        for texto in ("12.345.678-5", "123456785", "12345", "10000013-K"):
+            with self.subTest(texto=texto):
+                self.assertEqual(self.buscar(texto, ver_rut=False), [])
+        self.assertEqual(self.buscar("Ana", ver_rut=False), ["A101"])
+
+    def test_residente_dado_de_baja_no_hace_aparecer_su_unidad(self):
+        Residente.objects.get(usuario=self.e.residente_b).dar_de_baja()
+        self.assertEqual(self.buscar("Juan"), [])
+        self.assertEqual(self.buscar("10000013"), [])
+
+    def test_texto_vacio_o_con_espacios_no_filtra(self):
+        todas = self.buscar("")
+        self.assertEqual(len(todas), 6)
+        self.assertEqual(self.buscar("   "), todas)
+
+    def test_unidad_con_dos_residentes_no_se_duplica(self):
+        self.nombrar(self.e.comite, "Pedro", "Pérez", "")
+        Residente.objects.create(usuario=self.e.comite, unidad=self.e.a101, desde=date(2020, 1, 1))
+        self.assertEqual(self.buscar("Pérez"), ["A101"])
+
+    def test_comodines_de_like_se_buscan_como_texto(self):
+        self.assertEqual(self.buscar("%"), [])
+        self.assertEqual(self.buscar("_"), [])
+
+    def test_nunca_agrega_otro_condominio(self):
+        self.assertEqual(self.buscar("Ana Pérez"), ["A101"])
+        self.assertEqual(self.buscar("11111111"), [])
+
+    @skipUnless(connection.vendor == "mysql", "SQLite no ignora tildes; la base real y la CI usan MySQL")
+    def test_ignora_tildes_y_mayusculas_en_mysql(self):
+        self.assertEqual(self.buscar("perez"), ["A101"])
+        self.nombrar(self.e.residente_b, "Juan", "perez", "10000013-K")
+        self.assertEqual(self.buscar("PÉREZ"), ["A101", "B101"])
+
+
+class ListadoConBusquedaTest(BusquedaBase):
+    """`?q=` en la página Unidades: filtra, se combina con los chips, respeta roles y condominio."""
+
+    def setUp(self):
+        super().setUp()
+        self.url = reverse("condominios:unidades")
+        self.client.force_login(self.e.administrador)
+
+    def numeros(self, respuesta):
+        return [u.numero for edificio in respuesta.context["edificios"] for u in edificio.unidades.all()]
+
+    def cantidades(self, respuesta):
+        return {c["valor"]: c["cantidad"] for c in respuesta.context["chips"]}
+
+    def test_filtra_por_numero_nombre_y_rut(self):
+        self.assertEqual(self.numeros(self.client.get(self.url, {"q": "504"})), ["1504", "504"])
+        self.assertEqual(self.numeros(self.client.get(self.url, {"q": "pérez ana"})), ["A101"])
+        for rut in ("12.345.678-5", "123456785", "12345"):
+            with self.subTest(rut=rut):
+                self.assertEqual(self.numeros(self.client.get(self.url, {"q": rut})), ["A101"])
+
+    def test_filtra_desde_un_caracter(self):
+        self.assertEqual(self.numeros(self.client.get(self.url, {"q": "5"})), ["1504", "504"])
+
+    def test_los_edificios_sin_coincidencias_se_siguen_mostrando(self):
+        respuesta = self.client.get(self.url, {"q": "504"})
+        self.assertEqual([e.nombre for e in respuesta.context["edificios"]], ["Torre A", "Torre B"])
+        self.assertContains(respuesta, "Ninguna unidad con este filtro.")
+
+    def test_busqueda_con_chips_que_cuentan_dentro_del_resultado(self):
+        respuesta = self.client.get(self.url, {"q": "Torres", "ocupacion": "con_residentes"})
+        self.assertEqual(self.numeros(respuesta), ["B101"])
+        self.assertEqual(self.cantidades(respuesta), {"": 2, "con_residentes": 1, "sin_residentes": 1})
+        self.assertTrue(respuesta.context["hay_filtros"])
+        self.assertEqual(respuesta.context["url_limpiar"], "?")
+        # Los chips conservan q y el formulario conserva ocupacion.
+        chip_sin = [c for c in respuesta.context["chips"] if c["valor"] == "sin_residentes"][0]
+        self.assertEqual(chip_sin["url"], "?q=Torres&ocupacion=sin_residentes")
+        self.assertContains(respuesta, '<input type="hidden" name="ocupacion" value="con_residentes">', html=True)
+
+    def test_busqueda_vacia_muestra_todo_sin_limpiar_filtros(self):
+        for q in ("", "   "):
+            with self.subTest(q=q):
+                respuesta = self.client.get(self.url, {"q": q})
+                self.assertEqual(len(self.numeros(respuesta)), 6)
+                self.assertFalse(respuesta.context["hay_filtros"])
+                self.assertNotContains(respuesta, "Limpiar filtros")
+
+    def test_con_q_aparece_limpiar_filtros_que_quita_q(self):
+        respuesta = self.client.get(self.url, {"q": "504"})
+        self.assertContains(respuesta, "Limpiar filtros")
+        self.assertEqual(respuesta.context["url_limpiar"], "?")
+
+    def test_aislamiento_otro_condominio_nunca_aparece(self):
+        for q in ("504", "Ana", "Pérez", "11111111-1"):
+            with self.subTest(q=q):
+                respuesta = self.client.get(self.url, {"q": q})
+                self.assertNotContains(respuesta, "Torre única")
+                self.assertNotContains(respuesta, "11.111.111-1")
+                pks = [u.pk for e in respuesta.context["edificios"] for u in e.unidades.all()]
+                self.assertNotIn(self.e.unidad_ajena.pk, pks)
+        self.assertEqual(self.numeros(self.client.get(self.url, {"q": "11111111-1"})), [])
+        self.assertEqual(self.cantidades(self.client.get(self.url, {"q": "504"}))[""], 2)
+
+    def test_conserje_y_residente_reciben_403(self):
+        for usuario in (self.e.conserje, self.e.residente):
+            with self.subTest(usuario=usuario.email):
+                self.client.force_login(usuario)
+                self.assertEqual(self.client.get(self.url, {"q": "504"}).status_code, 403)
+
+    def test_el_comite_no_encuentra_por_rut_ni_ve_ningun_rut(self):
+        self.client.force_login(self.e.comite)
+        for q in ("12.345.678-5", "123456785", "12345"):
+            with self.subTest(q=q):
+                self.assertEqual(self.numeros(self.client.get(self.url, {"q": q})), [])
+        respuesta = self.client.get(self.url, {"q": "Ana"})
+        self.assertEqual(self.numeros(respuesta), ["A101"])
+        for rut in ("12.345.678-5", "12345678-5", "10.000.013-K", "10000013-K"):
+            self.assertNotContains(respuesta, rut)
+
+    def test_formulario_con_el_valor_y_la_ayuda_por_rol(self):
+        respuesta = self.client.get(self.url, {"q": "  pérez   ana "})
+        self.assertContains(respuesta, 'role="search"')
+        self.assertContains(respuesta, '<label for="busqueda-unidades" class="form-label fw-semibold">Buscar unidad o residente</label>', html=True)
+        self.assertContains(respuesta, 'value="pérez ana"')
+        self.assertContains(respuesta, 'maxlength="100"')
+        self.assertContains(respuesta, f'data-busqueda="{reverse("condominios:unidades_sugerencias")}"')
+        self.assertContains(respuesta, 'aria-live="polite"')
+        self.assertContains(respuesta, "Número de unidad, nombre o RUT.")
+        self.assertNotContains(respuesta, '<input type="hidden" name="ocupacion"')
+        self.assertNotContains(respuesta, "{#")  # ningún comentario de plantilla a la vista
+        self.client.force_login(self.e.comite)
+        respuesta = self.client.get(self.url)
+        self.assertContains(respuesta, "Número de unidad o nombre.")
+        self.assertNotContains(respuesta, "Número de unidad, nombre o RUT.")
+
+    def test_la_pagina_carga_busqueda_js(self):
+        self.assertContains(self.client.get(self.url), "js/busqueda.js")
+
+    def test_la_busqueda_no_agrega_consultas_por_unidad(self):
+        self.client.get(self.url)  # calienta cachés
+        with CaptureQueriesContext(connection) as sin_q:
+            self.client.get(self.url)
+        with self.assertNumQueries(len(sin_q)):
+            self.client.get(self.url, {"q": "a 1"})
+        for numero in ("A201", "A202", "A203"):
+            unidad = Unidad.objects.create(edificio=self.e.torre_a, numero=numero, alicuota=Decimal("0"))
+            Residente.objects.create(usuario=crear_usuario(f"{numero}@prueba.cl"), unidad=unidad, desde=date(2020, 1, 1))
+        with self.assertNumQueries(len(sin_q)):
+            self.client.get(self.url, {"q": "a 2", "ocupacion": "con_residentes"})
+
+
+class SugerenciasUnidadesTest(BusquedaBase):
+    """Endpoint JSON `condominios:unidades_sugerencias` (Issue #82)."""
+
+    def setUp(self):
+        super().setUp()
+        self.url = reverse("condominios:unidades_sugerencias")
+        self.client.force_login(self.e.administrador)
+
+    def pedir(self, q):
+        return self.client.get(self.url, {"q": q})
+
+    def test_administrador_recibe_nombre_y_rut_con_puntos(self):
+        respuesta = self.pedir("Pér")
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta["Content-Type"], "application/json")
+        self.assertEqual(respuesta.json(), {
+            "resultados": [{"edificio": "Torre A", "unidad": "A101", "residentes": [{"nombre": "Ana Pérez", "rut": "12.345.678-5"}]}],
+            "hay_mas": False,
+        })
+
+    def test_administrador_encuentra_por_rut_con_y_sin_puntos(self):
+        for q in ("12.345.678-5", "123456785", "12345"):
+            with self.subTest(q=q):
+                self.assertEqual([r["unidad"] for r in self.pedir(q).json()["resultados"]], ["A101"])
+
+    def test_comite_recibe_el_nombre_sin_ninguna_clave_rut(self):
+        self.client.force_login(self.e.comite)
+        self.assertEqual(self.pedir("Pér").json(), {
+            "resultados": [{"edificio": "Torre A", "unidad": "A101", "residentes": [{"nombre": "Ana Pérez"}]}],
+            "hay_mas": False,
+        })
+        datos = self.pedir("10").json()
+        self.assertEqual([r["unidad"] for r in datos["resultados"]], ["A101", "A102", "B101"])
+        for resultado in datos["resultados"]:
+            self.assertEqual(set(resultado), {"edificio", "unidad", "residentes"})
+            for residente in resultado["residentes"]:
+                self.assertEqual(set(residente), {"nombre"})
+        self.assertNotIn("rut", self.pedir("Juan").content.decode())
+
+    def test_comite_no_encuentra_por_rut(self):
+        self.client.force_login(self.e.comite)
+        for q in ("12.345.678-5", "123456785", "12345", "10000013-K"):
+            with self.subTest(q=q):
+                self.assertEqual(self.pedir(q).json(), {"resultados": [], "hay_mas": False})
+
+    def test_unidad_sin_residentes_y_sin_ids(self):
+        datos = self.pedir("TORRES1").json()
+        self.assertEqual(datos["resultados"], [{"edificio": "Torre A", "unidad": "TORRES1", "residentes": []}])
+        texto = self.pedir("Ana").content.decode()
+        self.assertNotIn('"pk"', texto)
+        self.assertNotIn('"id"', texto)
+
+    def test_sin_cache(self):
+        cache = self.pedir("Ana")["Cache-Control"]
+        for directiva in ("no-store", "no-cache", "must-revalidate", "private", "max-age=0"):
+            self.assertIn(directiva, cache)
+        self.assertIn("no-store", self.pedir("")["Cache-Control"])
+
+    def test_menos_de_dos_caracteres_devuelve_vacio_sin_consultar_unidades(self):
+        for q in ("", "P", "  P  ", "   "):
+            with self.subTest(q=q):
+                with CaptureQueriesContext(connection) as consultas:
+                    respuesta = self.pedir(q)
+                self.assertEqual(respuesta.json(), {"resultados": [], "hay_mas": False})
+                self.assertFalse([c for c in consultas if "condominios_unidad" in c["sql"]])
+
+    def test_consultas_fijas_sin_importar_la_cantidad_de_resultados(self):
+        self.pedir("P")  # calienta cachés
+        with CaptureQueriesContext(connection) as base:
+            self.pedir("P")
+        # Unidades con su edificio (1) y residentes activos con su usuario (1): nada por unidad.
+        with self.assertNumQueries(len(base) + 2):
+            self.assertEqual(len(self.pedir("Ana").json()["resultados"]), 1)
+        with self.assertNumQueries(len(base) + 2):
+            self.assertEqual(len(self.pedir("10").json()["resultados"]), 3)
+
+    def test_tope_de_diez_en_el_orden_del_listado_y_hay_mas(self):
+        torre_c = Edificio.objects.create(condominio=self.e.condominio, nombre="Torre C")
+        for i in range(1, 16):
+            Unidad.objects.create(edificio=torre_c, numero=f"10-{i:02d}", alicuota=Decimal("0"))
+        datos = self.pedir("10").json()
+        self.assertTrue(datos["hay_mas"])
+        self.assertEqual(
+            [(r["edificio"], r["unidad"]) for r in datos["resultados"]],
+            [("Torre A", "A101"), ("Torre A", "A102"), ("Torre B", "B101")]
+            + [("Torre C", f"10-{i:02d}") for i in range(1, 8)],
+        )
+        self.assertFalse(self.pedir("Ana").json()["hay_mas"])
+
+    def test_aislamiento_otro_condominio_cero_resultados(self):
+        for q in ("Ana Pérez", "11111111-1", "11.111.111", "Torre única", "ajena"):
+            with self.subTest(q=q):
+                texto = self.pedir(q).content.decode()
+                self.assertNotIn("Torre única", texto)
+                self.assertNotIn("11.111.111-1", texto)
+        self.assertEqual([r["unidad"] for r in self.pedir("504").json()["resultados"]], ["1504", "504"])
+        self.assertEqual(self.pedir("ajena").json()["resultados"], [])
+
+    def test_conserje_y_residente_reciben_403(self):
+        for usuario in (self.e.conserje, self.e.residente):
+            with self.subTest(usuario=usuario.email):
+                self.client.force_login(usuario)
+                self.assertEqual(self.pedir("Ana").status_code, 403)
+
+    def test_post_405_y_sin_sesion_al_inicio_de_sesion(self):
+        self.assertEqual(self.client.post(self.url, {"q": "Ana"}).status_code, 405)
+        self.client.logout()
+        respuesta = self.pedir("Ana")
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertTrue(respuesta["Location"].startswith(resolve_url(settings.LOGIN_URL)))
+
+    def test_residente_dado_de_baja_no_aparece(self):
+        Residente.objects.get(usuario=self.e.residente).dar_de_baja()
+        self.assertEqual(self.pedir("Ana").json()["resultados"], [])
+        self.assertEqual(self.pedir("A101").json()["resultados"][0]["residentes"], [])

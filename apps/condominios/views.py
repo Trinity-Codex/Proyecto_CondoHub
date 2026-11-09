@@ -12,17 +12,20 @@ Todo se trabaja desde la página Unidades: las acciones vuelven a ella.
 from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Exists, OuterRef, Prefetch
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.cache import add_never_cache_headers
 from django.views import View
 from django.views.generic import CreateView, DeleteView, FormView, ListView, UpdateView
 
-from apps.core.listados import FiltrosGetMixin
+from apps.core.formato import formatear_rut
+from apps.core.listados import FiltrosGetMixin, normalizar_busqueda
 from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, RolRequeridoMixin
 from apps.cuentas.views import enviar_invitacion
 
 from . import importacion
+from .busqueda import filtrar_unidades, ver_rut
 from .forms import EdificioForm, ImportarForm, ResidenteForm, UnidadForm
 from .models import Edificio, Membresia, Residente, Unidad
 
@@ -47,39 +50,59 @@ def avisar_si_alicuotas_descuadradas(request):
 OCUPACIONES = {"con_residentes": "Con residentes", "sin_residentes": "Sin residentes"}
 
 
-class UnidadesView(FiltrosGetMixin, RolRequeridoMixin, CondominioQuerysetMixin, ListView):
-    """Edificios del condominio con sus unidades y residentes, filtrables por ocupación (Issue #80)."""
+class UnidadesAccesoMixin(RolRequeridoMixin):
+    """
+    Quién ve Unidades: el listado y sus sugerencias (Issue #82) comparten este mixin para que sus permisos
+    no puedan diferir. Va primero en la vista; el queryset de partida son los edificios del condominio activo.
+    """
 
     roles_permitidos = [ADMINISTRADOR, COMITE]
     model = Edificio
+
+
+def _residentes_activos():
+    """Residentes que lista Unidades (criterio de residencia vigente de #80), con su usuario en la misma consulta."""
+    return Residente.objects.filter(activo=True).select_related("usuario")
+
+
+class UnidadesView(FiltrosGetMixin, UnidadesAccesoMixin, CondominioQuerysetMixin, ListView):
+    """
+    Edificios del condominio con sus unidades y residentes, filtrables por ocupación (Issue #80) y por
+    búsqueda `?q=` (Issue #82, reglas en busqueda.py).
+    """
+
     template_name = "condominios/unidades.html"
     context_object_name = "edificios"
     parametros_filtro = {"ocupacion": list(OCUPACIONES)}
+    busqueda = True
 
     @staticmethod
     def _con_residente_activo():
         """Criterio de residencia vigente: el mismo del panel de inicio y de los residentes que lista la página."""
         return Exists(Residente.objects.filter(unidad=OuterRef("pk"), activo=True))
 
+    def _buscar(self, unidades):
+        return filtrar_unidades(unidades, self.texto_busqueda(), ver_rut=ver_rut(self.request))
+
     def get_queryset(self):
         # prefetch_related trae unidades y residentes en pocas consultas (no una por unidad).
-        residentes = Residente.objects.filter(activo=True).select_related("usuario")
-        unidades = Unidad.objects.all()
+        unidades = self._buscar(Unidad.objects.all())
         ocupacion = self.filtro("ocupacion")
         if ocupacion:
             ocupada = self._con_residente_activo()
             unidades = unidades.filter(ocupada if ocupacion == "con_residentes" else ~ocupada)
         return super().get_queryset().prefetch_related(
-            Prefetch("unidades", queryset=unidades), Prefetch("unidades__residentes", queryset=residentes)
+            Prefetch("unidades", queryset=unidades), Prefetch("unidades__residentes", queryset=_residentes_activos())
         )
 
     def get_context_data(self, **kwargs):
         contexto = super().get_context_data(**kwargs)
         contexto["suma_alicuotas"] = self.request.condominio.suma_alicuotas()
-        # Una consulta cuenta las unidades de ambos grupos, antes de filtrar y solo del condominio activo.
+        # Una consulta cuenta las unidades de ambos grupos, solo del condominio activo: dentro del resultado
+        # de la búsqueda y antes de filtrar por ocupación.
         edificios = super().get_queryset()
         por_ocupacion = (
-            Unidad.objects.filter(edificio__in=edificios).annotate(ocupada=self._con_residente_activo())
+            self._buscar(Unidad.objects.filter(edificio__in=edificios)).annotate(ocupada=self._con_residente_activo())
             .order_by().values("ocupada").annotate(n=Count("pk"))
         )
         cantidades = {
@@ -87,7 +110,60 @@ class UnidadesView(FiltrosGetMixin, RolRequeridoMixin, CondominioQuerysetMixin, 
         }
         opciones = [("con_residentes", "Con residentes", "al-dia"), ("sin_residentes", "Sin residentes", "reserva")]
         contexto["chips"] = self.chips("ocupacion", opciones, cantidades, singular="unidad", plural="unidades")
+        contexto["busqueda_q"] = self.texto_busqueda()
+        contexto["ocupacion_activa"] = self.filtro("ocupacion")
         return contexto
+
+
+# Sugerencias de la búsqueda (Issue #82): tope de filas y largo mínimo del texto.
+SUGERENCIAS_MAXIMO = 10
+SUGERENCIAS_LARGO_MINIMO = 2
+
+
+class SugerenciasUnidadesView(UnidadesAccesoMixin, CondominioQuerysetMixin, ListView):
+    """
+    JSON con hasta 10 unidades que coinciden con `?q=`, con las mismas reglas, roles y condominio que el
+    listado. Solo lleva lo que el listado ya muestra a ese rol: el RUT (con puntos) solo al administrador,
+    y sin ids (la sugerencia elegida se resuelve en el listado por `q`). No se registra ni se guarda el texto
+    buscado (decisión 6 de la propuesta) y no se limita la frecuencia en el PMV (decisión 5).
+    """
+
+    http_method_names = ["get"]
+
+    @staticmethod
+    def _residente(residente, con_rut):
+        fila = {"nombre": str(residente.usuario)}
+        if con_rut and residente.usuario.rut:
+            fila["rut"] = formatear_rut(residente.usuario.rut)
+        return fila
+
+    def _sugerencias(self, texto):
+        con_rut = ver_rut(self.request)
+        unidades = (
+            filtrar_unidades(Unidad.objects.filter(edificio__in=self.object_list), texto, ver_rut=con_rut)
+            .select_related("edificio")
+            .prefetch_related(Prefetch("residentes", queryset=_residentes_activos()))
+        )
+        # Una fila de más dice si hay más coincidencias sin contarlas todas.
+        filas = list(unidades[: SUGERENCIAS_MAXIMO + 1])
+        resultados = [
+            {
+                "edificio": unidad.edificio.nombre,
+                "unidad": unidad.numero,
+                "residentes": [self._residente(r, con_rut) for r in unidad.residentes.all()],
+            }
+            for unidad in filas[:SUGERENCIAS_MAXIMO]
+        ]
+        return resultados, len(filas) > SUGERENCIAS_MAXIMO
+
+    def render_to_response(self, context, **response_kwargs):
+        texto = normalizar_busqueda(self.request.GET.get("q", ""))
+        resultados, hay_mas = [], False
+        if len(texto) >= SUGERENCIAS_LARGO_MINIMO:  # con menos no se consulta ninguna unidad
+            resultados, hay_mas = self._sugerencias(texto)
+        respuesta = JsonResponse({"resultados": resultados, "hay_mas": hay_mas})
+        add_never_cache_headers(respuesta)  # datos personales: que ni el navegador ni un proxy guarden copia
+        return respuesta
 
 
 class EliminarConMotivosMixin:

@@ -53,7 +53,7 @@ de chips) y el endpoint, siempre sobre `Unidad.objects.filter(edificio__in=<edif
   × 3 o 4 columnas. El endpoint corta a 11 filas (`[:11]` para saber si hay más). Se prueba con `assertNumQueries`. **No se propone índice
   ni migración:** un índice B-tree no ayuda a `%x%` y uno FULLTEXT de MySQL no busca por prefijo de RUT ni existe en SQLite.
 
-**3. El listado con `?q=`.** `FiltrosGetMixin` suma un atributo `busqueda = False`; con `busqueda = True`, `self.busqueda()` devuelve
+**3. El listado con `?q=`.** `FiltrosGetMixin` suma un atributo `busqueda = False`; con `busqueda = True`, `self.texto_busqueda()` devuelve
 el texto normalizado y `hay_filtros` lo cuenta. `hay_filtros(get, parametros_filtro, busqueda=False)` gana un argumento con valor por
 defecto, así los demás listados (que no declaran búsqueda) no cambian: un `?q=` en incidentes sigue sin efecto y sin «Limpiar filtros».
 - `UnidadesView` aplica `filtrar_unidades` en el `Prefetch` (como `ocupacion`) y en el conteo de los chips: **los chips cuentan dentro

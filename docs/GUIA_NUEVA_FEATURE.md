@@ -162,6 +162,31 @@ Variables útiles en cualquier vista (las pone `apps/core/middleware.py`):
 | `request.roles` | Roles del usuario en ese condominio, ej. `{"RESIDENTE", "COMITE"}` |
 | `tiene_rol(request, ADMINISTRADOR, COMITE)` | `True` si tiene alguno de esos roles |
 
+### Filtros, chips y búsqueda en un listado (`apps/core/listados.py`)
+
+`FiltrosGetMixin` lee los filtros por GET (`?estado=...`), arma los chips con su cantidad (`_chips.html`) y deja
+en el contexto `filtros_url`, `hay_filtros` y `url_limpiar`. Si además el listado acepta búsqueda (`?q=`),
+declara `busqueda = True`: `self.texto_busqueda()` devuelve el texto normalizado (sin espacios sobrantes,
+hasta 100 caracteres y 5 palabras) y «Limpiar filtros» aparece también con `q`. Qué columnas se buscan lo
+decide tu app, siempre sobre el queryset ya acotado por condominio y rol (nunca `Modelo.objects.all()`).
+El ejemplo real es Unidades (`apps/condominios/views.py` y `apps/condominios/busqueda.py`):
+
+```python
+class UnidadesView(FiltrosGetMixin, UnidadesAccesoMixin, CondominioQuerysetMixin, ListView):
+    parametros_filtro = {"ocupacion": list(OCUPACIONES)}
+    busqueda = True
+
+    def _buscar(self, unidades):
+        return filtrar_unidades(unidades, self.texto_busqueda(), ver_rut=ver_rut(self.request))
+```
+
+Para sugerencias mientras se escribe, `static/js/busqueda.js` (ya cargado en `base.html`) se activa solo en un
+`<input type="search" name="q" data-busqueda="{% url '...' %}">` dentro de un `<form method="get">` que tenga
+una región `<div class="visually-hidden" aria-live="polite" data-busqueda-estado></div>`. El endpoint
+responde `{"resultados": [{"edificio", "unidad", "residentes": [{"nombre", "rut"?}]}], "hay_mas"}`: si lo
+reutilizas en otro listado, adapta el JS a tus campos y entrega en el JSON solo lo que tu listado ya muestra a
+ese rol. Mira `condominios/unidades.html` y `SugerenciasUnidadesView`.
+
 ## Paso 5. Las rutas
 
 `apps/mascotas/urls.py`:
