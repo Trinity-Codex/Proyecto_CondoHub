@@ -14,8 +14,8 @@ Los campos de RUT SHALL aceptarlo con o sin puntos, guardarlo normalizado (`1234
 - **THEN** se guarda `12345678-5` en ambos casos
 
 #### Scenario: RUT con K y de 7 dígitos
-- **WHEN** se escribe «96.511.790-k» o «1.234.567-4»
-- **THEN** ambos se aceptan y se guardan `96511790-K` y `1234567-4`
+- **WHEN** se escribe «10.000.013-k» o «1.234.567-4»
+- **THEN** ambos se aceptan y se guardan `10000013-K` y `1234567-4`
 
 #### Scenario: Dígito verificador incorrecto
 - **WHEN** se envía «12.345.678-9»

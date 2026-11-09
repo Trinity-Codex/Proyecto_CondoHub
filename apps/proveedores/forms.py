@@ -1,6 +1,7 @@
 """Formulario de proveedores."""
 from django import forms
 
+from apps.core.campos import RutField
 from apps.core.formularios import ModeloFormularioBootstrap
 from apps.cuentas.validadores import normalizar_rut
 
@@ -11,6 +12,7 @@ class ProveedorForm(ModeloFormularioBootstrap):
     class Meta:
         model = Proveedor
         # Solo lo que llena el usuario. El condominio lo asigna la vista.
+        field_classes = {"rut": RutField}
         fields = ["rut", "razon_social", "rubro", "contacto", "telefono", "correo"]
 
     def __init__(self, *args, condominio, **kwargs):

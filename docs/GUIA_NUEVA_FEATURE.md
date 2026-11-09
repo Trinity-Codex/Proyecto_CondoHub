@@ -253,6 +253,12 @@ rechaza decimales y puntos mal agrupados, y `_campo.html` le pone el prefijo «$
 (se conservan los validadores del modelo y no pongas un `NumberInput` en `widgets`). El JS `static/js/formato.js` agrega los puntos
 mientras se escribe y nunca cambia un monto que no sea válido. Para mostrar dinero usa `{{ valor|pesos }}`.
 
+**RUT (#77):** para un campo de RUT usa `RutField` (`apps/core/campos.py`): acepta con o sin puntos y «k» minúscula, valida igual que
+`validar_rut` y `cleaned_data` sale normalizado (`12345678-5`). En un `forms.Form`: `rut = RutField(label="RUT")`; en un `ModelForm`,
+`field_classes = {"rut": RutField}` en el `Meta`. `_campo.html` agrega solo la región `aria-live` del aviso y el JS da formato en vivo.
+Para mostrar un RUT usa `{{ valor|rut }}` (`{% load condohub %}`); `{{ valor|rut|default:"—" }}` si puede faltar. Las funciones puras
+(`normalizar_rut`, `calcular_dv`, `formatear_rut`) viven en `apps/core/formato.py`; `apps.cuentas.validadores` las sigue exportando.
+
 Los `RadioSelect` y `CheckboxSelectMultiple` salen en un `fieldset` con `legend` (`_opciones.html`, lo elige `_campo.html`).
 Los filtros `control` y `es_casilla` están en `{% load formularios %}`. Las listas desplegables muestran «Seleccione…»
 (lo hace `BootstrapMixin`; tu `empty_label` propio se respeta).

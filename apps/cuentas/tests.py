@@ -532,3 +532,57 @@ class LimiteIntentosAdminTest(TestCase):
         self.client.post(reverse("admin:login"), {"username": "persona@prueba.cl", "password": CLAVE, "next": "/admin/"})
         self.assertEqual(IntentoFallido.objects.filter(correo="persona@prueba.cl").count(), 1)
         self.assertNotIn("_auth_user_id", self.client.session)
+
+
+class RutConFormatoTest(TestCase):
+    """Issue #77: el RUT se guarda normalizado y los listados lo muestran con puntos."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+
+    def test_alta_con_y_sin_puntos_guarda_normalizado(self):
+        self.client.force_login(self.e.administrador)
+        for correo, rut in [("a@prueba.cl", "12.345.678-5"), ("b@prueba.cl", "1.234.567-4"), ("c@prueba.cl", "10.000.013-k")]:
+            with self.subTest(rut=rut):
+                datos = {"email": correo, "first_name": "Ana", "last_name": "P", "rut": rut, "rol": Membresia.Rol.CONSERJE}
+                self.client.post(reverse("cuentas:usuario_nuevo"), datos)
+        self.assertEqual(
+            set(Usuario.objects.filter(email__in=["a@prueba.cl", "b@prueba.cl", "c@prueba.cl"]).values_list("rut", flat=True)),
+            {"12345678-5", "1234567-4", "10000013-K"},
+        )
+
+    def test_alta_con_error_vuelve_con_el_rut_con_puntos(self):
+        self.client.force_login(self.e.administrador)
+        datos = {"email": "no-es-correo", "first_name": "Ana", "last_name": "P", "rut": "12345678-5", "rol": Membresia.Rol.CONSERJE}
+        self.assertContains(self.client.post(reverse("cuentas:usuario_nuevo"), datos), 'value="12.345.678-5"')
+
+    def test_perfil_guarda_normalizado_y_lo_muestra_con_puntos(self):
+        self.client.force_login(self.e.residente)
+        datos = {"first_name": "Vale", "last_name": "Soto", "rut": "15.975.346-8", "telefono": ""}
+        self.client.post(reverse("cuentas:perfil"), datos)
+        self.e.residente.refresh_from_db()
+        self.assertEqual(self.e.residente.rut, "15975346-8")
+        self.assertContains(self.client.get(reverse("cuentas:perfil")), 'value="15.975.346-8"')
+
+    def test_perfil_con_rut_vacio_sigue_valido(self):
+        self.client.force_login(self.e.residente)
+        datos = {"first_name": "Vale", "last_name": "Soto", "rut": "", "telefono": ""}
+        self.assertRedirects(self.client.post(reverse("cuentas:perfil"), datos), reverse("cuentas:perfil"))
+
+    def test_perfil_rechaza_rut_ajeno_con_puntos(self):
+        crear_usuario("otro@prueba.cl", rut="12345678-5")
+        self.client.force_login(self.e.residente)
+        datos = {"first_name": "Vale", "last_name": "Soto", "rut": "12.345.678-5", "telefono": ""}
+        self.assertContains(self.client.post(reverse("cuentas:perfil"), datos), "Ya existe otra cuenta con ese RUT.")
+
+    def test_listado_de_usuarios_muestra_puntos(self):
+        self.e.residente.rut = "12345678-5"
+        self.e.residente.save()
+        self.client.force_login(self.e.administrador)
+        self.assertContains(self.client.get(reverse("cuentas:usuarios")), "12.345.678-5")
+
+    def test_formularios_de_rut_llevan_el_aviso_accesible(self):
+        self.client.force_login(self.e.administrador)
+        html = self.client.get(reverse("cuentas:usuario_nuevo")).content.decode()
+        self.assertIn('id="id_rut_aviso"', html)
+        self.assertIn("data-rut", html)

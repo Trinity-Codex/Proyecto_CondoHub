@@ -1,12 +1,15 @@
 """
-Campos de formulario propios de CondoHub (Issue #76). #77 agregará aquí `RutField`.
+Campos de formulario propios de CondoHub (Issues #76 y #77).
 
 Uso: `monto = MontoField(label="Monto", min_value=1)` en un Form, o `field_classes = {"monto": MontoField}`
 en el Meta de un ModelForm (se conservan los validadores del modelo). `_campo.html` pone el prefijo «$» solo.
+Para RUT: `rut = RutField(label="RUT")` o `field_classes = {"rut": RutField}`; `cleaned_data` sale normalizado.
 """
 from django import forms
 
-from .formato import formatear_monto, normalizar_monto
+from apps.cuentas.validadores import validar_rut
+
+from .formato import formatear_monto, formatear_rut, normalizar_monto, normalizar_rut
 
 # Regla de negocio y mensaje que debe ser igual en todos los campos de dinero.
 MENSAJE_MONTO_INVALIDO = "Escriba el monto en pesos, sin decimales. Ej.: 1.250.000."
@@ -43,3 +46,40 @@ class MontoField(forms.IntegerField):
         if digitos is None:
             raise forms.ValidationError(MENSAJE_MONTO_INVALIDO, code="invalid")
         return super().to_python(digitos)
+
+
+class RutInput(forms.TextInput):
+    """
+    Texto para RUT: `data-rut` (lo activa el JS), placeholder ficticio válido y valor mostrado con puntos.
+    `aviso_vivo` hace que `_campo.html` agregue la región aria-live donde el JS escribe «RUT válido.».
+    """
+
+    aviso_vivo = True
+
+    def __init__(self, attrs=None):
+        por_defecto = {
+            "data-rut": "", "autocomplete": "off", "spellcheck": "false", "autocapitalize": "characters",
+            "placeholder": "12.345.678-5",
+        }
+        super().__init__(attrs={**por_defecto, **(attrs or {})})
+
+    def format_value(self, value):
+        if value in (None, ""):
+            return None
+        # Un valor inválido se devuelve tal cual: la persona ve lo que escribió junto al error.
+        return formatear_rut(str(value))
+
+
+class RutField(forms.CharField):
+    """RUT chileno: acepta puntos y «k» minúscula, valida igual que antes y entrega `12345678-5`."""
+
+    widget = RutInput
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("max_length", 12)
+        kwargs.setdefault("validators", [validar_rut])
+        super().__init__(*args, **kwargs)
+
+    def to_python(self, value):
+        valor = super().to_python(value)
+        return normalizar_rut(valor) if valor else valor
