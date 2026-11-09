@@ -19,4 +19,4 @@ Cambio transversal del Issue #75 (`Closes #75`). Contrato C6 para #76, #77 y #78
 - [x] 3.1 Prueba que cada página de formulario de las 15 plantillas que incluyen `_formulario.html` responde 200 con su rol permitido y 403 o redirección con uno no permitido. Verificación: `python manage.py test apps` completo.
 - [x] 3.2 Prueba de que un POST sin JavaScript se guarda igual que antes (un formulario representativo).
 - [x] 3.3 Documentar C6 en `docs/equipo/PLAN_PMV_27NOV.md` (tabla de contratos) y en `docs/GUIA_NUEVA_FEATURE.md`. Verificación: `openspec validate --all --strict`.
-- [ ] 3.4 Archivar el cambio en el mismo PR (`/opsx:archive`) y avisar en el grupo la firma C6.
+- [x] 3.4 Archivar el cambio en el mismo PR (`/opsx:archive`) y avisar en el grupo la firma C6.
