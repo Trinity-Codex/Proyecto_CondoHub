@@ -14,8 +14,16 @@ Los campos de dinero que escribe el usuario SHALL aceptar pesos enteros con o si
 - **THEN** se guardan 1250000 y 85000 respectivamente
 
 #### Scenario: Monto ambiguo o inválido
-- **WHEN** el usuario escribe «1,5», «1.5», «1.25.000», «-5» o «abc» en un campo de dinero
+- **WHEN** el usuario escribe «1,5», «1.5», «1.25.000», «0.500», «01.000», «-5» o «abc» en un campo de dinero
 - **THEN** el formulario vuelve con un error en ese campo que explica que el monto va en pesos enteros, y no se guarda nada
+
+#### Scenario: El JavaScript no cambia un monto sin avisar
+- **WHEN** con JavaScript activo el usuario escribe «1500.5» o «1,5», o pega un texto que no es un monto válido, y sale del campo
+- **THEN** el campo conserva exactamente lo escrito (sin reagrupar dígitos) y, al enviar, el servidor muestra el error
+
+#### Scenario: Cero como monto
+- **WHEN** el usuario escribe «0» en un egreso y en la tarifa de un espacio común
+- **THEN** el egreso se rechaza y la tarifa se acepta con 0 (gratis)
 
 #### Scenario: Monto sobre el máximo
 - **WHEN** el administrador escribe un egreso de «1.000.000.000» (sobre el máximo de 999.999.999)

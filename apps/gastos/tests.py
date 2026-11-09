@@ -122,10 +122,42 @@ class EgresoTest(TestCase):
 
     def test_montos_enteros_positivos(self):
         """Criterio: los montos son enteros positivos (pesos chilenos)."""
-        for monto in ["0", "-500", "1500.5", "abc", "1000000000"]:
+        for monto in ["0", "-500", "1500.5", "abc", "1000000000", "1.000.000.000", "0.500", "01.000", "1,5"]:
             respuesta = self.client.post(reverse("gastos:egreso_nuevo", args=[self.periodo.pk]), self.datos(monto=monto))
             self.assertIn("monto", respuesta.context["form"].errors, monto)
         self.assertFalse(Egreso.objects.exists())
+
+    def test_monto_con_puntos_y_signo_se_guarda_como_entero(self):
+        """Issue #76: «1.250.000» y «$ 85.000» guardan 1250000 y 85000."""
+        url = reverse("gastos:egreso_nuevo", args=[self.periodo.pk])
+        for texto, esperado in [("1.250.000", 1250000), ("$ 85.000", 85000), ("1250000", 1250000)]:
+            self.assertRedirects(self.client.post(url, self.datos(monto=texto)), self.periodo.get_absolute_url())
+            self.assertEqual(Egreso.objects.latest("pk").monto, esperado)
+
+    def test_monto_en_el_maximo_se_acepta(self):
+        url = reverse("gastos:egreso_nuevo", args=[self.periodo.pk])
+        self.client.post(url, self.datos(monto="999.999.999"))
+        self.assertEqual(Egreso.objects.get().monto, 999999999)
+
+    def test_error_en_otro_campo_conserva_el_monto_con_puntos(self):
+        respuesta = self.client.post(
+            reverse("gastos:egreso_nuevo", args=[self.periodo.pk]), self.datos(monto="1.250.000", descripcion="")
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'value="1.250.000"')
+        self.assertFalse(Egreso.objects.exists())
+
+    def test_monto_invalido_conserva_lo_escrito_y_explica(self):
+        respuesta = self.client.post(reverse("gastos:egreso_nuevo", args=[self.periodo.pk]), self.datos(monto="1500.5"))
+        self.assertContains(respuesta, 'value="1500.5"')
+        self.assertContains(respuesta, "Escriba el monto en pesos, sin decimales")
+
+    def test_editar_muestra_el_monto_con_puntos_y_prefijo(self):
+        egreso = crear_egreso(self.periodo, self.e.administrador, monto=450000)
+        respuesta = self.client.get(reverse("gastos:egreso_editar", args=[egreso.pk]))
+        self.assertContains(respuesta, 'value="450.000"')
+        self.assertContains(respuesta, 'data-prefijo>$')
+        self.assertContains(respuesta, "data-monto")
 
 
 class PeriodoEmitidoTest(TestCase):

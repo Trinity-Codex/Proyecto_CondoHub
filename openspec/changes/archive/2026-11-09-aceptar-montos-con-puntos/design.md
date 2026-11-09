@@ -32,8 +32,8 @@ dependen de `django.forms`; #77 agregará `RutField`. No van en `apps/core/formu
 archivos, pero mezcla estilo con lectura de datos y choca con #77/#78).
 
 **Gramática estricta de `normalizar_monto(texto) -> str | None`.** Quita espacios en los extremos y un `$` inicial (con o sin espacio
-después). El resto debe ser `^\d+$` o `^\d{1,3}(\.\d{3})+$`; devuelve los dígitos sin puntos, o `None` si no calza. Así:
-«$ 1.250.000», «1250000», « 85.000 » → válidos; «1,5», «1.5», «1500.5», «1.25.000», «-5», «abc», «1 250 000» → `None`.
+después). El resto debe ser `^\d+$` o `^[1-9]\d{0,2}(\.\d{3})+$` (el primer grupo no empieza con 0); devuelve los dígitos sin puntos, o `None` si no calza. Así:
+«$ 1.250.000», «1250000», « 85.000 » → válidos; «1,5», «1.5», «1500.5», «1.25.000», «0.500», «01.000», «-5», «abc», «1 250 000» → `None`. Sin puntos se mantiene `^\d+$`: «0» pasa a los validadores, que lo rechazan en el egreso y lo aceptan en la tarifa (0 = gratis).
 En dinero, adivinar es peor que preguntar: «1.5» puede ser 1,5 o 1.500, y «1,5» no existe en pesos. Alternativa descartada: quitar todos
 los puntos como en el reporte (convertiría «1500.5» en 15005 y rompe la prueba actual).
 
@@ -62,8 +62,12 @@ solo delega `f"{n:,}".replace(...)` a `formatear_monto(abs(n))`. Prueba parametr
 antes de `{% block scripts %}`. Contiene `reformatear(entrada, formatear, esSignificativo)` (cursor tras el mismo dígito) y un registro
 `FORMATOS = { monto: { formatear: formatearMonto, significativo: digito } }`. Un solo listener `input` delegado en `document` busca
 `[data-<clave>]` por cada clave del registro, así sirve en formularios cargados después. #77 solo agrega `rut: {...}`.
-`formatearMonto` solo actúa si el texto tiene únicamente dígitos, puntos, espacios y `$`; ante una coma, letra o `-` no toca el valor, para
-que el servidor muestre el error en vez de convertir «1,5» en «15» en silencio. Sin JS, el servidor acepta las mismas entradas.
+**El JS nunca cambia un monto sin avisar.** Reglas de `formatearMonto` y del listener:
+- Mientras se escribe, solo reagrupa los puntos que el propio JS pone: si el usuario tipea un punto o una coma (`InputEvent.data`), o pega un texto que no es un monto válido según la gramática del servidor (réplica de `normalizar_monto`), el JS marca `dataset.montoManual` en ese campo y deja de formatearlo hasta que quede vacío. Así «1500.5» no se convierte en «15.005» ni se guarda 15005: el servidor lo rechaza y muestra el error.
+- Pegar «$ 1.250.000» (monto válido) se formatea normalmente.
+- Al salir del campo (`blur`) da formato solo si el texto es un monto válido; si no, lo deja tal cual.
+- Ante coma, letra o `-` nunca toca el valor. Sin JS, el servidor acepta las mismas entradas.
+- La lógica va en funciones puras (`esMontoValido`, `formatearMonto`, `reformatear`) y, como el proyecto no tiene ejecutor de JS, se prueba en el navegador con `javascript_tool` y se anotan los casos en el PR.
 
 ## Risks / Trade-offs
 

@@ -2,6 +2,7 @@
 from django import forms
 from django.utils import timezone
 
+from apps.core.campos import MontoField
 from apps.core.formularios import CampoFecha, FormularioBootstrap
 
 from .consultas import saldo_del_cobro
@@ -15,7 +16,7 @@ class PagoForm(FormularioBootstrap):
     definitiva (con el cobro bloqueado) está en Pago.registrar().
     """
 
-    monto = forms.IntegerField(label="Monto pagado ($)", min_value=1)
+    monto = MontoField(label="Monto pagado", min_value=1)
     fecha = forms.DateField(label="Fecha del pago", widget=CampoFecha(), initial=timezone.localdate)
     medio = forms.ChoiceField(label="Medio de pago", choices=Pago.Medio.choices)
     observacion = forms.CharField(label="Observación", max_length=200, required=False)

@@ -247,6 +247,12 @@ placeholder con contraste AA. Si necesitas una grilla o un prefijo, incluye el c
 <div class="col-md-6">{% include "_campo.html" with campo=form.monto prefijo="$" %}</div>
 ```
 
+**Montos en pesos (#76):** para un campo de dinero usa `MontoField` (`apps/core/campos.py`): acepta «$ 1.250.000», «1.250.000» y «1250000»,
+rechaza decimales y puntos mal agrupados, y `_campo.html` le pone el prefijo «$» solo. En un `forms.Form`:
+`monto = MontoField(label="Monto", min_value=1)`; en un `ModelForm`, `field_classes = {"monto": MontoField}` en el `Meta`
+(se conservan los validadores del modelo y no pongas un `NumberInput` en `widgets`). El JS `static/js/formato.js` agrega los puntos
+mientras se escribe y nunca cambia un monto que no sea válido. Para mostrar dinero usa `{{ valor|pesos }}`.
+
 Los `RadioSelect` y `CheckboxSelectMultiple` salen en un `fieldset` con `legend` (`_opciones.html`, lo elige `_campo.html`).
 Los filtros `control` y `es_casilla` están en `{% load formularios %}`. Las listas desplegables muestran «Seleccione…»
 (lo hace `BootstrapMixin`; tu `empty_label` propio se respeta).

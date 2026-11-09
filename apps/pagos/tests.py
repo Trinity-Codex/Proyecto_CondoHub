@@ -162,6 +162,27 @@ class RegistrarPagosTest(TestCase):
         self.cobro.refresh_from_db()
         self.assertEqual(self.cobro.estado, Estado.PAGADO)
 
+    def test_monto_con_puntos_y_signo(self):
+        """Issue #76: «$ 10.000» registra 10000 y el saldo sigue mandando."""
+        self.pagar("$ 10.000")
+        self.assertEqual(self.cobro.pagos.get().monto, 10000)
+
+    def test_monto_con_puntos_sobre_el_saldo_se_rechaza(self):
+        respuesta = self.pagar("42.001")
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("monto", respuesta.context["form"].errors)
+        self.assertContains(respuesta, "No puede superar el saldo pendiente ($42.000)")
+        self.assertEqual(self.cobro.pagos.count(), 0)
+
+    def test_monto_invalido_se_rechaza(self):
+        for texto in ["1,5", "0", "0.500", "-5"]:
+            self.assertIn("monto", self.pagar(texto).context["form"].errors, texto)
+        self.assertEqual(self.cobro.pagos.count(), 0)
+
+    def test_el_formulario_sugiere_el_saldo_con_puntos(self):
+        self.client.force_login(self.e.administrador)
+        self.assertContains(self.client.get(self.url), 'value="42.000"')
+
     def test_no_se_puede_pagar_mas_de_lo_adeudado(self):
         respuesta = self.pagar(42001)
         self.assertEqual(respuesta.status_code, 200)  # vuelve al formulario con el error
