@@ -5,11 +5,29 @@
 {% block contenido %}
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
   <h1 class="h3 mb-0"><i class="bi bi-cash-stack"></i> Cobranza</h1>
-  <div class="text-end">
-    <div class="text-muted small">Deuda total del condominio</div>
-    <div class="fs-4 fw-semibold">{{ deuda_total|pesos }}</div>
-  </div>
+  {% if cobranza %}<a href="{% url 'gastos:reporte' %}?periodo={{ cobranza.periodo.pk }}">Ver reporte de {{ cobranza.periodo }}</a>{% endif %}
 </div>
+
+{# Indicadores (Issue #57): la recaudación y la deuda del último período emitido, y la deuda de todos los cobros. #}
+<dl class="indicadores {% if cobranza %}indicadores-3{% endif %} mb-3">
+  {% if cobranza %}
+  <div class="indicador">
+    <dt class="indicador-etiqueta">Recaudación<span class="indicador-detalle">{{ cobranza.periodo }}</span></dt>
+    <dd class="indicador-numero">{{ cobranza.porcentaje_recaudacion|floatformat:1 }} %</dd>
+  </div>
+  <div class="indicador">
+    <dt class="indicador-etiqueta">Deuda al cierre del período<span class="indicador-detalle">{{ cobranza.periodo }}, con meses anteriores</span></dt>
+    <dd class="indicador-numero">{{ cobranza.deuda_total|pesos }}</dd>
+  </div>
+  {% endif %}
+  <div class="indicador">
+    <dt class="indicador-etiqueta">Deuda total del condominio<span class="indicador-detalle">Todos los períodos</span></dt>
+    <dd class="indicador-numero">{{ deuda_total|pesos }}</dd>
+  </div>
+</dl>
+{% if not cobranza %}
+<p class="text-muted">Aún no hay gastos comunes emitidos: los indicadores del período aparecen al emitir el primer período.</p>
+{% endif %}
 
 <div class="card">
 <div class="table-responsive">
