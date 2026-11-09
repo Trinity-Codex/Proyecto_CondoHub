@@ -14,7 +14,15 @@ class EdificioForm(ModeloFormularioBootstrap):
         model = Edificio
         # condominio lo asigna la vista (el condominio activo).
         fields = ["nombre", "direccion"]
-        help_texts = {"direccion": "Solo si es distinta a la del condominio."}
+        labels = {"nombre": "Nombre", "direccion": "Dirección"}
+        widgets = {
+            "nombre": forms.TextInput(attrs={"placeholder": "Ej.: Torre A"}),
+            "direccion": forms.TextInput(attrs={"placeholder": "Ej.: Av. Los Aromos 1234"}),
+        }
+        help_texts = {
+            "nombre": "Así se muestra en las unidades y en los comunicados. No puede repetirse en el condominio.",
+            "direccion": "Opcional. Solo si es distinta a la del condominio.",
+        }
 
     def __init__(self, *args, condominio, **kwargs):
         super().__init__(*args, **kwargs)
@@ -39,7 +47,25 @@ class UnidadForm(ModeloFormularioBootstrap):
     class Meta:
         model = Unidad
         fields = ["edificio", "numero", "piso", "tipo", "alicuota"]
-        widgets = {"alicuota": forms.NumberInput(attrs={"step": "0.000001", "min": 0, "max": 1})}
+        widgets = {
+            "numero": forms.TextInput(attrs={"placeholder": "Ej.: 101"}),
+            "piso": forms.NumberInput(attrs={"placeholder": "Ej.: 1"}),
+            "alicuota": forms.NumberInput(
+                attrs={"step": "0.000001", "min": 0, "max": 1, "placeholder": "Ej.: 0.012500"}
+            ),
+        }
+        labels = {
+            "edificio": "Edificio", "numero": "Número", "piso": "Piso", "tipo": "Tipo de unidad", "alicuota": "Alícuota",
+        }
+        help_texts = {
+            "edificio": "Edificio del condominio donde está la unidad.",
+            "numero": "Como figura en el reglamento o la escritura; se guarda en mayúsculas. "
+            "No puede repetirse en el edificio.",
+            "piso": "Los subterráneos van con número negativo (Ej.: -1).",
+            "tipo": "Departamento, casa, local, estacionamiento o bodega.",
+            "alicuota": "Fracción del total de gastos comunes que paga la unidad: con ella se reparte cada período. "
+            "Ej.: 0.012500 equivale a 1,25 %.",
+        }
 
     def __init__(self, *args, condominio, **kwargs):
         """Solo se puede elegir un edificio del condominio activo."""

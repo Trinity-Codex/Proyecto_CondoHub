@@ -205,3 +205,30 @@ footer {
   font-weight: 600;
   color: var(--condohub-azul);
 }
+
+/* Formularios largos en tarjetas numeradas (#78): cada sección es una tarjeta con su número en un círculo. */
+.seccion-formulario .seccion-titulo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.25rem;
+  font-size: 1.15rem;
+}
+.seccion-numero {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background-color: var(--condohub-azul);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.seccion-intro {
+  margin-bottom: 1rem;
+  color: #5c6773;  /* 5,6:1 sobre blanco */
+  font-size: 0.9rem;
+}

@@ -187,7 +187,7 @@ class PaginasConFormularioTest(TestCase):
         respuesta = self.client.post(reverse("proveedores:nuevo"), {"rut": "", "razon_social": ""})
         self.assertEqual(respuesta.status_code, 200)
         self.assertContains(respuesta, 'aria-invalid="true"')
-        self.assertContains(respuesta, 'aria-describedby="id_razon_social_error"')
+        self.assertContains(respuesta, 'aria-describedby="id_razon_social_helptext id_razon_social_error"')
         self.assertContains(respuesta, "invalid-feedback")
 
     def test_post_sin_javascript_guarda_igual(self):

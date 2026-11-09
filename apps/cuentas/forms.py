@@ -119,13 +119,24 @@ class FormularioAltaUsuario(FormularioBootstrap):
       duplica; solo se le agrega el rol en este condominio.
     """
 
-    email = forms.EmailField(label="Correo electrónico")
-    first_name = forms.CharField(label="Nombre", max_length=150)
-    last_name = forms.CharField(label="Apellido", max_length=150)
-    rut = RutField(label="RUT", help_text="Ejemplo: 12.345.678-5")
+    email = forms.EmailField(
+        label="Correo electrónico",
+        widget=forms.EmailInput(attrs={"placeholder": "Ej.: maria.soto@example.com"}),
+        help_text="Recibirá aquí la invitación para crear su contraseña y será con lo que inicie sesión.",
+    )
+    first_name = forms.CharField(
+        label="Nombre", max_length=150, widget=forms.TextInput(attrs={"placeholder": "Ej.: María"}),
+        help_text="Así se mostrará en los listados y en los correos de CondoHub.",
+    )
+    last_name = forms.CharField(
+        label="Apellido", max_length=150, widget=forms.TextInput(attrs={"placeholder": "Ej.: Soto"}),
+    )
+    rut = RutField(label="RUT", help_text="Identifica a la persona: no puede estar en dos cuentas.")
     rol = forms.ChoiceField(
+        label="Rol en este condominio",
         choices=Membresia.Rol.choices,
-        help_text="Para que un residente quede en su unidad, asígnalo luego desde la página Unidades.",
+        help_text="Define qué puede hacer en este condominio. Para que un residente quede en su unidad, "
+        "asígnalo luego desde la página Unidades.",
     )
 
     def __init__(self, *args, condominio, **kwargs):
@@ -195,9 +206,18 @@ class FormularioPerfil(ModeloFormularioBootstrap):
         model = Usuario
         # recibir_correos: avisos por correo (Issue #14).
         fields = ["first_name", "last_name", "rut", "telefono", "recibir_correos"]
-        labels = {"first_name": "Nombre", "last_name": "Apellido"}
+        labels = {
+            "first_name": "Nombre", "last_name": "Apellido", "telefono": "Teléfono",
+            "recibir_correos": "Recibir avisos por correo",
+        }
         field_classes = {"rut": RutField}
-        help_texts = {"rut": "Ejemplo: 12.345.678-5", "telefono": "Ejemplo: +56 9 1234 5678"}
+        widgets = {"telefono": forms.TextInput(attrs={"placeholder": "Ej.: +56 9 1234 5678", "inputmode": "tel"})}
+        help_texts = {
+            "first_name": "Así se mostrará en los listados y en los correos de CondoHub.",
+            "rut": "Opcional. Identifica a la persona: no puede estar en dos cuentas.",
+            "telefono": "Opcional. La administración lo usa para contactarte si hace falta.",
+            "recibir_correos": "Comunicados, incidentes, gastos comunes emitidos y pagos registrados.",
+        }
 
     def clean_rut(self):
         """El formato y el dígito verificador los revisa el modelo; aquí, que no sea de otra persona."""
