@@ -91,6 +91,7 @@
     monto: {
       enVivo: reagruparMonto,
       alSalir: formatearMonto,
+      esValido: esMontoValido,
       significativo: esDigito,
       pideDetenerse: montoPideDetenerse
     }
@@ -110,6 +111,19 @@
     });
   }
 
+  /*
+   * Un formulario que vuelve con error trae un valor inválido («1500.5») sin marca: al entrar al campo
+   * se marca como manual, para que escribir un dígito más no lo reagrupe («1500.50», no «150.050»).
+   */
+  function alEntrar(evento) {
+    var entrada = evento.target;
+    if (!entrada || !entrada.getAttribute || entrada.value === undefined) return;
+    Object.keys(FORMATOS).forEach(function (clave) {
+      if (entrada.getAttribute("data-" + clave) === null) return;
+      if (entrada.value !== "" && !FORMATOS[clave].esValido(entrada.value)) entrada.dataset[clave + "Manual"] = "1";
+    });
+  }
+
   function alSalir(evento) {
     var entrada = evento.target;
     if (!entrada || !entrada.getAttribute) return;
@@ -122,6 +136,7 @@
 
   if (typeof document !== "undefined") {
     document.addEventListener("input", alEscribir);
+    document.addEventListener("focusin", alEntrar);
     document.addEventListener("focusout", alSalir);
   }
   global.CondoHubFormato = {
