@@ -1,6 +1,7 @@
 """Consultas del estado de cuenta (Issues #3 y #4). Las vistas las comparten para dar los mismos números."""
 from apps.condominios.residencias import cobros_visibles
 from apps.gastos.models import DetalleGastoComun, PeriodoGasto
+from apps.gastos.reportes import generar_reporte
 
 
 def cobros_del_residente(usuario, condominio):
@@ -55,3 +56,12 @@ def total_adeudado(cobros):
     """
     deuda = (DetalleGastoComun.Estado.PENDIENTE, DetalleGastoComun.Estado.MOROSO)
     return sum(saldo_del_cobro(c) for c in cobros if c.estado in deuda)
+
+
+def reporte_del_ultimo_periodo(condominio):
+    """
+    Reporte de recaudación y morosidad del último período EMITIDO del condominio (el mismo que el reporte
+    muestra por defecto), o None si aún no se emite ninguno. Lo usan el inicio y la página Cobranza (#57, #79).
+    """
+    ultimo = PeriodoGasto.objects.filter(condominio=condominio, estado=PeriodoGasto.Estado.EMITIDO).first()
+    return generar_reporte(ultimo) if ultimo else None

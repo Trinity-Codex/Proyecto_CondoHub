@@ -320,6 +320,10 @@ class CargarDemoTest(TestCase):
         self.assertEqual(huella_demo(), self.HUELLA)
 
 
+def html_count(respuesta, texto):
+    return respuesta.content.decode().count(texto)
+
+
 class IndicadoresCobranzaTest(TestCase):
     """Indicadores de cobranza en el inicio (Issue #57): los mismos números del reporte."""
 
@@ -337,32 +341,61 @@ class IndicadoresCobranzaTest(TestCase):
             if unidad == self.e.b101:
                 Pago.registrar(cobro, monto=40000, registrado_por=self.e.administrador)
 
-    def inicio(self, usuario):
+    def cobranza(self, usuario):
         self.client.force_login(usuario)
-        return self.client.get(reverse("core:inicio"))
+        return self.client.get(reverse("pagos:cobranza"))
 
-    def test_administrador_y_comite_ven_los_numeros_del_reporte(self):
+    def test_administrador_y_comite_ven_los_numeros_del_reporte_en_cobranza(self):
         reporte = generar_reporte(self.marzo)
         self.assertEqual((reporte.porcentaje_recaudacion, reporte.deuda_total, len(reporte.unidades_morosas)), (33.3, 120000, 1))
         for usuario in (self.e.administrador, self.e.comite):
             with self.subTest(usuario=usuario):
-                respuesta = self.inicio(usuario)
+                respuesta = self.cobranza(usuario)
                 self.assertEqual(respuesta.context["cobranza"].periodo, self.marzo)
-                self.assertContains(respuesta, "Cobranza de Marzo 2026")
+                self.assertContains(respuesta, "Marzo 2026")
                 self.assertContains(respuesta, "33,3 %")
-                self.assertContains(respuesta, "$120.000")
                 self.assertContains(respuesta, f"{reverse('gastos:reporte')}?periodo={self.marzo.pk}")
+                # Deuda al cierre del período (reporte) y deuda total del condominio (tabla): cada una con su etiqueta.
+                self.assertContains(respuesta, "Deuda al cierre del período")
+                self.assertContains(respuesta, "Deuda total del condominio")
+                self.assertEqual(respuesta.context["cobranza"].deuda_total, 120000)
+                self.assertEqual(respuesta.context["deuda_total"], sum(f["deuda"] for f in respuesta.context["filas"]))
+                self.assertEqual(respuesta.context["deuda_total"], 120000)
+                self.assertContains(respuesta, "$120.000", count=2)
+                self.assertEqual(html_count(respuesta, 'class="indicador"'), 3)
 
-    def test_sin_periodos_emitidos(self):
+    def test_cobranza_sin_periodos_emitidos(self):
         PeriodoGasto.objects.update(estado=PeriodoGasto.Estado.ABIERTO)
-        self.assertContains(self.inicio(self.e.administrador), "Aún no hay gastos comunes emitidos")
+        respuesta = self.cobranza(self.e.administrador)
+        self.assertContains(respuesta, "Aún no hay gastos comunes emitidos")
+        self.assertContains(respuesta, "Deuda total del condominio")
+        self.assertNotContains(respuesta, "Recaudación")
+        self.assertContains(respuesta, "A101")  # la tabla sigue igual
 
-    def test_conserje_y_residente_no_los_ven(self):
+    def test_inicio_ya_no_trae_la_tarjeta_de_cobranza_pero_si_las_de_unidades(self):
+        self.client.force_login(self.e.administrador)
+        respuesta = self.client.get(reverse("core:inicio"))
+        self.assertNotContains(respuesta, "Recaudación")
+        self.assertNotContains(respuesta, "Cobranza de")
+        self.assertNotIn("cobranza", respuesta.context)
+        self.assertContains(respuesta, "Unidades morosas")
+
+    def test_inicio_sin_periodos_emitidos_avisa_que_faltan_las_tarjetas_de_unidades(self):
+        PeriodoGasto.objects.update(estado=PeriodoGasto.Estado.ABIERTO)
+        self.client.force_login(self.e.administrador)
+        respuesta = self.client.get(reverse("core:inicio"))
+        self.assertContains(respuesta, "Aún no hay gastos comunes emitidos")
+        self.assertNotContains(respuesta, "Unidades morosas")
+
+    def test_conserje_y_residente_no_acceden(self):
         for usuario in (self.e.conserje, self.e.residente):
             with self.subTest(usuario=usuario):
-                respuesta = self.inicio(usuario)
+                self.assertEqual(self.cobranza(usuario).status_code, 403)
+                self.client.force_login(usuario)
+                respuesta = self.client.get(reverse("core:inicio"))
                 self.assertNotIn("cobranza", respuesta.context)
                 self.assertNotContains(respuesta, "Unidades morosas")
+                self.assertNotContains(respuesta, "Recaudación")
 
 
 class TarjetasPorEstadoTest(TestCase):

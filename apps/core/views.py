@@ -11,10 +11,8 @@ from django.views.generic import TemplateView
 
 from apps.comunicados.models import Comunicado
 from apps.condominios.models import Residente, Unidad
-from apps.gastos.models import PeriodoGasto
-from apps.gastos.reportes import generar_reporte
 from apps.incidentes.models import Incidente
-from apps.pagos.consultas import cobros_del_residente, total_adeudado
+from apps.pagos.consultas import cobros_del_residente, reporte_del_ultimo_periodo, total_adeudado
 from apps.reservas.models import Reserva
 
 from .permisos import ADMINISTRADOR, COMITE, CONSERJE, RESIDENTE, RolRequeridoMixin, condominios_del_usuario, tiene_rol
@@ -26,8 +24,8 @@ class InicioView(RolRequeridoMixin, TemplateView):
       - todos:        últimos comunicados
       - residente:    su deuda, sus próximas reservas y sus incidentes abiertos
       - admin/comité/conserje: resumen (unidades y residentes) y tarjetas por estado (Issue #79)
-      - admin/comité:  indicadores de cobranza del último período emitido (Issue #57) y las
-                       tarjetas de unidades al día, con deuda y morosas, sacadas de ese reporte
+      - admin/comité:  tarjetas de unidades al día, con deuda y morosas, del reporte del último
+                       período emitido (Issues #57 y #79); la cobranza está en la página Cobranza
     """
 
     template_name = "core/inicio.html"
@@ -60,15 +58,15 @@ class InicioView(RolRequeridoMixin, TemplateView):
                 "residentes": Residente.objects.filter(unidad__in=unidades, activo=True).count(),
             }
             tarjetas = []
-            # Indicadores de cobranza (Issue #57): solo administrador y comité (el conserje no ve
-            # dinero). Del último período emitido, el mismo que el reporte muestra por defecto,
-            # y con generar_reporte, para que los números coincidan siempre con el reporte.
+            # Tarjetas de unidades (Issues #57 y #79): solo administrador y comité (el conserje no ve dinero),
+            # del último período emitido y con generar_reporte, para que coincidan siempre con el reporte.
+            # La recaudación y la deuda están en la página Cobranza.
             if tiene_rol(self.request, ADMINISTRADOR, COMITE):
-                ultimo = PeriodoGasto.objects.filter(condominio=condominio, estado=PeriodoGasto.Estado.EMITIDO).first()
-                contexto["cobranza"] = generar_reporte(ultimo) if ultimo else None
-                contexto["ve_cobranza"] = True
-                if contexto["cobranza"]:
-                    tarjetas += _tarjetas_de_unidades(contexto["cobranza"])
+                reporte = reporte_del_ultimo_periodo(condominio)
+                contexto["ve_unidades"] = True
+                contexto["hay_periodo"] = reporte is not None
+                if reporte:
+                    tarjetas += _tarjetas_de_unidades(reporte)
             tarjetas += _tarjetas_de_incidentes_y_reservas(condominio, hoy)
             contexto["tarjetas"] = tarjetas
             # Aviso si las alícuotas no suman 100 % (el prorrateo quedaría descuadrado).

@@ -164,8 +164,9 @@ h1, h2, h3, .h1, .h2, .h3, .h4, .h5, .marca {
   border-left: 4px solid var(--condohub-teal);
 }
 
-/* Panel de resumen del inicio: un solo panel con una parte por indicador. */
-.resumen-panel {
+/* Panel de indicadores (inicio y Cobranza): un solo panel con una parte por indicador (<dl>).
+   Con tres partes (.indicadores-3) se pone en fila desde lg, porque los montos son más anchos. */
+.indicadores {
   display: flex;
   flex-direction: column;
   margin: 0;
@@ -173,7 +174,7 @@ h1, h2, h3, .h1, .h2, .h3, .h4, .h5, .marca {
   border: 1px solid var(--bs-border-color);
   border-radius: var(--bs-border-radius);
 }
-.resumen-parte {
+.indicador {
   flex: 1 1 0;
   display: flex;
   align-items: center;
@@ -181,13 +182,17 @@ h1, h2, h3, .h1, .h2, .h3, .h4, .h5, .marca {
   padding: 0.875rem 1.25rem;
   min-width: 0;
 }
-.resumen-parte + .resumen-parte { border-top: 1px solid var(--bs-border-color); }
-.resumen-numero { order: 0; margin: 0; font-size: 2rem; font-weight: 600; line-height: 1; color: var(--condohub-azul); }
-.resumen-etiqueta { order: 1; display: flex; flex-direction: column; font-weight: 700; color: #1f2d3d; }
-.resumen-detalle { font-size: 0.8125rem; font-weight: 400; color: #4a5866; }
+.indicador + .indicador { border-top: 1px solid var(--bs-border-color); }
+.indicador-numero { order: 0; margin: 0; font-size: 2rem; font-weight: 600; line-height: 1; color: var(--condohub-azul); white-space: nowrap; }
+.indicador-etiqueta { order: 1; display: flex; flex-direction: column; font-weight: 700; color: #1f2d3d; }
+.indicador-detalle { font-size: 0.8125rem; font-weight: 400; color: #4a5866; }
 @media (min-width: 576px) {
-  .resumen-panel { flex-direction: row; }
-  .resumen-parte + .resumen-parte { border-top: 0; border-left: 1px solid var(--bs-border-color); }
+  .indicadores:not(.indicadores-3) { flex-direction: row; }
+  .indicadores:not(.indicadores-3) .indicador + .indicador { border-top: 0; border-left: 1px solid var(--bs-border-color); }
+}
+@media (min-width: 992px) {
+  .indicadores-3 { flex-direction: row; }
+  .indicadores-3 .indicador + .indicador { border-top: 0; border-left: 1px solid var(--bs-border-color); }
 }
 
 /* Tarjeta por estado (Issue #79): un enlace entero con nombre, cantidad y frase, y una franja con ícono y flecha. */
@@ -230,8 +235,8 @@ h1, h2, h3, .h1, .h2, .h3, .h4, .h5, .marca {
   justify-content: space-between;
   padding: 0.875rem 0;
   border-left: 2px solid var(--bs-border-color);
-  color: #4a5866;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  color: var(--kpi-acento); /* acento siempre visible: elemento gráfico, 3:1 mínimo sobre blanco y sobre --estado-*-fondo */
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 .kpi-icono { font-size: 1.5rem; line-height: 1; }
 .kpi-flecha { font-size: 1.125rem; line-height: 1; }
@@ -239,7 +244,6 @@ h1, h2, h3, .h1, .h2, .h3, .h4, .h5, .marca {
 .kpi:focus-visible .kpi-lateral {
   background-color: var(--kpi-fondo);
   border-left-color: var(--kpi-acento);
-  color: var(--kpi-texto, var(--kpi-acento));
 }
 @media (prefers-reduced-motion: reduce) {
   .kpi, .kpi-lateral { transition: none; }
@@ -249,12 +253,12 @@ h1, h2, h3, .h1, .h2, .h3, .h4, .h5, .marca {
 .kpi-cantidad { font-size: 1.75rem; font-weight: 600; line-height: 1.1; color: var(--condohub-azul); }
 .kpi-unidad { font-size: 0.875rem; font-weight: 400; color: #1f2d3d; }
 .kpi-frase { font-size: 0.8125rem; color: #4a5866; }
-.kpi-al-dia { --kpi-acento: var(--estado-al-dia); --kpi-fondo: var(--estado-al-dia-fondo); --kpi-texto: var(--estado-al-dia-texto); }
-.kpi-con-deuda { --kpi-acento: var(--estado-con-deuda); --kpi-fondo: var(--estado-con-deuda-fondo); --kpi-texto: var(--estado-con-deuda-texto); }
-.kpi-moroso { --kpi-acento: var(--estado-moroso); --kpi-fondo: var(--estado-moroso-fondo); --kpi-texto: var(--estado-moroso-texto); }
-.kpi-recibido { --kpi-acento: var(--estado-recibido); --kpi-fondo: var(--estado-recibido-fondo); --kpi-texto: var(--estado-recibido-texto); }
-.kpi-en-proceso { --kpi-acento: var(--estado-en-proceso); --kpi-fondo: var(--estado-en-proceso-fondo); --kpi-texto: var(--estado-en-proceso-texto); }
-.kpi-reserva { --kpi-acento: var(--estado-reserva); --kpi-fondo: var(--estado-reserva-fondo); --kpi-texto: var(--estado-reserva-texto); }
+.kpi-al-dia { --kpi-acento: var(--estado-al-dia); --kpi-fondo: var(--estado-al-dia-fondo); }
+.kpi-con-deuda { --kpi-acento: var(--estado-con-deuda); --kpi-fondo: var(--estado-con-deuda-fondo); }
+.kpi-moroso { --kpi-acento: var(--estado-moroso); --kpi-fondo: var(--estado-moroso-fondo); }
+.kpi-recibido { --kpi-acento: var(--estado-recibido); --kpi-fondo: var(--estado-recibido-fondo); }
+.kpi-en-proceso { --kpi-acento: var(--estado-en-proceso); --kpi-fondo: var(--estado-en-proceso-fondo); }
+.kpi-reserva { --kpi-acento: var(--estado-reserva); --kpi-fondo: var(--estado-reserva-fondo); }
 
 /* Comunicado fijado */
 .icono-fijado {

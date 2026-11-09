@@ -25,16 +25,16 @@ El sistema SHALL descargar el reporte en CSV para Excel y MUST neutralizar los t
 - **THEN** el CSV la escribe como texto, sin que Excel la evalúe
 
 ### Requirement: Indicadores de cobranza
-El sistema SHALL mostrar en el panel de inicio del administrador y del comité, para el último período emitido del condominio activo, el porcentaje de recaudación y la deuda total con un enlace al reporte de recaudación y morosidad, y la cantidad de unidades morosas, con la de unidades al día y con deuda, en tarjetas por estado, con los mismos números del reporte.
+El sistema SHALL mostrar en la página Cobranza del administrador y del comité, para el último período emitido del condominio activo, el porcentaje de recaudación y la deuda al cierre del período con un enlace al reporte de recaudación y morosidad, junto a la deuda total del condominio, y en el panel de inicio la cantidad de unidades al día, con deuda y morosas en tarjetas por estado, con los mismos números del reporte.
 
 #### Scenario: Indicadores del último período
-- **WHEN** el administrador abre el inicio y hay períodos emitidos
-- **THEN** ve el porcentaje de recaudación y la deuda total del último período emitido, y las unidades morosas, con deuda y al día en sus tarjetas, iguales a las del reporte
+- **WHEN** el administrador abre la página Cobranza y hay períodos emitidos
+- **THEN** ve el porcentaje de recaudación y la deuda al cierre del último período emitido, iguales a las del reporte, y la deuda total del condominio, sobre la tabla de unidades; en el inicio ve las unidades al día, con deuda y morosas en sus tarjetas
 
 #### Scenario: Sin períodos emitidos
 - **WHEN** el condominio aún no emite gastos comunes
-- **THEN** el panel indica que todavía no hay indicadores
+- **THEN** la página Cobranza indica que todavía no hay indicadores del período, muestra la deuda total del condominio y conserva la tabla
 
 #### Scenario: Acceso por rol
-- **WHEN** un conserje o un residente abre el inicio
-- **THEN** no ve los indicadores de cobranza
+- **WHEN** un conserje o un residente intenta abrir la página Cobranza o el inicio
+- **THEN** no ve los indicadores de cobranza ni las tarjetas de unidades

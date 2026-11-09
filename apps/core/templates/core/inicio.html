@@ -22,14 +22,14 @@
 {# ---- Resumen del condominio (administrador, comité y conserje) ---- #}
 {% if resumen %}
 <h2 class="h6 text-uppercase text-muted mb-2">Resumen</h2>
-<dl class="resumen-panel mb-4">
-  <div class="resumen-parte">
-    <dt class="resumen-etiqueta">Unidades<span class="resumen-detalle">Registradas en el condominio</span></dt>
-    <dd class="resumen-numero">{{ resumen.unidades }}</dd>
+<dl class="indicadores mb-4">
+  <div class="indicador">
+    <dt class="indicador-etiqueta">Unidades<span class="indicador-detalle">Registradas en el condominio</span></dt>
+    <dd class="indicador-numero">{{ resumen.unidades }}</dd>
   </div>
-  <div class="resumen-parte">
-    <dt class="resumen-etiqueta">Residentes<span class="resumen-detalle">Con residencia vigente</span></dt>
-    <dd class="resumen-numero">{{ resumen.residentes }}</dd>
+  <div class="indicador">
+    <dt class="indicador-etiqueta">Residentes<span class="indicador-detalle">Con residencia vigente</span></dt>
+    <dd class="indicador-numero">{{ resumen.residentes }}</dd>
   </div>
 </dl>
 {# ---- Tarjetas por estado (Issue #79): cada una es un enlace entero al listado ---- #}
@@ -51,31 +51,9 @@
   </div>
   {% endfor %}
 </div>
-{# ---- Indicadores de cobranza (administrador y comité, Issue #57) ---- #}
-{% if ve_cobranza %}
-<div class="card mb-4">
-  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-    <span><i class="bi bi-graph-up"></i> Cobranza{% if cobranza %} de {{ cobranza.periodo }}{% endif %}</span>
-    {% if cobranza %}<a href="{% url 'gastos:reporte' %}?periodo={{ cobranza.periodo.pk }}" class="small">Ver reporte</a>{% endif %}
-  </div>
-  {% if cobranza %}
-  <div class="card-body">
-    {# En el celular, un indicador por fila; desde md, dos columnas. Las unidades morosas están en su tarjeta (#79). #}
-    <div class="row g-2 text-md-center">
-      <div class="col-12 col-md-6 d-flex d-md-block justify-content-between align-items-baseline">
-        <div class="text-muted small">Recaudación</div>
-        <div class="fs-4 fw-semibold">{{ cobranza.porcentaje_recaudacion|floatformat:1 }} %</div>
-      </div>
-      <div class="col-12 col-md-6 d-flex d-md-block justify-content-between align-items-baseline">
-        <div class="text-muted small">Deuda total</div>
-        <div class="fs-4 fw-semibold text-nowrap">{{ cobranza.deuda_total|pesos }}</div>
-      </div>
-    </div>
-  </div>
-  {% else %}
-  <div class="card-body text-muted">Aún no hay gastos comunes emitidos: los indicadores aparecen al emitir el primer período.</div>
-  {% endif %}
-</div>
+{# Sin período emitido no hay tarjetas de unidades (administrador y comité). La cobranza está en su página. #}
+{% if ve_unidades and not hay_periodo %}
+<p class="text-muted mb-4">Aún no hay gastos comunes emitidos: las tarjetas de unidades aparecen al emitir el primer período.</p>
 {% endif %}
 {% if es_admin and suma_alicuotas != 1 %}
 <div class="alert alert-warning">
