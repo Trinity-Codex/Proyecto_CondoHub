@@ -435,7 +435,7 @@ class TarjetasPorEstadoTest(TestCase):
         self.assertEqual(list(t), ["recibido", "en-proceso", "reserva"])
         self.assertNotContains(respuesta, "Unidades morosas")
         self.assertNotContains(respuesta, "$")
-        self.assertContains(respuesta, "row-cols-xxl-3")
+        self.assertContains(respuesta, "row-cols-lg-3")
 
     def test_residente_sin_tarjetas_por_estado(self):
         respuesta, t = self.tarjetas(self.e.residente)
@@ -473,6 +473,9 @@ class TarjetasPorEstadoTest(TestCase):
         self.assertEqual(html.count('<a class="kpi '), 6)
         self.assertIn("Unidades morosas", html)
         self.assertIn('class="kpi-punto" aria-hidden="true"', html)
+        self.assertEqual(html.count('class="kpi-lateral" aria-hidden="true"'), 6)  # ícono y flecha son decorativos
+        for icono in ("bi-check-circle", "bi-hourglass-split", "bi-exclamation-triangle", "bi-inbox", "bi-wrench", "bi-calendar-event"):
+            self.assertIn(icono, html)
 
     def test_singular_y_plural(self):
         _, t = self.tarjetas(self.e.administrador)

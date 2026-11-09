@@ -22,23 +22,31 @@
 {# ---- Resumen del condominio (administrador, comité y conserje) ---- #}
 {% if resumen %}
 <h2 class="h6 text-uppercase text-muted mb-2">Resumen</h2>
-<div class="row g-3 mb-4">
-  <div class="col-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
-    <div class="text-muted small">Unidades</div><div class="fs-3 fw-semibold">{{ resumen.unidades }}</div>
-  </div></div></div>
-  <div class="col-6 col-lg-3"><div class="card tarjeta-indicador tarjeta-indicador-azul h-100"><div class="card-body">
-    <div class="text-muted small">Residentes</div><div class="fs-3 fw-semibold">{{ resumen.residentes }}</div>
-  </div></div></div>
-</div>
+<dl class="resumen-panel mb-4">
+  <div class="resumen-parte">
+    <dt class="resumen-etiqueta">Unidades<span class="resumen-detalle">Registradas en el condominio</span></dt>
+    <dd class="resumen-numero">{{ resumen.unidades }}</dd>
+  </div>
+  <div class="resumen-parte">
+    <dt class="resumen-etiqueta">Residentes<span class="resumen-detalle">Con residencia vigente</span></dt>
+    <dd class="resumen-numero">{{ resumen.residentes }}</dd>
+  </div>
+</dl>
 {# ---- Tarjetas por estado (Issue #79): cada una es un enlace entero al listado ---- #}
 <h2 class="h6 text-uppercase text-muted mb-2">Qué requiere atención</h2>
-<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xxl-{{ tarjetas_por_fila }} g-3 mb-4">
+<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 mb-4">
   {% for t in tarjetas %}
   <div class="col">
     <a class="kpi kpi-{{ t.clave }}" href="{{ t.url }}">
-      <span class="kpi-nombre"><span class="kpi-punto" aria-hidden="true"></span>{{ t.nombre }}</span>
-      <span class="kpi-cantidad">{{ t.cantidad }} <span class="kpi-unidad">{{ t.etiqueta }}</span></span>
-      <span class="kpi-frase">{{ t.frase }}</span>
+      <span class="kpi-contenido">
+        <span class="kpi-nombre"><span class="kpi-punto" aria-hidden="true"></span>{{ t.nombre }}</span>
+        <span class="kpi-cantidad">{{ t.cantidad }} <span class="kpi-unidad">{{ t.etiqueta }}</span></span>
+        <span class="kpi-frase">{{ t.frase }}</span>
+      </span>
+      <span class="kpi-lateral" aria-hidden="true">
+        <i class="bi {{ t.icono }} kpi-icono"></i>
+        <i class="bi bi-arrow-right kpi-flecha"></i>
+      </span>
     </a>
   </div>
   {% endfor %}

@@ -71,8 +71,6 @@ class InicioView(RolRequeridoMixin, TemplateView):
                     tarjetas += _tarjetas_de_unidades(contexto["cobranza"])
             tarjetas += _tarjetas_de_incidentes_y_reservas(condominio, hoy)
             contexto["tarjetas"] = tarjetas
-            # El conserje ve tres tarjetas (sin unidades); administrador y comité, seis: la grilla se ajusta.
-            contexto["tarjetas_por_fila"] = 6 if len(tarjetas) > 3 else 3
             # Aviso si las alícuotas no suman 100 % (el prorrateo quedaría descuadrado).
             contexto["suma_alicuotas"] = condominio.suma_alicuotas()
             # Incidentes por atender, para el equipo del condominio.
@@ -84,9 +82,10 @@ class InicioView(RolRequeridoMixin, TemplateView):
         return contexto
 
 
-def _tarjeta(clave, nombre, cantidad, singular, plural, frase, url):
+def _tarjeta(clave, icono, nombre, cantidad, singular, plural, frase, url):
+    """`icono` es una clase de Bootstrap Icons, decorativa: el nombre accesible sale del texto."""
     return {
-        "clave": clave, "nombre": nombre, "cantidad": cantidad,
+        "clave": clave, "icono": icono, "nombre": nombre, "cantidad": cantidad,
         "etiqueta": singular if cantidad == 1 else plural, "frase": frase, "url": url,
     }
 
@@ -101,11 +100,11 @@ def _tarjetas_de_unidades(reporte):
     url = f"{reverse('gastos:reporte')}?periodo={reporte.periodo.pk}"
     periodo = str(reporte.periodo)
     return [
-        _tarjeta("al-dia", "Unidades al día", por_situacion["Al día"], "unidad", "unidades",
+        _tarjeta("al-dia", "bi-check-circle", "Unidades al día", por_situacion["Al día"], "unidad", "unidades",
                  f"Sin deuda en {periodo}", url),
-        _tarjeta("con-deuda", "Unidades con deuda", por_situacion["Pendiente"], "unidad", "unidades",
+        _tarjeta("con-deuda", "bi-hourglass-split", "Unidades con deuda", por_situacion["Pendiente"], "unidad", "unidades",
                  f"Deben solo {periodo}", url),
-        _tarjeta("moroso", "Unidades morosas", por_situacion["Morosa"], "unidad", "unidades",
+        _tarjeta("moroso", "bi-exclamation-triangle", "Unidades morosas", por_situacion["Morosa"], "unidad", "unidades",
                  f"Con deuda anterior a {periodo}", url),
     ]
 
@@ -123,11 +122,11 @@ def _tarjetas_de_incidentes_y_reservas(condominio, hoy):
     en_proceso = por_estado.get(Incidente.Estado.EN_PROCESO, 0)
     de_hoy = reservas["de_hoy"]
     return [
-        _tarjeta("recibido", "Incidentes recibidos", recibidos, "incidente", "incidentes",
+        _tarjeta("recibido", "bi-inbox", "Incidentes recibidos", recibidos, "incidente", "incidentes",
                  "Esperan atención", f"{lista}?estado={Incidente.Estado.RECIBIDO}"),
-        _tarjeta("en-proceso", "Incidentes en proceso", en_proceso, "incidente", "incidentes",
+        _tarjeta("en-proceso", "bi-wrench", "Incidentes en proceso", en_proceso, "incidente", "incidentes",
                  "Se están atendiendo", f"{lista}?estado={Incidente.Estado.EN_PROCESO}"),
-        _tarjeta("reserva", "Reservas próximas", reservas["proximas"], "reserva", "reservas",
+        _tarjeta("reserva", "bi-calendar-event", "Reservas próximas", reservas["proximas"], "reserva", "reservas",
                  f"{de_hoy} para hoy", reverse("reservas:todas")),
     ]
 

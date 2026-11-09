@@ -163,37 +163,98 @@ h1, h2, h3, .h1, .h2, .h3, .h4, .h5, .marca {
 .tarjeta-indicador {
   border-left: 4px solid var(--condohub-teal);
 }
-.tarjeta-indicador-azul { border-left-color: var(--condohub-azul); }
 
-/* Tarjeta por estado (Issue #79): un enlace entero con nombre, cantidad y frase. */
-.kpi {
-  --kpi-acento: var(--condohub-teal-texto);
+/* Panel de resumen del inicio: un solo panel con una parte por indicador. */
+.resumen-panel {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  height: 100%;
-  padding: 0.875rem 1rem;
+  margin: 0;
   background: #fff;
-  border: 1px solid #e3e9ef;
-  border-top: 4px solid var(--kpi-acento);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+}
+.resumen-parte {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.875rem 1.25rem;
+  min-width: 0;
+}
+.resumen-parte + .resumen-parte { border-top: 1px solid var(--bs-border-color); }
+.resumen-numero { order: 0; margin: 0; font-size: 2rem; font-weight: 600; line-height: 1; color: var(--condohub-azul); }
+.resumen-etiqueta { order: 1; display: flex; flex-direction: column; font-weight: 700; color: #1f2d3d; }
+.resumen-detalle { font-size: 0.8125rem; font-weight: 400; color: #4a5866; }
+@media (min-width: 576px) {
+  .resumen-panel { flex-direction: row; }
+  .resumen-parte + .resumen-parte { border-top: 0; border-left: 1px solid var(--bs-border-color); }
+}
+
+/* Tarjeta por estado (Issue #79): un enlace entero con nombre, cantidad y frase, y una franja con ícono y flecha. */
+.kpi {
+  --kpi-acento: var(--condohub-teal-texto);
+  --kpi-fondo: #f4f7f9;
+  display: flex;
+  height: 100%;
+  background: #fff;
+  border: 1px solid var(--bs-border-color);
+  border-top: 3px solid var(--kpi-acento);
   border-radius: var(--bs-border-radius);
   color: #1f2d3d;
   text-decoration: none;
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.kpi:hover,
+.kpi:focus-visible {
+  border-color: var(--kpi-acento);
+  box-shadow: 0 2px 8px rgba(17, 51, 88, 0.12);
+  color: #1f2d3d;
+}
+.kpi:focus-visible { outline: 3px solid var(--condohub-azul); outline-offset: 2px; }
+.kpi-contenido {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.875rem 1rem;
   overflow-wrap: anywhere;
 }
-.kpi:hover { box-shadow: 0 2px 8px rgba(17, 51, 88, 0.12); color: #1f2d3d; }
-.kpi:focus-visible { outline: 3px solid var(--condohub-azul); outline-offset: 2px; }
+.kpi-lateral {
+  flex: none;
+  width: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 0;
+  border-left: 2px solid var(--bs-border-color);
+  color: #4a5866;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.kpi-icono { font-size: 1.5rem; line-height: 1; }
+.kpi-flecha { font-size: 1.125rem; line-height: 1; }
+.kpi:hover .kpi-lateral,
+.kpi:focus-visible .kpi-lateral {
+  background-color: var(--kpi-fondo);
+  border-left-color: var(--kpi-acento);
+  color: var(--kpi-texto, var(--kpi-acento));
+}
+@media (prefers-reduced-motion: reduce) {
+  .kpi, .kpi-lateral { transition: none; }
+}
 .kpi-nombre { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; color: var(--condohub-azul); }
 .kpi-punto { flex: none; width: 0.625rem; height: 0.625rem; border-radius: 50%; background: var(--kpi-acento); }
 .kpi-cantidad { font-size: 1.75rem; font-weight: 600; line-height: 1.1; color: var(--condohub-azul); }
 .kpi-unidad { font-size: 0.875rem; font-weight: 400; color: #1f2d3d; }
 .kpi-frase { font-size: 0.8125rem; color: #4a5866; }
-.kpi-al-dia { --kpi-acento: var(--estado-al-dia); }
-.kpi-con-deuda { --kpi-acento: var(--estado-con-deuda); }
-.kpi-moroso { --kpi-acento: var(--estado-moroso); }
-.kpi-recibido { --kpi-acento: var(--estado-recibido); }
-.kpi-en-proceso { --kpi-acento: var(--estado-en-proceso); }
-.kpi-reserva { --kpi-acento: var(--estado-reserva); }
+.kpi-al-dia { --kpi-acento: var(--estado-al-dia); --kpi-fondo: var(--estado-al-dia-fondo); --kpi-texto: var(--estado-al-dia-texto); }
+.kpi-con-deuda { --kpi-acento: var(--estado-con-deuda); --kpi-fondo: var(--estado-con-deuda-fondo); --kpi-texto: var(--estado-con-deuda-texto); }
+.kpi-moroso { --kpi-acento: var(--estado-moroso); --kpi-fondo: var(--estado-moroso-fondo); --kpi-texto: var(--estado-moroso-texto); }
+.kpi-recibido { --kpi-acento: var(--estado-recibido); --kpi-fondo: var(--estado-recibido-fondo); --kpi-texto: var(--estado-recibido-texto); }
+.kpi-en-proceso { --kpi-acento: var(--estado-en-proceso); --kpi-fondo: var(--estado-en-proceso-fondo); --kpi-texto: var(--estado-en-proceso-texto); }
+.kpi-reserva { --kpi-acento: var(--estado-reserva); --kpi-fondo: var(--estado-reserva-fondo); --kpi-texto: var(--estado-reserva-texto); }
 
 /* Comunicado fijado */
 .icono-fijado {

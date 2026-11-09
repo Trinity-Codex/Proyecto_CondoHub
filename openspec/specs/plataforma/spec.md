@@ -181,7 +181,7 @@ El sistema SHALL mostrar en el panel de inicio una tarjeta por estado, con nombr
 
 #### Scenario: Pantallas angostas y anchas
 - **WHEN** el panel se abre a 375 px y a 1440 px
-- **THEN** no hay desborde horizontal ni tarjetas solapadas, y a 1440 px las seis tarjetas caben en una fila
+- **THEN** no hay desborde horizontal ni tarjetas solapadas, y desde 992 px las tarjetas se muestran de tres en tres (administrador y comité en dos filas, el conserje en una)
 
 ### Requirement: Colores por estado accesibles
 El sistema SHALL definir un color por estado en variables CSS (`--estado-*`, con su fondo y su texto) que alcancen contraste AA (3:1 el acento, 4,5:1 el texto sobre su fondo), y MUST NOT usar el color como único indicador: toda tarjeta o etiqueta de estado lleva también su nombre en texto. Las tarjetas enlace SHALL tener nombre accesible y foco visible.
