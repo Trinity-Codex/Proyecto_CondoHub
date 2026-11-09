@@ -1,13 +1,15 @@
 """Formularios de gastos comunes."""
 from django import forms
+from django.core.validators import MaxValueValidator
 from django.db.models import Q
 
 from apps.condominios.models import Edificio
 from apps.core.campos import MontoField
+from apps.core.formato import formatear_monto
 from apps.core.formularios import CampoFecha, FormularioBootstrap, ModeloFormularioBootstrap
 from apps.proveedores.models import Proveedor
 
-from .models import MESES, Egreso, PeriodoGasto, vencimiento_por_defecto
+from .models import DIA_VENCIMIENTO, MESES, MONTO_MAXIMO, Egreso, PeriodoGasto, vencimiento_por_defecto
 
 
 class PeriodoForm(ModeloFormularioBootstrap):
@@ -26,7 +28,26 @@ class PeriodoForm(ModeloFormularioBootstrap):
         widgets = {
             # El mes se elige de una lista con su nombre en vez de escribir un número.
             "mes": forms.Select(choices=[(i, m.capitalize()) for i, m in enumerate(MESES, start=1)]),
+            "anio": forms.NumberInput(attrs={"placeholder": "Ej.: 2026"}),
+            "porcentaje_fondo_reserva": forms.NumberInput(attrs={"placeholder": "Ej.: 5"}),
+            "referencia_reglamento": forms.TextInput(attrs={"placeholder": "Ej.: Art. 12 del reglamento de copropiedad"}),
             "fecha_vencimiento": CampoFecha(),
+        }
+        labels = {
+            "mes": "Mes", "anio": "Año", "porcentaje_fondo_reserva": "% del fondo de reserva",
+            "criterio_prorrateo": "Criterio de prorrateo", "referencia_reglamento": "Referencia del reglamento",
+            "fecha_vencimiento": "Fecha de vencimiento",
+        }
+        help_texts = {
+            "mes": "Mes al que corresponden los gastos que se cobrarán. Solo puede haber un período por mes.",
+            "anio": "Año del período.",
+            "porcentaje_fondo_reserva": "Parte del gasto común que se destina al fondo de reserva. Mínimo 5 % (Ley 21.442).",
+            "criterio_prorrateo": "Define cómo se reparte el total entre las unidades. Por defecto, según la alícuota; "
+            "usa otro solo si el reglamento del condominio lo indica.",
+            "referencia_reglamento": "Opcional. Artículo del reglamento de copropiedad que autoriza el criterio; "
+            "debes indicarlo si repartes en partes iguales.",
+            "fecha_vencimiento": "Opcional. Último día para pagar sin quedar atrasado. "
+            f"Si la dejas vacía, vence el día {DIA_VENCIMIENTO} del mes siguiente.",
         }
 
     def __init__(self, *args, condominio, **kwargs):
@@ -78,10 +99,18 @@ class EgresoForm(ModeloFormularioBootstrap):
         fields = ["categoria", "descripcion", "monto", "fecha", "proveedor"]
         widgets = {
             "fecha": CampoFecha(),
+            "descripcion": forms.TextInput(attrs={"placeholder": "Ej.: Reposición de luminarias del pasillo"}),
         }
         # MontoField acepta «1.250.000»; los validadores del modelo (mínimo 1 y MONTO_MAXIMO) siguen corriendo.
         field_classes = {"monto": MontoField}
-        help_texts = {"monto": "En pesos, con o sin puntos de miles."}
+        labels = {"categoria": "Categoría", "descripcion": "Descripción", "monto": "Monto", "fecha": "Fecha del documento"}
+        help_texts = {
+            "categoria": "Agrupa el gasto en el resumen del período.",
+            "descripcion": "Qué se pagó. Se muestra en el detalle del período.",
+            "monto": "En pesos, con o sin puntos de miles. Se suma al total que se reparte entre las unidades.",
+            "fecha": "Fecha de la boleta o factura.",
+            "proveedor": "Opcional. Déjalo en «Sin proveedor» para sueldos, cuentas de luz u otros gastos sin proveedor.",
+        }
 
     def __init__(self, *args, condominio, **kwargs):
         super().__init__(*args, **kwargs)
@@ -95,6 +124,11 @@ class EgresoForm(ModeloFormularioBootstrap):
         self.fields["proveedor"].queryset = Proveedor.objects.filter(condominio=condominio).filter(visibles)
         self.fields["proveedor"].empty_label = "Sin proveedor"
         self.fields["monto"].widget.attrs["placeholder"] = "Ej.: 450.000"
+        # El modelo ya valida el máximo, pero su mensaje trae el número sin puntos; este corre antes
+        # (validadores del campo) y lo escribe como lo escribe la persona, sin tocar el modelo.
+        self.fields["monto"].validators.append(
+            MaxValueValidator(MONTO_MAXIMO, message=f"El monto no puede superar ${formatear_monto(MONTO_MAXIMO)}.")
+        )
 
 
 class FiltroReporteForm(FormularioBootstrap):

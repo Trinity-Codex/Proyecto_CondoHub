@@ -9,8 +9,40 @@
 </ol></nav>
 
 <div class="row justify-content-center">
-  <div class="col-lg-6">
+  <div class="{% if form.alicuota %}col-lg-8{% else %}col-lg-6{% endif %}">
     <h1 class="h3 mb-3">{{ titulo }}</h1>
+    {# Las unidades van en tarjetas numeradas; edificios y residentes (mismo template) siguen con _formulario.html. #}
+    {% if form.alicuota %}
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include "_formulario_cabecera.html" with form=form %}
+      <section class="card mb-3 seccion-formulario" aria-labelledby="seccion-1">
+        <div class="card-body">
+          <h2 class="seccion-titulo" id="seccion-1"><span class="seccion-numero" aria-hidden="true">1</span>Ubicación</h2>
+          <p class="seccion-intro">Dónde está la unidad dentro del condominio.</p>
+          <div class="row g-3">
+            <div class="col-md-6">{% include "_campo.html" with campo=form.edificio %}</div>
+            <div class="col-md-6">{% include "_campo.html" with campo=form.numero %}</div>
+            <div class="col-md-6">{% include "_campo.html" with campo=form.piso %}</div>
+          </div>
+        </div>
+      </section>
+      <section class="card mb-3 seccion-formulario" aria-labelledby="seccion-2">
+        <div class="card-body">
+          <h2 class="seccion-titulo" id="seccion-2"><span class="seccion-numero" aria-hidden="true">2</span>Tipo y prorrateo</h2>
+          <p class="seccion-intro">Qué es la unidad y qué parte de los gastos comunes le corresponde.</p>
+          <div class="row g-3">
+            <div class="col-md-6">{% include "_campo.html" with campo=form.tipo %}</div>
+            <div class="col-md-6">{% include "_campo.html" with campo=form.alicuota %}</div>
+          </div>
+        </div>
+      </section>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary" type="submit">Guardar</button>
+        <a class="btn btn-outline-secondary" href="{% url 'condominios:unidades' %}">Cancelar</a>
+      </div>
+    </form>
+    {% else %}
     <div class="card"><div class="card-body">
       <form method="post" novalidate>
         {% csrf_token %}
@@ -21,6 +53,7 @@
         </div>
       </form>
     </div></div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

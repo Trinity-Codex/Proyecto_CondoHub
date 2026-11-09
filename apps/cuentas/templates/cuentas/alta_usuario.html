@@ -8,18 +8,37 @@
 </ol></nav>
 
 <div class="row justify-content-center">
-  <div class="col-lg-6">
+  <div class="col-lg-8">
     <h1 class="h3 mb-3">Nuevo usuario <span class="text-muted fs-5">· {{ condominio_activo.nombre }}</span></h1>
-    <div class="card"><div class="card-body">
-      <form method="post" novalidate>
-        {% csrf_token %}
-        {% include "_formulario.html" with form=form %}
-        <div class="d-flex gap-2">
-          <button class="btn btn-primary" type="submit">Crear y enviar invitación</button>
-          <a class="btn btn-outline-secondary" href="{% url 'cuentas:usuarios' %}">Cancelar</a>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include "_formulario_cabecera.html" with form=form %}
+      <section class="card mb-3 seccion-formulario" aria-labelledby="seccion-1">
+        <div class="card-body">
+          <h2 class="seccion-titulo" id="seccion-1"><span class="seccion-numero" aria-hidden="true">1</span>Datos de la persona</h2>
+          <p class="seccion-intro">Con estos datos se crea la cuenta y se le envía la invitación.</p>
+          <div class="row g-3">
+            <div class="col-md-6">{% include "_campo.html" with campo=form.first_name %}</div>
+            <div class="col-md-6">{% include "_campo.html" with campo=form.last_name %}</div>
+            <div class="col-md-6">{% include "_campo.html" with campo=form.email %}</div>
+            <div class="col-md-6">{% include "_campo.html" with campo=form.rut %}</div>
+          </div>
         </div>
-      </form>
-    </div></div>
+      </section>
+      <section class="card mb-3 seccion-formulario" aria-labelledby="seccion-2">
+        <div class="card-body">
+          <h2 class="seccion-titulo" id="seccion-2"><span class="seccion-numero" aria-hidden="true">2</span>Rol en el condominio</h2>
+          <p class="seccion-intro">Define qué podrá hacer la persona en este condominio.</p>
+          <div class="row g-3">
+            <div class="col-md-6">{% include "_campo.html" with campo=form.rol %}</div>
+          </div>
+        </div>
+      </section>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary" type="submit">Crear y enviar invitación</button>
+        <a class="btn btn-outline-secondary" href="{% url 'cuentas:usuarios' %}">Cancelar</a>
+      </div>
+    </form>
     <p class="text-muted small mt-2"><i class="bi bi-envelope"></i> La persona recibirá un correo con un enlace para crear su contraseña (válido por 3 días). Si el correo ya tiene cuenta, solo se le agrega el rol en este condominio.</p>
   </div>
 </div>

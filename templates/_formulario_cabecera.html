@@ -1,0 +1,17 @@
+{% comment %}
+  Cabecera común de los formularios (Issue #78): errores generales, campos ocultos y la leyenda de obligatorios.
+  La usa _formulario.html; los formularios por secciones la incluyen una vez, arriba del <form>:
+      {% include "_formulario_cabecera.html" with form=form %}
+  La leyenda sale solo si algún campo visible es obligatorio (dictsort deja al final el que tiene required=True).
+{% endcomment %}
+{% if form.non_field_errors %}
+<div class="alert alert-danger">
+  {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+</div>
+{% endif %}
+
+{% for campo in form.hidden_fields %}{{ campo }}{% endfor %}
+
+{% with mayor=form.visible_fields|dictsort:"field.required"|last %}{% if mayor.field.required %}
+<p class="text-muted small mb-3">Los campos con * son obligatorios.</p>
+{% endif %}{% endwith %}
