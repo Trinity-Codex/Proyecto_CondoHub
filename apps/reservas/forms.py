@@ -2,6 +2,7 @@
 from django import forms
 
 from apps.condominios.models import Unidad
+from apps.core.campos import MontoField
 from apps.core.formularios import CampoFecha, CampoHora, FormularioBootstrap, ModeloFormularioBootstrap
 
 from .models import EspacioComun, Reserva
@@ -43,6 +44,7 @@ class EspacioComunForm(ModeloFormularioBootstrap):
             "hora_apertura": CampoHora(),
             "hora_cierre": CampoHora(),
         }
+        field_classes = {"tarifa": MontoField}
 
     def clean(self):
         datos = super().clean()

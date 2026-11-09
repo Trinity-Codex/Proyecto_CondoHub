@@ -7,6 +7,8 @@ Uso en cualquier plantilla:
 """
 from django import template
 
+from apps.core.formato import formatear_monto
+
 register = template.Library()
 
 
@@ -20,5 +22,4 @@ def pesos(valor):
     except (TypeError, ValueError):
         return valor  # si no es un número, se muestra tal cual
     signo = "-" if numero < 0 else ""
-    # f"{1234567:,}" -> "1,234,567"; en Chile el separador de miles es el punto.
-    return f"{signo}${abs(numero):,}".replace(",", ".")
+    return f"{signo}${formatear_monto(abs(numero))}"

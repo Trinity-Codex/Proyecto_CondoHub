@@ -5,17 +5,22 @@ from io import BytesIO, StringIO
 from pathlib import Path
 from unittest import mock
 
+from django import forms
 from django.conf import settings
 from django.core.management import call_command
 from django.db.models import Count, Sum
+from django.template.loader import render_to_string
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from pypdf import PdfReader
 
 from apps.comunicados.models import Comunicado
 from apps.condominios.models import Condominio, Edificio, Membresia, Residente, Unidad
+from apps.core.campos import MENSAJE_MONTO_INVALIDO, MontoField, MontoInput
+from apps.core.formato import formatear_monto, normalizar_monto
 from apps.core.pdf import ErrorPDF, _resolver_estatico, generar_pdf, renderizar_pdf
 from apps.core.pruebas import crear_escenario, crear_usuario
+from apps.core.templatetags.condohub import pesos
 from apps.cuentas.models import Usuario
 from apps.gastos.models import DetalleGastoComun, Egreso, PeriodoGasto
 from apps.gastos.reportes import generar_reporte
@@ -355,3 +360,95 @@ class IndicadoresCobranzaTest(TestCase):
                 respuesta = self.inicio(usuario)
                 self.assertNotIn("cobranza", respuesta.context)
                 self.assertNotContains(respuesta, "Unidades morosas")
+
+
+class FormatoMontoTest(SimpleTestCase):
+    """Issue #76: gramática estricta de los montos en pesos."""
+
+    def test_entradas_validas(self):
+        for texto, esperado in [
+            ("$ 1.250.000", "1250000"), ("$1.250", "1250"), ("1250000", "1250000"), (" 85.000 ", "85000"),
+            ("0", "0"), ("999", "999"), ("1.000", "1000"), ("$ 85", "85"),
+        ]:
+            with self.subTest(texto=texto):
+                self.assertEqual(normalizar_monto(texto), esperado)
+
+    def test_entradas_invalidas(self):
+        for texto in [
+            "1,5", "1.5", "1500.5", "1.25.000", "0.500", "01.000", "-5", "abc", "1 250 000", "", "$", "1.250.00",
+            "1250.000.", ".500", "$$5", None, "١٢٣",
+        ]:
+            with self.subTest(texto=texto):
+                self.assertIsNone(normalizar_monto(texto))
+
+    def test_formatear_monto(self):
+        for valor, esperado in [(0, "0"), (999, "999"), (1234567, "1.234.567"), (-5000, "-5.000"), (None, "0")]:
+            with self.subTest(valor=valor):
+                self.assertEqual(formatear_monto(valor), esperado)
+
+    def test_pesos_conserva_su_salida(self):
+        """El filtro |pesos da lo mismo que antes de usar formatear_monto."""
+        for valor, esperado in [
+            (1234567, "$1.234.567"), (-5000, "-$5.000"), (1500.6, "$1.501"), (None, "$0"), ("", "$0"),
+            ("abc", "abc"), (0, "$0"), (990, "$990"), ("85000", "$85.000"),
+        ]:
+            with self.subTest(valor=valor):
+                self.assertEqual(pesos(valor), esperado)
+
+
+class MontoFieldTest(SimpleTestCase):
+    def test_limpia_entradas_validas(self):
+        campo = MontoField()
+        for texto, esperado in [("$ 1.250.000", 1250000), ("1250000", 1250000), (" 85.000 ", 85000)]:
+            with self.subTest(texto=texto):
+                self.assertEqual(campo.clean(texto), esperado)
+
+    def test_rechaza_entradas_invalidas_con_el_mensaje(self):
+        campo = MontoField()
+        for texto in ["1,5", "abc", "-5", "1500.5", "0.500", "01.000", "1.25.000"]:
+            with self.subTest(texto=texto):
+                with self.assertRaises(forms.ValidationError) as error:
+                    campo.clean(texto)
+                self.assertEqual(error.exception.messages, [MENSAJE_MONTO_INVALIDO])
+
+    def test_obligatorio_y_opcional(self):
+        with self.assertRaises(forms.ValidationError):
+            MontoField().clean("")
+        self.assertIsNone(MontoField(required=False).clean(""))
+
+    def test_respeta_minimo_y_maximo(self):
+        with self.assertRaises(forms.ValidationError):
+            MontoField(min_value=1).clean("0")
+        self.assertEqual(MontoField(min_value=0).clean("0"), 0)
+        with self.assertRaises(forms.ValidationError):
+            MontoField(max_value=999999999).clean("1.000.000.000")
+
+    def test_widget(self):
+        widget = MontoInput()
+        self.assertEqual(widget.format_value(1250000), "1.250.000")
+        self.assertEqual(widget.format_value("$ 1250000"), "1.250.000")
+        self.assertEqual(widget.format_value("1500.5"), "1500.5")  # inválido: tal cual, junto al error
+        self.assertIsNone(widget.format_value(None))
+        html = widget.render("monto", 450000)
+        for atributo in ('inputmode="numeric"', "data-monto", 'type="text"', 'value="450.000"'):
+            self.assertIn(atributo, html)
+
+
+class PrefijoMontoTest(SimpleTestCase):
+    class Formulario(forms.Form):
+        monto = MontoField(label="Monto")
+        nombre = forms.CharField(label="Nombre")
+
+    def dibujar(self, campo):
+        return render_to_string("_campo.html", {"campo": self.Formulario()[campo]})
+
+    def test_el_monto_lleva_prefijo_solo(self):
+        html = self.dibujar("monto")
+        self.assertIn('class="input-group-text" data-prefijo>$', html)
+
+    def test_un_campo_comun_no(self):
+        self.assertNotIn("input-group", self.dibujar("nombre"))
+
+    def test_el_prefijo_explicito_manda(self):
+        html = render_to_string("_campo.html", {"campo": self.Formulario()["monto"], "prefijo": "UF"})
+        self.assertIn("data-prefijo>UF", html)

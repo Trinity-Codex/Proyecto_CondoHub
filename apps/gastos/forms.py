@@ -3,6 +3,7 @@ from django import forms
 from django.db.models import Q
 
 from apps.condominios.models import Edificio
+from apps.core.campos import MontoField
 from apps.core.formularios import CampoFecha, FormularioBootstrap, ModeloFormularioBootstrap
 from apps.proveedores.models import Proveedor
 
@@ -77,9 +78,10 @@ class EgresoForm(ModeloFormularioBootstrap):
         fields = ["categoria", "descripcion", "monto", "fecha", "proveedor"]
         widgets = {
             "fecha": CampoFecha(),
-            "monto": forms.NumberInput(attrs={"min": 1, "step": 1, "placeholder": "Ej: 450000"}),
         }
-        help_texts = {"monto": "En pesos, sin puntos ni signo $."}
+        # MontoField acepta «1.250.000»; los validadores del modelo (mínimo 1 y MONTO_MAXIMO) siguen corriendo.
+        field_classes = {"monto": MontoField}
+        help_texts = {"monto": "En pesos, con o sin puntos de miles."}
 
     def __init__(self, *args, condominio, **kwargs):
         super().__init__(*args, **kwargs)
@@ -92,6 +94,7 @@ class EgresoForm(ModeloFormularioBootstrap):
             visibles |= Q(pk=self.instance.proveedor_id)
         self.fields["proveedor"].queryset = Proveedor.objects.filter(condominio=condominio).filter(visibles)
         self.fields["proveedor"].empty_label = "Sin proveedor"
+        self.fields["monto"].widget.attrs["placeholder"] = "Ej.: 450.000"
 
 
 class FiltroReporteForm(FormularioBootstrap):
