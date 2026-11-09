@@ -188,3 +188,20 @@ footer {
 .barra-categoria {
   background-color: var(--condohub-teal);
 }
+
+/* ---------------------------------------------------------------- Formularios (C6, #75) */
+/* El placeholder de Bootstrap no alcanza contraste AA; #6c757d da 4,7:1 sobre blanco. */
+.form-control::placeholder {
+  color: #6c757d;
+  opacity: 1;
+}
+
+/* Subsección dentro de una tarjeta de formulario: línea superior, sin otra tarjeta. */
+.subtitulo-seccion {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--bs-border-color);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--condohub-azul);
+}

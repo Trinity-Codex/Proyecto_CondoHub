@@ -1,0 +1,17 @@
+{% comment %}
+  Grupo de opciones (RadioSelect o CheckboxSelectMultiple) dentro de un fieldset con legend.
+  Uso: {% include "_opciones.html" with campo=form.x %} (lo llama _campo.html solo).
+{% endcomment %}{% load formularios %}
+<fieldset{% if campo.help_text or campo.errors %} aria-describedby="{% if campo.help_text %}{{ campo.auto_id }}_helptext{% endif %}{% if campo.help_text and campo.errors %} {% endif %}{% if campo.errors %}{{ campo.auto_id }}_error{% endif %}"{% endif %}>
+  <legend class="form-label fs-6">{{ campo.label }}{% if campo.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</legend>
+  {% for opcion in campo.subwidgets %}
+  <div class="form-check">
+    {% with sub=opcion.data %}
+    <input class="form-check-input{% if campo.errors %} is-invalid{% endif %}" type="{{ sub.type }}" name="{{ sub.name }}" value="{{ sub.value }}" id="{{ sub.attrs.id }}"{% if sub.selected %} checked{% endif %}{% if campo.errors %} aria-invalid="true"{% endif %}>
+    {% endwith %}
+    <label class="form-check-label" for="{{ opcion.id_for_label }}">{{ opcion.choice_label }}</label>
+  </div>
+  {% endfor %}
+  {% if campo.help_text %}<div class="form-text" id="{{ campo.auto_id }}_helptext">{{ campo.help_text }}</div>{% endif %}
+  {% for error in campo.errors %}<div class="invalid-feedback d-block" id="{{ campo.auto_id }}_error{% if not forloop.first %}_{{ forloop.counter }}{% endif %}">{{ error }}</div>{% endfor %}
+</fieldset>

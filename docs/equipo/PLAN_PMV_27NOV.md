@@ -79,6 +79,7 @@ cambia sin avisar en el grupo.
 | **C2 · Filtro de residencia (#46)** | Maximiliano | `Residente.desde` y `Residente.hasta`; `apps.condominios.residencias.cobros_visibles(cobros, usuario)` aplicado en `pagos/consultas.py` | #6, #56, #57 | **Mié 11** |
 | **C4 · Pagos vigentes (#53)** | Winderson | `Pago.objects.vigentes()` (excluye anulados), aplicado en `pagos/consultas.py` y en `anotar_pagado` de `gastos/reportes.py` | #54, #55, reportes | **Jue 12** |
 | **C5 · Saldo del fondo (#8)** | Walther | `apps.gastos.fondo.saldo_fondo(condominio, hasta_periodo=None)` y los movimientos del fondo | #55 (rendición y saldo en el aviso de cobro) | **Mié 18** |
+| **C6 · Componente de campo (#75)** | Walther | `{% include "_campo.html" with campo=form.x prefijo="$" %}` (`prefijo` opcional), `_opciones.html` para `RadioSelect` y los filtros `control` y `es_casilla` (`{% load formularios %}`, `apps/core/templatetags/formularios.py`); `BootstrapMixin` rotula «Seleccione…» en los select. `_formulario.html` ya lo usa: los formularios actuales no cambian | #76, #77, #78 | Al unir #75 |
 
 Mientras un contrato no esté en `main`, quien lo necesita avanza con lo que no depende de él (plantillas,
 pruebas, vistas) o usa un valor provisional en su rama.
