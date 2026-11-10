@@ -41,11 +41,11 @@ Entradas: instancias guardadas de condominio y período. Un período ajeno provo
 
 Ejemplo ficticio: inicial $100.000, aporte de noviembre $5.000 emitido en diciembre, egreso de noviembre $2.000 y egreso de diciembre $1.000. El corte de noviembre devuelve $103.000 y su listado solo incluye movimientos de noviembre. #55 suma ingresos/egresos del queryset y muestra el saldo al mismo corte en su propio Issue. Un movimiento retroactivo posterior modifica el resultado histórico: no se prometen informes congelados.
 
-### 3. Legado y apertura: recomendación pendiente de Walther
+### 3. Legado y apertura: decisión aprobada por Walther
 
 La única migración nueva de `gastos` crea estructura y restricciones; **no genera ingresos de períodos ya emitidos**. Se evita sumar aportes históricos a un inicial que ya los incluye. No modifica cobros ni inventa egresos.
 
-El administrador configura el movimiento inicial desde el fondo, con monto, fecha y descripción del respaldo. Con legado, la fecha de apertura es el primer día del mes siguiente al último período emitido sin movimiento; el inicial incluye el resultado contable de todos esos períodos. Debe conciliarse con antecedentes externos y aportes cobrados; no confundirse con efectivo recaudado.
+El administrador configura el movimiento inicial desde el fondo, con monto, fecha y descripción del respaldo. Con legado, la fecha de apertura es como mínimo el primer día del mes siguiente al último período emitido sin movimiento; el inicial incluye el resultado contable de todos esos períodos. Debe conciliarse con antecedentes externos y aportes cobrados; no confundirse con efectivo recaudado.
 
 C5 detecta legado mediante períodos emitidos sin ingreso asociado. Si falta inicial, ambas funciones lanzan `ValidationError` con código `fondo_sin_apertura`. Con inicial, una consulta de corte/mes anterior a su fecha lanza `ValidationError`, código `fondo_sin_cobertura`; #55 presenta «Histórico del fondo no disponible». No se devuelve cero como historia desconocida. Después de abrir, la consulta sin período incluye todo el libro registrado.
 
@@ -71,7 +71,7 @@ En `apps/gastos/demo.py`: inicial ficticio anterior a sus períodos, ingresos pr
 
 ## Risks / Trade-offs
 
-- Legado incompleto → apertura documentada y errores de cobertura en C5; revisar la limitación con #55 antes de implementar.
+- Legado incompleto → apertura documentada y errores de cobertura en C5; limitación aprobada y expuesta mediante errores de cobertura para #55.
 - Aportes emitidos impagos → rotular «Saldo contable del fondo»; no prometer caja ni registrar pagos otra vez.
 - Fechas retroactivas → auditoría y corte contable explícitos; rendición congelada fuera del alcance.
 - Pérdida de trazabilidad o cruce de condominio → inmutabilidad, validación en servicio/formulario, 403/404 y pruebas de rollback.
@@ -79,12 +79,18 @@ En `apps/gastos/demo.py`: inicial ficticio anterior a sus períodos, ingresos pr
 
 ## Migration Plan
 
-Tras aprobar las decisiones: respaldo según proceso del proyecto, una migración nueva de `gastos`, pruebas en base limpia y con períodos emitidos, y apertura manual del legado. En esta fase no se ejecutan migraciones ni se modifican datos. Para revertir, retirar primero la interfaz; no deshacer migración ni borrar movimientos sin respaldo y decisión expresa de Walther.
+Con las decisiones aprobadas: respaldo según proceso del proyecto, una migración nueva de `gastos`, pruebas en base limpia y con períodos emitidos, y apertura manual del legado. La verificación y la regresión de reinicio se ejecutan en la base de pruebas; no se reinicia la base de desarrollo. Para revertir, retirar primero la interfaz; no deshacer migración ni borrar movimientos sin respaldo y decisión expresa de Walther.
 
-## Pending Approval
+## Decisiones aprobadas
 
-1. **Históricos:** recomiendo no generarlos en la migración; apertura documentada y error explícito antes de ella. Si se necesitan rendiciones históricas, decidir su reconstrucción antes de implementar.
-2. **Corte C5:** recomiendo mes contable inclusivo e ingreso del período aunque se emita al mes siguiente. Es propuesta para #55, todavía no aprobada.
-3. **Apertura:** confirmar monto respaldado y fecha por condominio; recomiendo el primer día posterior al último período legado e incluir aportes ya cobrados, sin tratarlos como efectivo recaudado.
+Walther aprobó expresamente el 10 de noviembre de 2026 las tres recomendaciones y autorizó implementar, verificar, archivar y publicar el PR #92 sin unirlo:
 
-Se presentan para revisión según el brief. No se consideran aprobados ni habilitan implementación automática.
+1. No generar ingresos históricos en la migración. Apertura documentada y errores `fondo_sin_apertura` / `fondo_sin_cobertura` para #55.
+2. Corte inclusivo al último día del mes. El aporte corresponde al mes del período aunque se emita después.
+3. Inicial configurado por administrador con monto respaldado y fecha posterior al último período legado, según la regla de apertura de la decisión 3. Saldo contable distinto de efectivo recaudado.
+
+No hay decisiones de diseño pendientes. Los montos reales de apertura los declara el administrador con su respaldo; la demo usa cifras ficticias.
+
+## Excepción puntual de pruebas autorizada
+
+Walther autorizó el 10 de noviembre de 2026 actualizar únicamente el fixture de `apps/pagos/tests.py::EstadoCuentaTest.test_la_notificacion_de_emision_lleva_al_estado_de_cuenta`: apertura ficticia de $0 al 01-11-2026 antes de emitir noviembre, pues su escenario tiene agosto–octubre legados. No se cambia código funcional de pagos ni sus expectativas.

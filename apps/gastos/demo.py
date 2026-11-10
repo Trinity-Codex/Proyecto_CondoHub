@@ -12,6 +12,7 @@ y el de Los Aromos: "los_aromos".
 """
 from datetime import date, timedelta
 
+from apps.gastos.fondo import registrar_movimiento
 from apps.gastos.models import Egreso, PeriodoGasto
 from apps.gastos.servicios import emitir_periodo
 
@@ -21,6 +22,12 @@ def cargar(datos):
     mes_anterior = hoy.replace(day=1) - timedelta(days=1)  # último día del mes anterior
     hace_dos_meses = mes_anterior.replace(day=1) - timedelta(days=1)
 
+    # Cifras ficticias: apertura anterior a todos los períodos de esta demo.
+    for clave, monto in [("vista_verde", 1000000), ("los_aromos", 500000)]:
+        registrar_movimiento(datos[clave], tipo="INICIAL", monto=monto,
+            fecha=hace_dos_meses.replace(day=1), descripcion="Saldo inicial ficticio: conciliación de ejemplo",
+            usuario=datos["usuarios"]["administrador"])
+
     antiguo = _periodo_con_egresos(datos, hace_dos_meses, ajuste=1.02)
     emitir_periodo(antiguo)
     anterior = _periodo_con_egresos(datos, mes_anterior, ajuste=0.97)
@@ -28,6 +35,9 @@ def cargar(datos):
     actual = _periodo_con_egresos(datos, hoy)
     aromos = _periodo_los_aromos(datos, mes_anterior)
     emitir_periodo(aromos)
+    registrar_movimiento(datos["vista_verde"], tipo="EGRESO", monto=75000, fecha=mes_anterior,
+        descripcion="Reparación extraordinaria ficticia de ascensor", acuerdo="Acta ficticia 3 de la demo",
+        proveedor=datos.get("proveedores", {}).get("ascensores"), usuario=datos["usuarios"]["administrador"])
     datos["periodos"] = {"hace_dos_meses": antiguo, "anterior": anterior, "actual": actual, "los_aromos": aromos}
 
 

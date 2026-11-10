@@ -31,8 +31,9 @@ from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, R
 from apps.core.templatetags.condohub import pesos
 
 from .filtros import COLOR_SITUACION, SITUACIONES, ordenar_por_urgencia
-from .forms import EgresoForm, FiltroReporteForm, PeriodoForm
-from .models import Egreso, PeriodoGasto
+from .forms import EgresoForm, FiltroReporteForm, MovimientoFondoForm, PeriodoForm
+from .models import Egreso, MovimientoFondo, PeriodoGasto
+from .fondo import registrar_movimiento, saldo_fondo
 from .reportes import generar_reporte
 from .servicios import calcular_emision, emitir_periodo
 
@@ -171,7 +172,7 @@ class EmitirPeriodoView(RolRequeridoMixin, CondominioQuerysetMixin, DetailView):
     def post(self, request, *args, **kwargs):
         periodo = self.get_object()
         try:
-            emision = emitir_periodo(periodo)
+            emision = emitir_periodo(periodo, usuario=request.user)
         except ValidationError as error:
             for mensaje in error.messages:
                 messages.error(request, mensaje)
@@ -393,3 +394,69 @@ class ReporteCsvBase(ReporteBase):
 
 class ReporteCsvView(ReporteMixin, ReporteCsvBase, View):
     """El CSV del reporte: separador ";" y UTF-8 con BOM (así Excel lee bien las tildes)."""
+
+
+class FondoListView(RolRequeridoMixin, CondominioQuerysetMixin, ListView):
+    roles_permitidos = [ADMINISTRADOR, COMITE]
+    model = MovimientoFondo
+    template_name = "gastos/fondo.html"
+    context_object_name = "movimientos"
+    paginate_by = 25
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("proveedor", "periodo")
+
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+        try:
+            contexto["saldo"] = saldo_fondo(self.request.condominio)
+        except ValidationError as error:
+            contexto["aviso_apertura"] = " ".join(error.messages)
+        contexto["tiene_inicial"] = self.get_queryset().filter(tipo=MovimientoFondo.Tipo.INICIAL).exists()
+        return contexto
+
+
+class FondoDetailView(RolRequeridoMixin, CondominioQuerysetMixin, DetailView):
+    roles_permitidos = [ADMINISTRADOR, COMITE]
+    model = MovimientoFondo
+    template_name = "gastos/fondo_detalle.html"
+    context_object_name = "movimiento"
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("proveedor", "periodo", "creado_por")
+
+
+class FondoCreateView(RolRequeridoMixin, CondominioQuerysetMixin, CreateView):
+    roles_permitidos = [ADMINISTRADOR]
+    model = MovimientoFondo
+    form_class = MovimientoFondoForm
+    template_name = "gastos/fondo_formulario.html"
+    tipo = MovimientoFondo.Tipo.INICIAL
+
+    def get_initial(self):
+        return {"fecha": timezone.localdate()}
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs.pop("instance", None)
+        return {**kwargs, "condominio": self.request.condominio, "tipo": self.tipo}
+
+    def get_context_data(self, **kwargs):
+        return {**super().get_context_data(**kwargs), "titulo": dict(MovimientoFondo.Tipo.choices)[self.tipo]}
+
+    def form_valid(self, form):
+        datos = form.cleaned_data.copy()
+        sentido = datos.pop("sentido", "SUMAR")
+        if sentido == "RESTAR":
+            datos["monto"] = -datos["monto"]
+        try:
+            self.object = registrar_movimiento(self.request.condominio, tipo=self.tipo, usuario=self.request.user, **datos)
+        except ValidationError as error:
+            if hasattr(error, "error_dict"):
+                for campo, errores in error.error_dict.items():
+                    form.add_error(campo if campo in form.fields else None, errores)
+            else:
+                form.add_error(None, error)
+            return self.form_invalid(form)
+        messages.success(self.request, "Movimiento del fondo registrado.")
+        return redirect(self.object)
