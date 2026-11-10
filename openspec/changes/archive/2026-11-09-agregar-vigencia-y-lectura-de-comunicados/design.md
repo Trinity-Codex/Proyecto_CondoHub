@@ -59,3 +59,5 @@ Sin comunicados nuevos (ver Context): el «Corte de agua programado en Torre B»
 
 - **Cambios de residentes:** el conteo usa los residentes activos de hoy, no los del día de la publicación.
 - **Consultas en la lista:** el conteo del administrador hace dos consultas por comunicado de la página (10 por página).
+- **Cuentas desactivadas:** una unidad cuyo único residente tiene la cuenta desactivada cuenta como destinataria y no puede confirmar. Es el mismo criterio de `destinatarios()`; se revisa con la Issue de residencia vigente.
+- **Lista «Faltan»:** en un condominio grande puede ser larga. Para el PMV (hasta unas 200 unidades) es aceptable.

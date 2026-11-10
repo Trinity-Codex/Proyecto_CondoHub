@@ -6,6 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
@@ -38,9 +39,10 @@ class InicioView(RolRequeridoMixin, TemplateView):
         hoy = date.today()
 
         # Misma regla que la lista de comunicados: un residente solo ve los de su edificio.
+        # Solo los vigentes (Issue #58): los vencidos quedan en "Ver vencidos" de la lista.
         contexto["comunicados"] = Comunicado.objects.visibles_para(
             usuario, condominio, ve_todos=tiene_rol(self.request, ADMINISTRADOR, COMITE, CONSERJE)
-        ).select_related("edificio")[:3]
+        ).vigentes(timezone.localdate()).select_related("edificio")[:3]
         contexto["mis_reservas"] = Reserva.objects.filter(
             solicitante=usuario, espacio__condominio=condominio, fecha__gte=hoy, estado=Reserva.Estado.CONFIRMADA
         ).select_related("espacio", "unidad__edificio")[:5]

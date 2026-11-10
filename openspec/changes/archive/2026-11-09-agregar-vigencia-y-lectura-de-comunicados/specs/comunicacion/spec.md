@@ -36,7 +36,7 @@ El sistema SHALL permitir que un residente al que va dirigido un comunicado lo m
 
 #### Scenario: Unidades que faltan
 - **WHEN** el administrador abre el detalle de un comunicado
-- **THEN** ve «X de Y unidades confirmaron» y la lista de unidades que aún no lo hacen
+- **THEN** ve «Unidades que confirmaron la lectura: X de Y» y la lista de unidades que aún no lo hacen
 
 #### Scenario: Acceso por rol
 - **WHEN** un miembro del comité, un conserje o un residente de otro edificio intenta marcar como leído

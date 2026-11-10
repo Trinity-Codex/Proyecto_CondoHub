@@ -7,15 +7,34 @@
   <li class="breadcrumb-item active" aria-current="page">{{ comunicado.titulo|truncatechars:40 }}</li>
 </ol></nav>
 
-<article class="card">
+<article class="card mb-4">
   <div class="card-body p-4">
     <h1 class="h3">{% if comunicado.fijado %}<i class="bi bi-pin-angle-fill icono-fijado"></i>{% endif %} {{ comunicado.titulo }}</h1>
     <div class="text-muted small mb-3">
       Publicado el {{ comunicado.fecha_publicacion|date:"d-m-Y \a \l\a\s H:i" }} por {{ comunicado.autor }} ·
       {% if comunicado.edificio %}Para {{ comunicado.edificio.nombre }}{% else %}Para todo el condominio{% endif %}
+      {% if comunicado.vigente_hasta %}
+      · {% if vencido %}<span class="insignia">Vencido</span> el {{ comunicado.vigente_hasta|date:"d-m-Y" }}{% else %}Visible hasta el {{ comunicado.vigente_hasta|date:"d-m-Y" }}{% endif %}
+      {% endif %}
     </div>
     <div class="texto-largo">{{ comunicado.contenido }}</div>
   </div>
+
+  {# Confirmación de lectura del residente (Issue #58) #}
+  {% if puede_marcar %}
+  <div class="card-footer">
+    {% if leido %}
+    <span class="insignia insignia-al-dia"><i class="bi bi-check2" aria-hidden="true"></i> Leíste este comunicado</span>
+    {% else %}
+    <form method="post" action="{% url 'comunicados:marcar_leido' comunicado.pk %}">
+      {% csrf_token %}
+      <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-check2" aria-hidden="true"></i> Marcar como leído</button>
+      <span class="small text-muted ms-2">Así la administración sabe que tu unidad está informada.</span>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+
   {% if es_admin %}
   <div class="card-footer d-flex gap-2">
     <a class="btn btn-outline-primary btn-sm" href="{% url 'comunicados:editar' comunicado.pk %}"><i class="bi bi-pencil"></i> Editar</a>
@@ -23,4 +42,26 @@
   </div>
   {% endif %}
 </article>
+
+{# Confirmaciones por unidad, solo para el administrador (Issue #58) #}
+{% if es_admin %}
+<section class="card" aria-labelledby="titulo-confirmaciones">
+  <div class="card-header">
+    <h2 class="h6 mb-0" id="titulo-confirmaciones"><i class="bi bi-check2-all" aria-hidden="true"></i> Confirmaciones de lectura</h2>
+  </div>
+  <div class="card-body">
+    <p class="mb-2">Unidades que confirmaron la lectura: <strong class="text-nowrap">{{ confirmadas }} de {{ destinatarias }}</strong></p>
+    {% if faltan %}
+    <p class="small text-muted mb-1">Faltan:</p>
+    <ul class="list-inline mb-0">
+      {% for unidad in faltan %}<li class="list-inline-item"><span class="insignia">{{ unidad }}</span></li>{% endfor %}
+    </ul>
+    {% elif destinatarias %}
+    <p class="small text-success mb-0"><i class="bi bi-check-circle" aria-hidden="true"></i> Todas las unidades confirmaron.</p>
+    {% else %}
+    <p class="small text-muted mb-0">Este comunicado no tiene unidades con residentes.</p>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}
