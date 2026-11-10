@@ -1,4 +1,5 @@
 """Pruebas de la administración de edificios, unidades y residentes (Issue #10, RF01)."""
+from collections import Counter
 from datetime import date, timedelta
 from decimal import Decimal
 from importlib import import_module
@@ -15,6 +16,7 @@ from django.shortcuts import resolve_url
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.auditoria.models import RegistroAuditoria
 from apps.core.pruebas import crear_escenario, crear_usuario
 from apps.cuentas.models import Usuario
 from apps.gastos.models import DetalleGastoComun, PeriodoGasto
@@ -1208,3 +1210,100 @@ class SugerenciasUnidadesTest(BusquedaBase):
         Residente.objects.get(usuario=self.e.residente).dar_de_baja()
         self.assertEqual(self.pedir("Ana").json()["resultados"], [])
         self.assertEqual(self.pedir("A101").json()["resultados"][0]["residentes"], [])
+
+
+# --------------------------------------------------------------------------
+# Eventos de auditoría de condominios (Refs #27, contrato C1)
+# --------------------------------------------------------------------------
+class AuditoriaCondominiosTest(TestCase):
+    def setUp(self):
+        self.e = crear_escenario()
+        self.client.force_login(self.e.administrador)
+
+    def registros(self, **filtros):
+        return list(RegistroAuditoria.objects.filter(condominio_id=self.e.condominio.pk, **filtros).order_by("id"))
+
+    def test_crear_editar_y_eliminar_un_edificio(self):
+        self.client.post(reverse("condominios:edificio_nuevo"), {"nombre": "Torre C", "direccion": ""})
+        torre = Edificio.objects.get(nombre="Torre C")
+        self.client.post(reverse("condominios:edificio_editar", args=[torre.pk]), {"nombre": "Torre Central", "direccion": ""})
+        self.client.post(reverse("condominios:edificio_eliminar", args=[torre.pk]))
+        crear, modificar, eliminar = self.registros(objeto_tipo="edificio")
+        self.assertEqual((crear.accion, crear.antes, crear.despues), ("crear", None, {"nombre": "Torre C", "direccion": ""}))
+        self.assertEqual((modificar.antes, modificar.despues), ({"nombre": "Torre C"}, {"nombre": "Torre Central"}))
+        self.assertEqual((eliminar.accion, eliminar.objeto_id, eliminar.antes["nombre"]), ("eliminar", str(torre.pk), "Torre Central"))
+        self.assertEqual(eliminar.usuario_id, self.e.administrador.pk)
+
+    def test_cambio_de_alicuota_guarda_la_anterior_y_la_nueva(self):
+        datos = {"edificio": self.e.torre_a.pk, "numero": "A101", "piso": 1, "tipo": Unidad.Tipo.DEPARTAMENTO, "alicuota": "0.35"}
+        self.client.post(reverse("condominios:unidad_editar", args=[self.e.a101.pk]), datos)
+        (registro,) = self.registros(objeto_tipo="unidad")
+        self.assertEqual((registro.accion, registro.objeto_id), ("modificar", str(self.e.a101.pk)))
+        self.assertEqual((registro.antes, registro.despues), ({"alicuota": "0.400000"}, {"alicuota": "0.350000"}))
+
+    def test_guardar_sin_cambios_no_registra(self):
+        datos = {"edificio": self.e.torre_a.pk, "numero": "A101", "piso": 1, "tipo": Unidad.Tipo.DEPARTAMENTO, "alicuota": "0.4"}
+        self.client.post(reverse("condominios:unidad_editar", args=[self.e.a101.pk]), datos)
+        self.assertEqual(self.registros(), [])
+
+    def test_si_falla_la_auditoria_no_se_guarda_el_cambio(self):
+        datos = {"edificio": self.e.torre_a.pk, "numero": "A101", "piso": 1, "tipo": Unidad.Tipo.DEPARTAMENTO, "alicuota": "0.35"}
+        with mock.patch("apps.condominios.auditoria.registrar", side_effect=RuntimeError("falla simulada")):
+            with self.assertRaises(RuntimeError):
+                self.client.post(reverse("condominios:unidad_editar", args=[self.e.a101.pk]), datos)
+        self.e.a101.refresh_from_db()
+        self.assertEqual(self.e.a101.alicuota, Decimal("0.4"))
+
+    def test_eliminar_una_unidad_protegida_no_registra(self):
+        self.client.post(reverse("condominios:unidad_eliminar", args=[self.e.a101.pk]))  # tiene residente activo
+        self.assertEqual(self.registros(), [])
+
+    def test_asignar_y_dar_de_baja_registra_la_residencia_y_el_rol(self):
+        persona = crear_usuario("nueva.residente@prueba.cl")
+        self.client.post(
+            reverse("condominios:residente_nuevo", args=[self.e.a102.pk]),
+            {"correo": persona.email, "tipo": Residente.Tipo.ARRENDATARIO, "desde": "2024-03-01"},
+        )
+        residencia, rol = self.registros()
+        self.assertEqual((residencia.accion, residencia.objeto_tipo), ("crear", "residente"))
+        self.assertEqual(residencia.despues["desde"], "2024-03-01")
+        self.assertEqual((rol.accion, rol.objeto_tipo, rol.objeto_id), ("cambiar_rol", "usuario", str(persona.pk)))
+        self.assertEqual((rol.antes, rol.despues), ({"roles": []}, {"roles": ["RESIDENTE"]}))
+
+        residente = Residente.objects.get(usuario=persona)
+        self.client.post(reverse("condominios:residente_baja", args=[residente.pk]))
+        baja, pierde_rol = self.registros()[2:]
+        self.assertEqual((baja.accion, baja.antes["activo"], baja.despues["activo"]), ("modificar", True, False))
+        self.assertEqual(baja.despues["hasta"], timezone.localdate().isoformat())
+        self.assertEqual((pierde_rol.antes, pierde_rol.despues), ({"roles": ["RESIDENTE"]}, {"roles": []}))
+
+    def test_baja_sin_perder_el_rol_no_registra_cambio_de_rol(self):
+        Residente.objects.create(usuario=self.e.residente, unidad=self.e.a102, desde=date(2020, 1, 1))  # vive en dos
+        self.client.post(reverse("condominios:residente_baja", args=[Residente.objects.get(unidad=self.e.a102).pk]))
+        self.assertEqual([r.accion for r in self.registros()], ["modificar"])
+
+    def test_la_importacion_registra_cada_cambio_a_nombre_de_quien_confirma(self):
+        archivo = SimpleUploadedFile("unidades.csv", PLANILLA.encode("utf-8"), content_type="text/csv")
+        self.client.post(reverse("condominios:importar"), {"archivo": archivo})
+        self.client.post(reverse("condominios:importar_confirmar"))
+        acciones = Counter((r.accion, r.objeto_tipo) for r in self.registros())
+        self.assertEqual(
+            acciones,
+            {
+                ("crear", "edificio"): 1,  # Torre C
+                ("crear", "unidad"): 1,  # C101
+                ("modificar", "unidad"): 2,  # A101 y A102 cambian; B101 queda igual y no se registra
+                ("crear", "usuario"): 2,  # las cuentas nuevas
+                ("crear", "residente"): 2,
+                ("cambiar_rol", "usuario"): 2,  # las cuentas nuevas reciben el rol residente
+            },
+        )
+        self.assertEqual({r.usuario_id for r in self.registros()}, {self.e.administrador.pk})
+
+    def test_reimportar_el_mismo_archivo_no_registra_nada_nuevo(self):
+        resultado = importacion.validar(importacion.leer(PLANILLA), self.e.condominio)
+        importacion.aplicar(resultado, self.e.condominio, usuario=self.e.administrador)
+        cantidad = len(self.registros())
+        resultado = importacion.validar(importacion.leer(PLANILLA), self.e.condominio)
+        importacion.aplicar(resultado, self.e.condominio, usuario=self.e.administrador)
+        self.assertEqual(len(self.registros()), cantidad)

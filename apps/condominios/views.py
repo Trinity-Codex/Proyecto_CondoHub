@@ -19,12 +19,14 @@ from django.utils.cache import add_never_cache_headers
 from django.views import View
 from django.views.generic import CreateView, DeleteView, FormView, ListView, UpdateView
 
+from apps.auditoria.servicios import Accion, registrar
 from apps.core.formato import formatear_rut
 from apps.core.listados import FiltrosGetMixin, normalizar_busqueda
 from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, RolRequeridoMixin
 from apps.cuentas.views import enviar_invitacion
 
 from . import importacion
+from .auditoria import AuditarCambiosMixin, datos_de, registrar_cambio, registrar_roles, roles_de
 from .busqueda import filtrar_unidades, ver_rut
 from .forms import EdificioForm, ImportarForm, ResidenteForm, UnidadForm
 from .models import Edificio, Membresia, Residente, Unidad
@@ -185,7 +187,11 @@ class EliminarConMotivosMixin:
         if motivos:
             messages.error(self.request, f"No se puede eliminar {self.object}: {'; '.join(motivos)}.")
             return redirect(self.get_success_url())
-        return super().form_valid(form)
+        # Auditoría (#27): se registra ANTES de borrar (después el objeto ya no tiene id),
+        # en la misma transacción que el borrado.
+        with transaction.atomic():
+            registrar(self.request.user, self.request.condominio, Accion.ELIMINAR, self.object, antes=datos_de(self.object))
+            return super().form_valid(form)
 
 
 # --------------------------------------------------------------------------
@@ -207,7 +213,7 @@ class EdificioFormMixin:
         return url_unidades(self.object)
 
 
-class EdificioCreateView(RolRequeridoMixin, EdificioFormMixin, CreateView):
+class EdificioCreateView(RolRequeridoMixin, EdificioFormMixin, AuditarCambiosMixin, CreateView):
     roles_permitidos = [ADMINISTRADOR]
     extra_context = {"titulo": "Nuevo edificio"}
 
@@ -217,7 +223,7 @@ class EdificioCreateView(RolRequeridoMixin, EdificioFormMixin, CreateView):
         return super().form_valid(form)
 
 
-class EdificioUpdateView(RolRequeridoMixin, CondominioQuerysetMixin, EdificioFormMixin, UpdateView):
+class EdificioUpdateView(RolRequeridoMixin, CondominioQuerysetMixin, EdificioFormMixin, AuditarCambiosMixin, UpdateView):
     roles_permitidos = [ADMINISTRADOR]
     extra_context = {"titulo": "Editar edificio"}
 
@@ -264,7 +270,7 @@ class UnidadFormMixin:
         return respuesta
 
 
-class UnidadCreateView(RolRequeridoMixin, UnidadFormMixin, CreateView):
+class UnidadCreateView(RolRequeridoMixin, UnidadFormMixin, AuditarCambiosMixin, CreateView):
     roles_permitidos = [ADMINISTRADOR]
     extra_context = {"titulo": "Nueva unidad"}
 
@@ -277,7 +283,7 @@ class UnidadCreateView(RolRequeridoMixin, UnidadFormMixin, CreateView):
         return super().form_valid(form)
 
 
-class UnidadUpdateView(RolRequeridoMixin, CondominioQuerysetMixin, UnidadFormMixin, UpdateView):
+class UnidadUpdateView(RolRequeridoMixin, CondominioQuerysetMixin, UnidadFormMixin, AuditarCambiosMixin, UpdateView):
     roles_permitidos = [ADMINISTRADOR]
     campo_condominio = "edificio__condominio"
     extra_context = {"titulo": "Editar unidad"}
@@ -334,7 +340,14 @@ class ResidenteCreateView(RolRequeridoMixin, FormView):
         return contexto
 
     def form_valid(self, form):
-        residente = form.save()
+        # Auditoría (#27): la residencia (nueva o reactivada) y los roles que cambian con ella.
+        persona, condominio = form.cleaned_data["usuario"], self.request.condominio
+        previo = Residente.objects.filter(usuario=persona, unidad=self.get_unidad()).select_related("usuario", "unidad__edificio").first()
+        antes, roles_antes = (datos_de(previo) if previo else None), roles_de(persona, condominio)
+        with transaction.atomic():
+            residente = form.save()
+            registrar_cambio(self.request.user, condominio, residente, antes)
+            registrar_roles(self.request.user, condominio, persona, roles_antes)
         messages.success(self.request, f"{residente.usuario} quedó como {residente.get_tipo_display().lower()} de {residente.unidad}.")
         return redirect(url_unidades(residente.unidad.edificio))
 
@@ -352,7 +365,12 @@ class ResidenteBajaView(RolRequeridoMixin, View):
             activo=True,
             unidad__edificio__condominio=request.condominio,
         )
-        residente.dar_de_baja()
+        antes, roles_antes = datos_de(residente), roles_de(residente.usuario, request.condominio)
+        with transaction.atomic():
+            residente.dar_de_baja()
+            # Auditoría (#27): la baja y, si ya no vive en otra unidad, el rol residente que pierde.
+            registrar_cambio(request.user, request.condominio, residente, antes)
+            registrar_roles(request.user, request.condominio, residente.usuario, roles_antes)
         messages.success(request, f"{residente.usuario} ya no es residente de {residente.unidad}.")
         return redirect(url_unidades(residente.unidad.edificio))
 
@@ -404,7 +422,7 @@ class ConfirmarImportacionView(RolRequeridoMixin, View):
             return render(request, "condominios/importar.html", contexto)
         try:
             with transaction.atomic():
-                cuentas_nuevas = importacion.aplicar(resultado, request.condominio)
+                cuentas_nuevas = importacion.aplicar(resultado, request.condominio, usuario=request.user)
                 if request.POST.get("enviar_invitaciones"):
                     for usuario in cuentas_nuevas:
                         # on_commit: si la importación se revierte, no sale ningún correo.

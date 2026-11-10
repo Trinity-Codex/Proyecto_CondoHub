@@ -27,6 +27,7 @@ from django.utils import timezone
 from apps.cuentas.models import Usuario
 from apps.cuentas.validadores import normalizar_rut, validar_rut
 
+from .auditoria import datos_de, registrar_cambio, registrar_roles, roles_de
 from .models import Edificio, Residente, Unidad
 
 COLUMNAS = [
@@ -326,49 +327,62 @@ def validar(filas, condominio):
 
 
 @transaction.atomic
-def aplicar(resultado, condominio):
+def aplicar(resultado, condominio, usuario=None):
     """
     Guarda todo el archivo en una transacción: si algo falla, no queda nada.
     Devuelve las cuentas creadas (para enviarles la invitación).
+
+    `usuario`: quien confirma la importación. Cada edificio, unidad, cuenta, residente y
+    cambio de rol queda en la auditoría a su nombre (Refs #27), en esta misma transacción.
     """
     if not resultado.valido:
         raise ValueError("No se puede importar un archivo con errores.")
     edificios, unidades = existentes(condominio)  # igual que validar(): lo guardado coincide con la vista previa
-    cuentas, nuevas = {}, []
+    cuentas, nuevas, roles_antes = {}, [], {}
     for fila in resultado.filas:
         nombre = sin_tildes(fila["edificio"])
         if nombre not in edificios:
             edificios[nombre] = Edificio.objects.create(condominio=condominio, nombre=fila["edificio"])
+            registrar_cambio(usuario, condominio, edificios[nombre], None)
         unidad = unidades.get(fila.clave_unidad)
         if unidad is None:
-            unidades[fila.clave_unidad] = Unidad.objects.create(
+            unidades[fila.clave_unidad] = unidad = Unidad.objects.create(
                 edificio=edificios[nombre], numero=fila["numero"], piso=fila.piso, tipo=fila.tipo, alicuota=fila.alicuota
             )
+            registrar_cambio(usuario, condominio, unidad, None)
         elif (unidad.piso, unidad.tipo, unidad.alicuota) != (fila.piso, fila.tipo, fila.alicuota):
+            antes = datos_de(unidad)
             unidad.piso, unidad.tipo, unidad.alicuota = fila.piso, fila.tipo, fila.alicuota
             unidad.save(update_fields=["piso", "tipo", "alicuota"])
+            registrar_cambio(usuario, condominio, unidad, antes)  # p. ej. la alícuota anterior y la nueva
         if not fila.correo:
             continue
         if fila.correo not in cuentas:
-            usuario = Usuario.objects.filter(email__iexact=fila.correo).first()
-            if usuario is None:
+            persona = Usuario.objects.filter(email__iexact=fila.correo).first()
+            if persona is None:
                 # Clave aleatoria que nadie conoce, como en el alta de usuarios (#11): la persona
                 # define la suya con la invitación (PasswordResetForm no escribe a cuentas sin clave usable).
-                usuario = Usuario.objects.create_user(
+                persona = Usuario.objects.create_user(
                     email=fila.correo,
                     password=secrets.token_urlsafe(16),
                     first_name=fila["nombre"],
                     last_name=fila["apellido"],
                     rut=fila["rut"],
                 )
-                nuevas.append(usuario)
-            cuentas[fila.correo] = usuario
+                nuevas.append(persona)
+                registrar_cambio(usuario, condominio, persona, None)
+            cuentas[fila.correo] = persona
+            roles_antes[fila.correo] = roles_de(persona, condominio)
         # Igual que ResidenteForm.save(): crea o reactiva, con el tipo y la fecha del archivo.
-        residente, _ = Residente.objects.get_or_create(
+        residente, creado = Residente.objects.get_or_create(
             usuario=cuentas[fila.correo], unidad=unidades[fila.clave_unidad], defaults={"desde": fila.desde}
         )
+        antes = None if creado else datos_de(residente)
         residente.tipo, residente.desde, residente.activo = fila.tipo_residente, fila.desde, True
         residente.save()  # da el rol RESIDENTE en el condominio
+        registrar_cambio(usuario, condominio, residente, antes)
+    for correo, persona in cuentas.items():
+        registrar_roles(usuario, condominio, persona, roles_antes[correo])
     return nuevas
 
 
