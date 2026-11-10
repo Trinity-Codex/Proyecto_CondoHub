@@ -11,22 +11,30 @@ CreateView...), que ya traen el trabajo repetitivo hecho. Cada vista combina:
 Permisos:
   - Listar y ver:                  cualquier miembro del condominio
   - Crear, editar y eliminar:      administrador
+  - Marcar como leído:             residente al que va dirigido (Issue #58)
+  - Ver las confirmaciones:        administrador (Issue #58)
 """
 from django.contrib import messages
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.utils import timezone
+from django.views import View
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+
+from apps.core.listados import FiltrosGetMixin
 
 from apps.core.permisos import (
     ADMINISTRADOR,
     COMITE,
     CONSERJE,
+    RESIDENTE,
     CondominioQuerysetMixin,
     RolRequeridoMixin,
     tiene_rol,
 )
 
 from .forms import ComunicadoForm
-from .models import Comunicado
+from .models import Comunicado, LecturaComunicado
 
 
 class ComunicadosVisiblesMixin(CondominioQuerysetMixin):
@@ -49,17 +57,73 @@ class ComunicadosVisiblesMixin(CondominioQuerysetMixin):
         )
 
 
-class ComunicadoListView(RolRequeridoMixin, ComunicadosVisiblesMixin, ListView):
+class ComunicadoListView(RolRequeridoMixin, FiltrosGetMixin, ComunicadosVisiblesMixin, ListView):
+    """
+    Lista principal: solo los vigentes (RF13). Con ?vigencia=vencidos, los vencidos (Issue #58).
+    Se usa un enlace y no chips: los chips traen «Todos» activo por defecto y aquí lo normal es
+    ver solo los vigentes.
+    """
+
     model = Comunicado
     template_name = "comunicados/lista.html"
     context_object_name = "comunicados"
     paginate_by = 10  # 10 comunicados por página
+    parametros_filtro = {"vigencia": ["vencidos"]}
+
+    def get_queryset(self):
+        hoy = timezone.localdate()
+        qs = super().get_queryset()
+        return qs.vencidos(hoy) if self.filtro("vigencia") else qs.vigentes(hoy)
+
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+        contexto["ver_vencidos"] = bool(self.filtro("vigencia"))
+        if not contexto["ver_vencidos"]:
+            contexto["cantidad_vencidos"] = super().get_queryset().vencidos(timezone.localdate()).count()
+        if tiene_rol(self.request, ADMINISTRADOR):
+            # Conteo de lectura por unidad, solo de los comunicados de esta página.
+            for comunicado in contexto["comunicados"]:
+                confirmadas, destinatarias = comunicado.confirmaciones()
+                comunicado.confirmadas, comunicado.destinatarias = len(confirmadas), len(destinatarias)
+        return contexto
 
 
 class ComunicadoDetailView(RolRequeridoMixin, ComunicadosVisiblesMixin, DetailView):
+    """El detalle no filtra por vigencia: el enlace de una notificación antigua sigue funcionando."""
+
     model = Comunicado
     template_name = "comunicados/detalle.html"
     context_object_name = "comunicado"
+
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+        comunicado, usuario = self.object, self.request.user
+        contexto["vencido"] = comunicado.esta_vencido(timezone.localdate())
+        if tiene_rol(self.request, RESIDENTE):
+            contexto["puede_marcar"] = True
+            contexto["leido"] = comunicado.lecturas.filter(usuario=usuario).exists()
+        if tiene_rol(self.request, ADMINISTRADOR):
+            confirmadas, destinatarias = comunicado.confirmaciones()
+            contexto["confirmadas"], contexto["destinatarias"] = len(confirmadas), len(destinatarias)
+            contexto["faltan"] = sorted(destinatarias - confirmadas, key=lambda u: (u.edificio.nombre, u.piso, u.numero))
+        return contexto
+
+
+class MarcarLeidoView(RolRequeridoMixin, View):
+    """
+    El residente marca el comunicado como leído (Issue #58). Solo por POST. Si el comunicado no
+    va dirigido a él (otro edificio u otro condominio), 404. Pulsar dos veces no duplica.
+    """
+
+    roles_permitidos = [RESIDENTE]
+    http_method_names = ["post"]
+
+    def post(self, request, pk):
+        visibles = Comunicado.objects.visibles_para(request.user, request.condominio, ve_todos=False)
+        comunicado = get_object_or_404(visibles, pk=pk)
+        LecturaComunicado.objects.get_or_create(comunicado=comunicado, usuario=request.user)
+        messages.success(request, "Marcaste el comunicado como leído. ¡Gracias!")
+        return redirect(comunicado.get_absolute_url())
 
 
 class ComunicadoFormMixin:
