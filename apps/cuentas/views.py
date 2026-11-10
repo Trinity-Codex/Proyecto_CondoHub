@@ -16,12 +16,15 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
+from django.db import transaction
 from django.db.models import Prefetch
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import FormView, ListView, UpdateView
 
-from apps.condominios.models import Membresia
+from apps.auditoria.servicios import Accion, registrar
+from apps.condominios.auditoria import datos_de, registrar_cambio, registrar_roles, roles_de
+from apps.condominios.models import Condominio, Membresia
 from apps.core.permisos import ADMINISTRADOR, RolRequeridoMixin
 
 from .forms import FormularioAltaUsuario, FormularioCambiarClave, FormularioPerfil, FormularioRecuperarClave
@@ -75,7 +78,15 @@ class UsuarioCreateView(RolRequeridoMixin, FormView):
         return kwargs
 
     def form_valid(self, form):
-        usuario, creado = form.save()
+        condominio = self.request.condominio
+        existente = form.usuario_existente
+        roles_antes = roles_de(existente, condominio) if existente else []
+        with transaction.atomic():
+            usuario, creado = form.save()
+            # Auditoría (#27): la cuenta nueva (sin sus datos si ya existía) y el rol que recibe.
+            if creado:
+                registrar_cambio(self.request.user, condominio, usuario, None)
+            registrar_roles(self.request.user, condominio, usuario, roles_antes)
         rol = Membresia.Rol(form.cleaned_data["rol"]).label
         if creado:
             enviar_invitacion(self.request, usuario, form.cleaned_data["rol"])
@@ -107,6 +118,24 @@ class PerfilView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         # Siempre el usuario de la sesión: no hay un <pk> en la URL, así que
         # nadie puede abrir ni editar el perfil de otra persona.
         return self.request.user
+
+    def form_valid(self, form):
+        """
+        Auditoría (#27): un cambio de datos personales queda registrado en CADA condominio
+        donde la persona tiene un rol activo, porque la administración de cada uno responde
+        por sus datos (Ley 21.719). Sin condominio, no hay auditoría que lo lea.
+        """
+        antes = datos_de(Usuario.objects.get(pk=self.object.pk))  # el formulario ya cambió self.object
+        with transaction.atomic():
+            respuesta = super().form_valid(form)
+            despues = datos_de(self.object)
+            if despues != antes:
+                condominios = Condominio.objects.filter(
+                    activo=True, membresias__usuario=self.object, membresias__activo=True
+                ).distinct()
+                for condominio in condominios:
+                    registrar(self.object, condominio, Accion.MODIFICAR, self.object, antes=antes, despues=despues)
+        return respuesta
 
 
 class CambiarClaveView(LoginRequiredMixin, SuccessMessageMixin, PasswordChangeView):

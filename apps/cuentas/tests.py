@@ -8,6 +8,7 @@ from django.test import RequestFactory, SimpleTestCase, TestCase, override_setti
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.auditoria.models import RegistroAuditoria
 from apps.condominios.models import Membresia
 from apps.core.pruebas import CLAVE, crear_escenario, crear_usuario
 
@@ -586,3 +587,50 @@ class RutConFormatoTest(TestCase):
         html = self.client.get(reverse("cuentas:usuario_nuevo")).content.decode()
         self.assertIn('id="id_rut_aviso"', html)
         self.assertIn("data-rut", html)
+
+
+# --------------------------------------------------------------------------
+# Eventos de auditoría de cuentas (Refs #27, contrato C1)
+# --------------------------------------------------------------------------
+class AuditoriaCuentasTest(TestCase):
+    def setUp(self):
+        self.e = crear_escenario()
+
+    def registros(self, condominio=None):
+        condominio = condominio or self.e.condominio
+        return list(RegistroAuditoria.objects.filter(condominio_id=condominio.pk).order_by("id"))
+
+    def alta(self, **campos):
+        self.client.force_login(self.e.administrador)
+        datos = {"email": "nuevo@prueba.cl", "first_name": "Ana", "last_name": "Pérez", "rut": "12.345.678-5",
+                 "rol": Membresia.Rol.CONSERJE, **campos}
+        return self.client.post(reverse("cuentas:usuario_nuevo"), datos)
+
+    def test_alta_de_una_cuenta_nueva_registra_la_cuenta_y_el_rol(self):
+        self.alta()
+        nueva = Usuario.objects.get(email="nuevo@prueba.cl")
+        cuenta, rol = self.registros()
+        self.assertEqual((cuenta.accion, cuenta.objeto_tipo, cuenta.objeto_id), ("crear", "usuario", str(nueva.pk)))
+        self.assertEqual(cuenta.despues["correo"], "nuevo@prueba.cl")
+        self.assertEqual((rol.accion, rol.antes, rol.despues), ("cambiar_rol", {"roles": []}, {"roles": ["CONSERJE"]}))
+        self.assertEqual(rol.usuario_id, self.e.administrador.pk)
+
+    def test_rol_nuevo_a_una_cuenta_existente_registra_solo_el_rol(self):
+        self.alta(email=self.e.residente.email, rol=Membresia.Rol.COMITE)
+        (rol,) = self.registros()
+        self.assertEqual((rol.objeto_id, rol.antes, rol.despues), (str(self.e.residente.pk), {"roles": ["RESIDENTE"]}, {"roles": ["COMITE", "RESIDENTE"]}))
+
+    def test_mi_perfil_registra_los_datos_que_cambian_en_cada_condominio(self):
+        Membresia.objects.create(usuario=self.e.residente, condominio=self.e.ajeno, rol=Membresia.Rol.COMITE)
+        self.client.force_login(self.e.residente)
+        self.client.post(reverse("cuentas:perfil"), {"first_name": "residente", "last_name": "", "rut": "", "telefono": "+56 9 1234 5678"})
+        for condominio in (self.e.condominio, self.e.ajeno):
+            with self.subTest(condominio=condominio):
+                (registro,) = self.registros(condominio)
+                self.assertEqual((registro.accion, registro.usuario_id), ("modificar", self.e.residente.pk))
+                self.assertEqual((registro.antes, registro.despues), ({"telefono": ""}, {"telefono": "+56 9 1234 5678"}))
+
+    def test_mi_perfil_sin_cambios_o_solo_la_preferencia_de_correos_no_registra(self):
+        self.client.force_login(self.e.residente)
+        self.client.post(reverse("cuentas:perfil"), {"first_name": "residente", "last_name": "", "rut": "", "telefono": ""})
+        self.assertEqual(self.registros(), [])
