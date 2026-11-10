@@ -14,7 +14,7 @@ Ver `proposal.md` para el motivo. En `main` (`64bd63b`), `PeriodoGasto` guarda p
 
 ### 1. Libro de movimientos en gastos
 
-`MovimientoFondo` vive en `apps/gastos/models.py`: `condominio`, `tipo` (`INICIAL`, `INGRESO`, `EGRESO`, `AJUSTE`), `monto` firmado, `fecha` contable, `descripcion`, `acuerdo`, `proveedor` opcional, `periodo` opcional, `creado_por` opcional para Sistema y fecha de creación. El proveedor usa `SET_NULL`, conservando el movimiento; el período, `PROTECT`. Ningún saldo se agrega a `Condominio`.
+`MovimientoFondo` vive en `apps/gastos/models.py`: `condominio`, `tipo` (`INICIAL`, `INGRESO`, `EGRESO`, `AJUSTE`), `monto` firmado, `fecha` contable, `descripcion`, `acuerdo`, `proveedor` opcional, `periodo` opcional, `creado_por` opcional para Sistema y fecha de creación. El proveedor usa `SET_NULL`, conservando el movimiento; el período, `RESTRICT`: impide borrar un período conservando sus movimientos, pero permite borrar el condominio completo cuando ambos se eliminan en cascada, como requiere el reinicio de la demo. Ningún saldo se agrega a `Condominio`.
 
 `monto` es `BigIntegerField` en pesos enteros: inicial e ingreso no negativos, egreso negativo, ajuste no nulo. Un ingreso tiene período obligatorio; los demás tipos no lo tienen. Solo un inicial por condominio y un ingreso por período. MySQL no admite índices únicos parciales: para el inicial, columna auxiliar nullable `marca_inicial` fija a 1 solo en `INICIAL`, restricción de consistencia y `UniqueConstraint(condominio, marca_inicial)`; para ingresos, unicidad del período nullable. No usar `UniqueConstraint(condition=...)`.
 
