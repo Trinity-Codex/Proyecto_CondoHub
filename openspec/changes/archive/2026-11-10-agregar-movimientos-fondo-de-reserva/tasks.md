@@ -45,10 +45,20 @@ Implementación autorizada por Walther el 10 de noviembre de 2026. Históricos, 
 - [x] 5.1 Agregar a `apps/gastos/demo.py` inicial ficticio, ingresos mediante las emisiones actuales y egreso ficticio con proveedor y acuerdo; ampliar `huella_demo`/`HUELLA` en `apps/core/tests.py`. Comprobar carga, recarga y reinicio solo en base de pruebas con `CargarDemoTest`, preservando claves consumidas por otras apps. Probar que `RESTRICT` impide borrar un período cuyos movimientos se conservan y permite eliminar el condominio completo con sus movimientos en cascada, sin romper el reinicio de la demo. No ejecutar `cargar_demo --reiniciar` en desarrollo.
 - [x] 5.2 Ejecutar `venv\Scripts\python.exe manage.py makemigrations --check` y `venv\Scripts\python.exe manage.py test apps` completo; guardar resultados sin errores, incluida concurrencia en MySQL y regresiones de pagos/notificaciones/cartera.
 - [x] 5.3 Levantar la aplicación en puerto **8008** y hacer verificación visual con medición del DOM a **375 y 1440 px**: saldo, tabla/listado, detalle, apertura, egreso y ajuste. Registrar anchos de viewport/documento, ausencia de desbordamiento de página, etiquetas/errores asociados y controles utilizables; cerrar el servidor al terminar.
-- [ ] 5.4 Ejecutar `openspec validate agregar-movimientos-fondo-de-reserva --strict`, `openspec validate --all --strict` y `codex review --base main` antes de dejar el PR listo; resolver hallazgos, verificar diff solo del alcance y esperar CI `pruebas` verde.
+- [x] 5.4 Ejecutar `openspec validate agregar-movimientos-fondo-de-reserva --strict`, `openspec validate --all --strict` y `codex review --base main` antes de dejar el PR listo; resolver hallazgos, verificar diff solo del alcance y esperar CI `pruebas` verde.
 
 ## Workflow follow-up
 
 - Propuesta revisada e implementación autorizada el 10 de noviembre de 2026; mantener borrador hasta completar controles.
 - Antes de archivar, actualizar contra `main` y repetir controles del proyecto; archivar el cambio y sincronizar `gastos-comunes` en este mismo PR.
 - La unión la decide Walther en ese momento. No unir, mencionar usuarios ni enviar mensajes al equipo desde esta tarea.
+
+## Evidencia de implementación
+
+- Suite MySQL: 749 pruebas OK (96,559 s); incluye dos conexiones reales para apertura y emisión, rollback, migración sin ingresos retroactivos y reinicio demo en pruebas.
+- SQLite: 153 pruebas de gastos OK, con tres de bloqueo omitidas por falta de SELECT FOR UPDATE.
+- makemigrations --check sin cambios; OpenSpec estricto del cambio válido y global 13/13.
+- Revisión codex review --base main completada por lectura: P2 de SQLite reproducido y corregido con skipUnlessDBFeature. El ejecutor de revisión no pudo ejecutar Python/OpenSpec; la sesión implementadora ejecutó los controles.
+- Casos de borde de validación reproducidos y corregidos con pruebas: respaldo nulo y fecha normalizada.
+- Visual: 14 capturas y medidas DOM a 375/1440, cinco pantallas más errores y aviso de apertura. Sin desbordamiento de página; etiquetas y errores asociados. Puerto 8008 cerrado, base de pruebas eliminada y desarrollo intacto.
+- CI del commit de implementación 2d9e437: pruebas verde, ejecución 42829110535. Tras archivo y actualización con origin/main se repiten controles y CI.
