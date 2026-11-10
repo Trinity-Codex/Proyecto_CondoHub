@@ -48,7 +48,8 @@ Todos con la clave **`condohub2026`**:
 | `residente@condohub.cl` | Residente propietario de A-101 |
 | `residente2@condohub.cl` | Residente arrendatario de B-102 |
 | `residente3@condohub.cl` | Residente del otro condominio (Edificio Los Aromos) |
-| `superadmin@condohub.cl` | Superusuario de la plataforma (`/admin/`) |
+| `gerencia@condohub.cl` | Administrador general: solo consulta la cartera de los **dos** condominios (`/cartera/`), sin rol dentro de ellos |
+| `superadmin@condohub.cl` | Superusuario de la plataforma (`/admin/`); asigna los condominios del administrador general |
 
 ## Funcionalidades
 

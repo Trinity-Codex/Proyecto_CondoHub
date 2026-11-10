@@ -6,6 +6,7 @@ En las plantillas se puede usar, por ejemplo:
     {% if es_admin %} ... {% endif %}
     {{ condominio_activo.nombre }}
 """
+from apps.cartera.permisos import condominios_de_cartera
 from apps.condominios.models import Membresia
 
 from .permisos import ADMINISTRADOR, COMITE, CONSERJE, RESIDENTE, condominios_del_usuario
@@ -30,4 +31,6 @@ def condohub(request):
         "es_residente": RESIDENTE in roles,
         "es_conserje": CONSERJE in roles,
         "notificaciones_sin_leer": sin_leer,
+        # El menú muestra «Cartera» solo a quien tiene condominios asignados (administrador general) o es superusuario.
+        "tiene_cartera": condominios_de_cartera(request.user).exists(),
     }

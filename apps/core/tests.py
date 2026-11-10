@@ -109,7 +109,7 @@ class MenuAdministracionTest(TestCase):
         respuesta = self.menu(self.e.administrador)
         self.assertContains(respuesta, "Administración")
         for ruta in ("condominios:unidades", "cuentas:usuarios", "gastos:periodos", "pagos:cobranza",
-                     "gastos:reporte", "proveedores:lista", "cartera:inicio", "rendicion:inicio", "auditoria:inicio"):
+                     "gastos:reporte", "proveedores:lista", "rendicion:inicio", "auditoria:inicio"):
             self.assertContains(respuesta, f'class="dropdown-item " href="{reverse(ruta)}"')
 
     def test_el_comite_no_ve_usuarios(self):
@@ -117,17 +117,18 @@ class MenuAdministracionTest(TestCase):
         self.assertContains(respuesta, "Administración")
         self.assertNotContains(respuesta, reverse("cuentas:usuarios"))
 
-    def test_el_comite_ve_cartera_y_rendicion_pero_no_auditoria(self):
-        # Roles provisionales del PMV (#62): auditoría es solo del administrador.
+    def test_el_comite_ve_rendicion_pero_no_auditoria_ni_cartera(self):
+        # Roles provisionales del PMV (#62): auditoría es solo del administrador. La cartera ya no es
+        # suya: es del administrador general (#54), así que no aparece en el menú de ningún rol del condominio.
         respuesta = self.menu(self.e.comite)
-        self.assertContains(respuesta, reverse("cartera:inicio"))
         self.assertContains(respuesta, reverse("rendicion:inicio"))
         self.assertNotContains(respuesta, reverse("auditoria:inicio"))
+        self.assertNotContains(respuesta, reverse("cartera:inicio"))
 
     def test_las_apps_nuevas_marcan_administracion(self):
-        respuesta = self.menu(self.e.administrador, "cartera:inicio")
+        respuesta = self.menu(self.e.administrador, "rendicion:inicio")
         self.assertContains(respuesta, 'class="nav-link dropdown-toggle active"')
-        self.assertContains(respuesta, f'class="dropdown-item active" href="{reverse("cartera:inicio")}"')
+        self.assertContains(respuesta, f'class="dropdown-item active" href="{reverse("rendicion:inicio")}"')
 
     def test_residentes_y_conserje_no_ven_administracion(self):
         for usuario in (self.e.residente, self.e.conserje):
@@ -278,7 +279,7 @@ class CargarDemoTest(TestCase):
 
     maxDiff = None
     HUELLA = {
-        "usuarios": 7,
+        "usuarios": 8,  # + gerencia@condohub.cl, el administrador general (#54)
         "superusuarios": 1,
         "condominios": ["Condominio Vista Verde", "Edificio Los Aromos"],
         "edificios": 3,
@@ -289,15 +290,15 @@ class CargarDemoTest(TestCase):
         "espacios": 4,
         "reservas": {"CONFIRMADA": 1},
         "comunicados": 3,
-        "notificaciones": 21,
+        "notificaciones": 22,
         "incidentes": {"EN_PROCESO": 1, "RECIBIDO": 1},
         "proveedores": {False: 1, True: 3},
-        "periodos": {"ABIERTO": 1, "EMITIDO": 2},
-        "egresos": 24,
+        "periodos": {"ABIERTO": 1, "EMITIDO": 3},  # + el mes anterior de Los Aromos (#54)
+        "egresos": 28,
         "egresos_con_proveedor": 9,
-        "suma_egresos": 6476939,
-        "cobros": {"PAGADO": 13, "PENDIENTE": 7},
-        "suma_cobros": {"s": 4310739, "f": 215537},
+        "suma_egresos": 7155439,
+        "cobros": {"PAGADO": 13, "PENDIENTE": 11},
+        "suma_cobros": {"s": 4989239, "f": 249462},
         "pagos": 14,
         "suma_pagos": 3196063,
     }
@@ -739,3 +740,28 @@ class BusquedaEnOtrosListadosTest(TestCase):
         self.assertEqual(len(respuesta.context["incidentes"]), 1)
         self.assertFalse(respuesta.context["hay_filtros"])
         self.assertNotContains(respuesta, "Limpiar filtros")
+
+
+class RespuestaCsvTest(SimpleTestCase):
+    """`respuesta_csv` (apps/core/exportar.py): lo que comparten el reporte de morosidad y la cartera."""
+
+    def descargar(self, encabezados, filas):
+        from apps.core.exportar import respuesta_csv
+
+        return respuesta_csv("prueba.csv", encabezados, filas)
+
+    def test_lleva_bom_punto_y_coma_y_nombre_de_archivo(self):
+        respuesta = self.descargar(["Unidad", "Saldo"], [["A101", 42000], ["A102", 0]])
+        self.assertEqual(respuesta["Content-Type"], "text/csv; charset=utf-8")
+        self.assertEqual(respuesta["Content-Disposition"], 'attachment; filename="prueba.csv"')
+        texto = respuesta.content.decode("utf-8")
+        self.assertTrue(texto.startswith("\ufeffUnidad;Saldo"))
+        self.assertIn("A101;42000", texto)
+        self.assertEqual(len(texto.splitlines()), 3)  # encabezado y dos filas
+
+    def test_neutraliza_las_formulas_y_deja_los_numeros(self):
+        respuesta = self.descargar(["Nombre", "Monto"], [["=SUMA(1)", -5], ["@cmd", 7], ["Torre A", 1]])
+        lineas = respuesta.content.decode("utf-8").splitlines()
+        self.assertEqual(lineas[1], "'=SUMA(1);-5")  # el texto con apóstrofo; el número negativo intacto
+        self.assertEqual(lineas[2], "'@cmd;7")
+        self.assertEqual(lineas[3], "Torre A;1")

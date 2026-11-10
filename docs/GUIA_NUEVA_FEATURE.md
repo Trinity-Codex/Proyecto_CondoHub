@@ -162,6 +162,38 @@ Variables útiles en cualquier vista (las pone `apps/core/middleware.py`):
 | `request.roles` | Roles del usuario en ese condominio, ej. `{"RESIDENTE", "COMITE"}` |
 | `tiene_rol(request, ADMINISTRADOR, COMITE)` | `True` si tiene alguno de esos roles |
 
+### Vistas que no son de un solo condominio: la cartera (`apps/cartera/permisos.py`)
+
+El administrador general (Issue #54) no tiene condominio activo ni rol en ninguno: el superusuario le asigna
+condominios desde `/admin/` (modelo `AsignacionCartera`) y solo los consulta. Por eso sus vistas **no** usan
+`RolRequeridoMixin` ni `CondominioQuerysetMixin`; usan estas dos piezas:
+
+```python
+from apps.cartera.permisos import CarteraRequeridaMixin, condominios_de_cartera
+
+condominios_de_cartera(request.user)   # condominios activos asignados; el superusuario, todos los activos
+
+
+class MiVistaDeCartera(CarteraRequeridaMixin, TemplateView):   # sin sesión: login; sin cartera: 403
+    def get_context_data(self, **kwargs):
+        condominio = get_object_or_404(self.condominios, pk=self.kwargs["pk"])  # no asignado: 404
+```
+
+Toda consulta de una vista así parte de `condominios_de_cartera(...)`. El reporte de recaudación se puede abrir
+para un condominio dado sin cambiar el activo: `ReporteBase` en `apps/gastos/views.py` toma el condominio de
+`get_condominio_reporte()`, y la cartera lo reemplaza (ver `apps/cartera/views.py`).
+
+### Descargar una tabla en CSV (`apps/core/exportar.py`)
+
+```python
+from apps.core.exportar import respuesta_csv
+
+return respuesta_csv("morosidad-2026-10.csv", ["Unidad", "Saldo"], [[unidad.numero, saldo] for ...])
+```
+
+Devuelve el archivo para Excel (separador «;», UTF-8 con BOM) y pasa cada celda por `celda_segura`, que antepone
+un apóstrofo a los textos que empiezan con `=`, `+`, `-`, `@`, tabulación o retorno de carro. No armes un CSV a mano.
+
 ### Filtros, chips y búsqueda en un listado (`apps/core/listados.py`)
 
 `FiltrosGetMixin` lee los filtros por GET (`?estado=...`), arma los chips con su cantidad (`_chips.html`) y deja

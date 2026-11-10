@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
+from apps.cartera.permisos import condominios_de_cartera
 from apps.comunicados.models import Comunicado
 from apps.condominios.models import Residente, Unidad
 from apps.incidentes.models import Incidente
@@ -146,4 +147,7 @@ def sin_condominio(request):
     """Se muestra cuando el usuario no pertenece a ningún condominio activo."""
     if request.condominio is not None:
         return redirect("core:inicio")
+    # Un administrador general no tiene condominio activo: su página es la cartera (Issue #54).
+    if condominios_de_cartera(request.user).exists():
+        return redirect("cartera:inicio")
     return render(request, "core/sin_condominio.html")
