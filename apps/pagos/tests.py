@@ -91,6 +91,9 @@ class EstadoCuentaTest(TestCase):
             periodo=self.nov, categoria="ASEO", descripcion="Aseo de noviembre", monto=100000,
             creado_por=self.e.administrador,
         )
+        from apps.gastos.fondo import registrar_movimiento
+        registrar_movimiento(self.e.condominio, tipo="INICIAL", monto=0,
+            fecha=datetime.date(2026, 11, 1), descripcion="Apertura ficticia del legado de prueba")
         emitir_periodo(self.nov)
         notificacion = Notificacion.objects.filter(usuario=self.e.residente, titulo="Gastos comunes emitidos").get()
         self.assertEqual(notificacion.url, reverse("pagos:estado_cuenta"))

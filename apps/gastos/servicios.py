@@ -18,13 +18,16 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Sum
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.condominios.models import Residente, Unidad
+from apps.auditoria.servicios import Accion, registrar
+from apps.condominios.models import Condominio, Residente, Unidad
 from apps.notificaciones.observador import Evento
 
-from .models import DetalleGastoComun, PeriodoGasto
+from .fondo import fin_mes, guardar_movimiento, validar_cobertura
+from .models import DetalleGastoComun, MovimientoFondo, PeriodoGasto
 from .prorrateo import ESTRATEGIAS
 
 
@@ -97,17 +100,17 @@ def calcular_emision(periodo):
 
 
 @transaction.atomic
-def emitir_periodo(periodo):
+def emitir_periodo(periodo, *, usuario=None):
     """
     Emite el período: crea un DetalleGastoComun por unidad, cambia el período a
     EMITIDO y avisa a los residentes (patrón Observer).
 
     Lanza ValidationError si no se puede emitir (ver calcular_emision).
     """
-    # select_for_update() bloquea la fila del período hasta terminar: si dos
-    # personas presionan "Emitir" al mismo tiempo, la segunda espera y luego ve
-    # el período ya emitido (no se crean cobros duplicados).
-    periodo = PeriodoGasto.objects.select_for_update().select_related("condominio").get(pk=periodo.pk)
+    # Siempre condominio antes del período: coordina apertura, manuales y doble emisión.
+    condominio = Condominio.objects.select_for_update().get(pk=periodo.condominio_id)
+    periodo = PeriodoGasto.objects.select_for_update().get(pk=periodo.pk, condominio=condominio)
+    validar_cobertura(condominio, fin_mes(periodo))
     emision = calcular_emision(periodo)
     if not emision.puede_emitir:
         raise ValidationError(emision.errores)
@@ -118,9 +121,18 @@ def emitir_periodo(periodo):
             for fila in emision.filas
         ]
     )
+    aporte = int(periodo.detalles.aggregate(total=Sum("monto_fondo_reserva"))["total"] or 0)
+    guardar_movimiento(MovimientoFondo(
+        condominio=condominio, tipo=MovimientoFondo.Tipo.INGRESO, monto=aporte,
+        fecha=fin_mes(periodo), descripcion=f"Aporte de {periodo}", periodo=periodo, creado_por=usuario,
+    ), usuario)
     periodo.estado = PeriodoGasto.Estado.EMITIDO
     periodo.fecha_emision = timezone.now()
     periodo.save(update_fields=["estado", "fecha_emision"])
+
+    registrar(usuario, condominio, Accion.MODIFICAR, periodo,
+              antes={"estado": PeriodoGasto.Estado.ABIERTO},
+              despues={"estado": periodo.estado, "fecha_emision": periodo.fecha_emision, "aporte_fondo": aporte})
 
     residentes = Residente.objects.filter(activo=True, unidad__edificio__condominio=periodo.condominio)
     periodo.notificar(

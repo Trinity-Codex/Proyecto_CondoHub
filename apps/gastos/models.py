@@ -251,3 +251,67 @@ class DetalleGastoComun(models.Model):
     def total(self):
         """Lo que la unidad debe pagar en el período (gastos + fondo de reserva)."""
         return self.monto + self.monto_fondo_reserva
+
+
+class MovimientoFondo(models.Model):
+    """Libro contable del fondo: se corrige agregando ajustes, nunca editando movimientos."""
+
+    class Tipo(models.TextChoices):
+        INICIAL = "INICIAL", "Saldo inicial"
+        INGRESO = "INGRESO", "Ingreso"
+        EGRESO = "EGRESO", "Egreso"
+        AJUSTE = "AJUSTE", "Ajuste"
+
+    condominio = models.ForeignKey("condominios.Condominio", on_delete=models.CASCADE, related_name="movimientos_fondo")
+    tipo = models.CharField(max_length=7, choices=Tipo.choices)
+    monto = models.BigIntegerField()
+    fecha = models.DateField("fecha contable")
+    descripcion = models.CharField("descripción y respaldo", max_length=200)
+    acuerdo = models.CharField("acuerdo o referencia justificativa", max_length=200, blank=True)
+    proveedor = models.ForeignKey(
+        "proveedores.Proveedor", on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos_fondo",
+    )
+    periodo = models.OneToOneField(
+        PeriodoGasto, on_delete=models.RESTRICT, null=True, blank=True, related_name="ingreso_fondo",
+    )
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos_fondo",
+    )
+    creado = models.DateTimeField(auto_now_add=True)
+    # MySQL no admite unicidad parcial; NULL permite múltiples movimientos no iniciales.
+    marca_inicial = models.PositiveSmallIntegerField(null=True, blank=True, editable=False)
+
+    class Meta:
+        ordering = ["fecha", "pk"]
+        verbose_name = "movimiento del fondo"
+        verbose_name_plural = "movimientos del fondo"
+        constraints = [
+            models.UniqueConstraint(fields=["condominio", "marca_inicial"], name="uq_fondo_inicial"),
+            models.CheckConstraint(condition=(
+                models.Q(tipo="INICIAL", monto__gte=0, periodo__isnull=True, marca_inicial=1, marca_inicial__isnull=False)
+                | models.Q(tipo="INGRESO", monto__gte=0, periodo__isnull=False, marca_inicial__isnull=True)
+                | models.Q(tipo="EGRESO", monto__lt=0, periodo__isnull=True, marca_inicial__isnull=True)
+                | (models.Q(tipo="AJUSTE", periodo__isnull=True, marca_inicial__isnull=True) & ~models.Q(monto=0))
+            ), name="ck_fondo_tipo_monto_origen"),
+        ]
+        indexes = [models.Index(fields=["condominio", "fecha"], name="fondo_condo_fecha_idx")]
+
+    def clean(self):
+        super().clean()
+        errores = {}
+        if not (self.descripcion or "").strip():
+            errores["descripcion"] = "Indica la descripción y el respaldo del movimiento."
+        if self.tipo in (self.Tipo.EGRESO, self.Tipo.AJUSTE) and not (self.acuerdo or "").strip():
+            errores["acuerdo"] = "Indica el acuerdo autorizante o la referencia justificativa."
+        if self.proveedor_id and self.proveedor.condominio_id != self.condominio_id:
+            errores["proveedor"] = "El proveedor debe pertenecer al condominio activo."
+        if self.periodo_id and self.periodo.condominio_id != self.condominio_id:
+            errores["periodo"] = "El período debe pertenecer al condominio activo."
+        if errores:
+            raise ValidationError(errores)
+
+    def get_absolute_url(self):
+        return reverse("gastos:fondo_detalle", args=[self.pk])
+
+    def __str__(self):
+        return f"{self.get_tipo_display()}: {self.descripcion}"

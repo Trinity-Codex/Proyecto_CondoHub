@@ -11,7 +11,7 @@ from django.core.management import call_command
 from django.db import IntegrityError, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.db.models import RestrictedError
-from django.test import SimpleTestCase, TestCase, TransactionTestCase
+from django.test import SimpleTestCase, TestCase, TransactionTestCase, skipUnlessDBFeature
 from django.urls import reverse
 
 from apps.condominios.models import Unidad
@@ -482,3 +482,503 @@ class FiltroEgresosTest(TestCase):
 
     def test_insignia_del_periodo(self):
         self.assertContains(self.client.get(reverse("gastos:periodos")), "insignia insignia-en-proceso")
+
+
+class FondoManualTest(TestCase):
+    """Issue #8: validación del servicio y auditoría del libro del fondo."""
+
+    def setUp(self):
+        from . import fondo
+        self.fondo = fondo
+        self.e = crear_escenario()
+
+    def registrar(self, tipo="INICIAL", **cambios):
+        return self.fondo.registrar_movimiento(
+            self.e.condominio, tipo=tipo, usuario=self.e.administrador,
+            **{"monto": 100000, "fecha": date(2026, 10, 1), "descripcion": "Respaldo ficticio de apertura",
+               "acuerdo": "Acta ficticia 1", **cambios},
+        )
+
+    def test_administrador_configura_inicial_y_auditoria(self):
+        from apps.auditoria.models import RegistroAuditoria
+        movimiento = self.registrar(monto=0)
+        self.assertEqual((movimiento.monto, movimiento.creado_por), (0, self.e.administrador))
+        self.assertEqual(self.fondo.saldo_fondo(self.e.condominio), 0)
+        evento = RegistroAuditoria.objects.get(objeto_tipo="movimientofondo")
+        self.assertEqual((evento.accion, evento.usuario_id, evento.despues["monto"]), ("crear", self.e.administrador.pk, 0))
+
+    def test_saldo_inicial_repetido(self):
+        from .models import MovimientoFondo
+        self.registrar()
+        with self.assertRaises(ValidationError):
+            self.registrar()
+        self.assertEqual(MovimientoFondo.objects.count(), 1)
+
+    def test_egreso_autorizado_y_saldo_negativo(self):
+        self.registrar(monto=0)
+        egreso = self.registrar("EGRESO", monto=2500)
+        self.assertEqual(egreso.monto, -2500)
+        self.assertEqual(self.fondo.saldo_fondo(self.e.condominio), -2500)
+
+    def test_ajuste_trazable_positivo_y_negativo(self):
+        inicial = self.registrar()
+        self.registrar("AJUSTE", monto=-1000)
+        self.registrar("AJUSTE", monto=500)
+        inicial.refresh_from_db()
+        self.assertEqual(inicial.monto, 100000)
+        self.assertEqual(self.fondo.saldo_fondo(self.e.condominio), 99500)
+
+    def test_datos_invalidos_no_guardan_ni_auditan(self):
+        from apps.auditoria.models import RegistroAuditoria
+        from apps.proveedores.models import Proveedor
+        from .models import MovimientoFondo, MONTO_MAXIMO
+        ajeno = Proveedor.objects.create(condominio=self.e.ajeno, rut="12345678-5", razon_social="Ficticio")
+        for tipo, cambios in [
+            ("INICIAL", {"monto": -1}), ("EGRESO", {"monto": 0}), ("EGRESO", {"monto": -1}),
+            ("AJUSTE", {"monto": 0}), ("EGRESO", {"monto": MONTO_MAXIMO + 1}),
+            ("AJUSTE", {"monto": -MONTO_MAXIMO - 1}), ("EGRESO", {"descripcion": "  "}),
+            ("EGRESO", {"acuerdo": "  "}), ("AJUSTE", {"acuerdo": ""}),
+            ("EGRESO", {"fecha": None}), ("EGRESO", {"proveedor": ajeno}),
+            ("INGRESO", {}), ("DESCONOCIDO", {}), ("EGRESO", {"monto": 1.5}),
+        ]:
+            with self.subTest(tipo=tipo, cambios=cambios), self.assertRaises(ValidationError):
+                self.registrar(tipo, **cambios)
+        self.assertFalse(MovimientoFondo.objects.exists())
+        self.assertFalse(RegistroAuditoria.objects.exists())
+
+    def test_datos_nulos_de_respaldo_son_validation_error(self):
+        for cambios in [{"descripcion": None}, {"acuerdo": None}]:
+            with self.subTest(cambios=cambios), self.assertRaises(ValidationError):
+                self.registrar("EGRESO", **cambios)
+
+    def test_fecha_de_servicio_normalizada(self):
+        self.registrar("AJUSTE", monto=1)
+        inicial = self.registrar(fecha="2026-10-01")
+        self.assertEqual(inicial.fecha, date(2026, 10, 1))
+
+    def test_manual_anterior_a_apertura(self):
+        self.registrar()
+        for tipo in ("EGRESO", "AJUSTE"):
+            with self.subTest(tipo=tipo), self.assertRaises(ValidationError):
+                self.registrar(tipo, fecha=date(2026, 9, 30))
+        self.assertEqual(self.fondo.saldo_fondo(self.e.condominio), 100000)
+
+    def test_rollback_si_falla_auditoria_manual(self):
+        from .models import MovimientoFondo
+        for tipo in ("INICIAL", "EGRESO", "AJUSTE"):
+            with self.subTest(tipo=tipo), mock.patch("apps.gastos.fondo.registrar", side_effect=RuntimeError("C1")):
+                with self.assertRaises(RuntimeError):
+                    self.registrar(tipo)
+            self.assertFalse(MovimientoFondo.objects.exists())
+            self.assertEqual(self.fondo.saldo_fondo(self.e.condominio), 0)
+
+
+class FondoConsultasTest(TestCase):
+    def setUp(self):
+        from . import fondo
+        self.fondo = fondo
+        self.e = crear_escenario()
+        self.periodo = crear_periodo(self.e.condominio)
+
+    def manual(self, tipo="INICIAL", **cambios):
+        return self.fondo.registrar_movimiento(self.e.condominio, tipo=tipo, usuario=self.e.administrador,
+            **{"monto": 100000, "fecha": date(2026, 10, 1), "descripcion": "Respaldo ficticio", "acuerdo": "Acta 1", **cambios})
+
+    def test_fondo_sin_movimientos(self):
+        from .models import MovimientoFondo
+        saldo = self.fondo.saldo_fondo(self.e.condominio)
+        self.assertIs(type(saldo), int)
+        self.assertEqual(saldo, 0)
+        self.assertEqual(list(self.fondo.movimientos_fondo(self.e.condominio, self.periodo)), [])
+        self.assertFalse(MovimientoFondo.objects.exists())
+
+    def test_corte_inclusivo_emision_tardia_y_mes_abierto(self):
+        from .servicios import emitir_periodo
+        self.manual()
+        crear_egreso(self.periodo, self.e.administrador, monto=100001)
+        emitir_periodo(self.periodo)
+        self.manual("EGRESO", monto=2000, fecha=date(2026, 10, 31))
+        self.manual("EGRESO", monto=1000, fecha=date(2026, 11, 1))
+        self.assertEqual(self.fondo.saldo_fondo(self.e.condominio, self.periodo), 103000)
+        self.assertEqual(self.fondo.saldo_fondo(self.e.condominio), 102000)
+        abierto = crear_periodo(self.e.condominio, mes=11)
+        self.assertEqual(self.fondo.saldo_fondo(self.e.condominio, abierto), 102000)
+
+    def test_febrero_bisiesto_y_cambio_de_anio(self):
+        for anio, mes, ultimo, siguiente in [(2024, 2, date(2024, 2, 29), date(2024, 3, 1)),
+                                            (2025, 12, date(2025, 12, 31), date(2026, 1, 1))]:
+            periodo = crear_periodo(self.e.condominio, mes=mes, anio=anio)
+            self.manual("AJUSTE", monto=10, fecha=ultimo)
+            self.manual("AJUSTE", monto=20, fecha=siguiente)
+            filas = list(self.fondo.movimientos_fondo(self.e.condominio, periodo))
+            self.assertEqual([m.fecha for m in filas], [ultimo])
+            esperado = 10 if anio == 2024 else 40
+            self.assertEqual(self.fondo.saldo_fondo(self.e.condominio, periodo), esperado)
+
+    def test_movimientos_mes_orden_relaciones_y_aislamiento(self):
+        primero = self.manual()
+        segundo = self.manual("AJUSTE", monto=5)
+        self.manual("EGRESO", monto=1, fecha=date(2026, 11, 1))
+        self.fondo.registrar_movimiento(self.e.ajeno, tipo="INICIAL", monto=999, fecha=date(2026, 10, 1), descripcion="Ajeno")
+        filas = self.fondo.movimientos_fondo(self.e.condominio, self.periodo)
+        with self.assertNumQueries(1):
+            valores = [(m.pk, m.tipo, m.monto, m.descripcion, m.acuerdo, m.proveedor, m.periodo, m.creado_por.pk) for m in filas]
+        self.assertEqual([m[0] for m in valores], [primero.pk, segundo.pk])
+        self.assertEqual(self.fondo.movimientos_fondo(self.e.condominio).count(), 3)
+
+    def test_periodo_ajeno_en_ambas_consultas(self):
+        ajeno = crear_periodo(self.e.ajeno)
+        for consultar in (self.fondo.saldo_fondo, self.fondo.movimientos_fondo):
+            with self.subTest(consulta=consultar), self.assertRaises(ValidationError):
+                consultar(self.e.condominio, ajeno)
+
+    def test_legado_exige_apertura_y_no_duplica(self):
+        self.periodo.estado = PeriodoGasto.Estado.EMITIDO
+        self.periodo.save()
+        cobro = DetalleGastoComun.objects.create(periodo=self.periodo, unidad=self.e.a101, monto=100, monto_fondo_reserva=5)
+        for consulta in (self.fondo.saldo_fondo, self.fondo.movimientos_fondo):
+            with self.assertRaises(ValidationError) as error:
+                consulta(self.e.condominio)
+            self.assertEqual(error.exception.code, "fondo_sin_apertura")
+        with self.assertRaises(ValidationError):
+            self.manual(fecha=date(2026, 10, 31))
+        self.manual(fecha=date(2026, 11, 1))
+        for consulta in (self.fondo.saldo_fondo, self.fondo.movimientos_fondo):
+            with self.assertRaises(ValidationError) as error:
+                consulta(self.e.condominio, self.periodo)
+            self.assertEqual(error.exception.code, "fondo_sin_cobertura")
+        cobro.refresh_from_db()
+        self.assertEqual(cobro.total, 105)
+        self.assertEqual(self.fondo.saldo_fondo(self.e.condominio), 100000)
+        self.assertEqual(self.fondo.movimientos_fondo(self.e.condominio).count(), 1)
+
+    def test_inicial_opcional_no_puede_superar_primer_movimiento(self):
+        self.manual("AJUSTE", monto=5)
+        with self.assertRaises(ValidationError):
+            self.manual(fecha=date(2026, 10, 2))
+        self.manual(fecha=date(2026, 10, 1))
+        self.assertEqual(self.fondo.saldo_fondo(self.e.condominio), 100005)
+
+
+class FondoEmisionTest(TestCase):
+    def setUp(self):
+        from .models import MovimientoFondo
+        from .servicios import emitir_periodo
+        from apps.auditoria.models import RegistroAuditoria
+        from apps.notificaciones.models import Notificacion
+        self.Movimiento = MovimientoFondo
+        self.Evento = RegistroAuditoria
+        self.Notificacion = Notificacion
+        self.emitir = emitir_periodo
+        self.e = crear_escenario()
+        self.periodo = crear_periodo(self.e.condominio)
+        crear_egreso(self.periodo, self.e.administrador, monto=100001)
+
+    def assert_sin_efectos(self):
+        self.periodo.refresh_from_db()
+        self.assertTrue(self.periodo.esta_abierto)
+        self.assertFalse(DetalleGastoComun.objects.exists())
+        self.assertFalse(self.Movimiento.objects.filter(tipo="INGRESO").exists())
+        self.assertFalse(self.Evento.objects.filter(objeto_tipo__in=["periodogasto", "movimientofondo"]).exists())
+        self.assertFalse(self.Notificacion.objects.exists())
+
+    def test_aporte_exacto_y_auditoria_autor(self):
+        from .fondo import saldo_fondo
+        self.emitir(self.periodo, usuario=self.e.administrador)
+        ingreso = self.Movimiento.objects.get()
+        self.assertEqual(ingreso.monto, sum(self.periodo.detalles.values_list("monto_fondo_reserva", flat=True)))
+        self.assertEqual((ingreso.monto, ingreso.fecha, ingreso.periodo), (5000, date(2026, 10, 31), self.periodo))
+        self.assertEqual(saldo_fondo(self.e.condominio), 5000)
+        evento = self.Evento.objects.get(objeto_tipo="periodogasto")
+        self.assertEqual((evento.accion, evento.usuario_id, evento.antes["estado"], evento.despues["estado"]),
+                         ("modificar", self.e.administrador.pk, "ABIERTO", "EMITIDO"))
+        self.assertEqual(evento.despues["aporte_fondo"], 5000)
+        self.assertEqual(self.Evento.objects.filter(objeto_tipo="movimientofondo").count(), 1)
+        with self.assertRaises(ValidationError):
+            self.emitir(self.periodo)
+        self.assertEqual(self.Movimiento.objects.count(), 1)
+
+    def test_sistema_y_aporte_redondeado_a_cero(self):
+        self.periodo.egresos.update(monto=1)
+        self.emitir(self.periodo)
+        ingreso = self.Movimiento.objects.get()
+        self.assertEqual(ingreso.monto, 0)
+        self.assertIsNone(ingreso.creado_por)
+        self.assertEqual(self.Evento.objects.get(objeto_tipo="periodogasto").usuario_nombre, "Sistema")
+
+    def test_alicuotas_y_sin_egresos_no_crean_ingreso_ni_eventos(self):
+        self.e.a101.alicuota = 0
+        self.e.a101.save()
+        with self.assertRaises(ValidationError):
+            self.emitir(self.periodo)
+        self.assert_sin_efectos()
+        self.periodo.egresos.all().delete()
+        with self.assertRaises(ValidationError):
+            self.emitir(self.periodo)
+        self.assert_sin_efectos()
+
+    def test_emision_atomica_ingreso_auditoria_y_notificacion(self):
+        from apps.notificaciones.models import Notificacion
+        for destino in ["apps.gastos.fondo.MovimientoFondo.save", "apps.gastos.fondo.registrar", "apps.gastos.servicios.registrar"]:
+            with self.subTest(destino=destino), mock.patch(destino, side_effect=RuntimeError("Fallo simulado")):
+                with self.assertRaises(RuntimeError):
+                    self.emitir(self.periodo)
+            self.assert_sin_efectos()
+        crear_notificacion = Notificacion.objects.bulk_create
+        def notificar_y_fallar(*args, **kwargs):
+            crear_notificacion(*args, **kwargs)
+            raise RuntimeError("Notificación persistida y fallo")
+        with mock.patch.object(Notificacion.objects, "bulk_create", side_effect=notificar_y_fallar):
+            with self.assertRaises(RuntimeError):
+                self.emitir(self.periodo)
+        self.assert_sin_efectos()
+
+    def test_emision_anterior_a_apertura(self):
+        from .fondo import registrar_movimiento
+        registrar_movimiento(self.e.condominio, tipo="INICIAL", monto=0, fecha=date(2026, 11, 1), descripcion="Respaldo ficticio")
+        previos = self.Evento.objects.count()
+        with self.assertRaises(ValidationError):
+            self.emitir(self.periodo)
+        self.periodo.refresh_from_db()
+        self.assertTrue(self.periodo.esta_abierto)
+        self.assertEqual(self.Evento.objects.count(), previos)
+        self.assertFalse(DetalleGastoComun.objects.exists())
+        self.assertFalse(self.Movimiento.objects.filter(tipo="INGRESO").exists())
+
+    def test_restrict_periodo_y_cascada_condominio(self):
+        self.emitir(self.periodo)
+        with self.assertRaises(RestrictedError):
+            self.periodo.delete()
+        self.e.condominio.delete()
+        self.assertFalse(self.Movimiento.objects.exists())
+
+
+class FondoRestriccionesTest(TestCase):
+    def setUp(self):
+        from .models import MovimientoFondo
+        self.Movimiento = MovimientoFondo
+        self.e = crear_escenario()
+        self.periodo = crear_periodo(self.e.condominio)
+
+    def test_mysql_signos_origen_y_marca(self):
+        for campos in [
+            {"tipo": "INICIAL", "monto": -1, "marca_inicial": 1},
+            {"tipo": "INICIAL", "monto": 1},
+            {"tipo": "EGRESO", "monto": 0}, {"tipo": "EGRESO", "monto": 1},
+            {"tipo": "AJUSTE", "monto": 0}, {"tipo": "INGRESO", "monto": 1},
+            {"tipo": "INGRESO", "monto": -1, "periodo": self.periodo},
+            {"tipo": "AJUSTE", "monto": 1, "periodo": self.periodo},
+            {"tipo": "EGRESO", "monto": -1, "marca_inicial": 1}, {"tipo": "OTRO", "monto": 1},
+        ]:
+            with self.subTest(campos=campos), self.assertRaises(IntegrityError), transaction.atomic():
+                self.Movimiento.objects.create(condominio=self.e.condominio, fecha=date(2026, 10, 1), descripcion="Ficticio", **campos)
+
+    def test_unicidad_inicial_e_ingreso_en_base(self):
+        for campos in [{"tipo": "INICIAL", "marca_inicial": 1}, {"tipo": "INGRESO", "periodo": self.periodo}]:
+            datos = {"condominio": self.e.condominio, "monto": 0, "fecha": date(2026, 10, 1), "descripcion": "Ficticio", **campos}
+            self.Movimiento.objects.create(**datos)
+            with self.assertRaises(IntegrityError), transaction.atomic():
+                self.Movimiento.objects.create(**datos)
+
+    def test_rechaza_periodo_y_proveedor_ajenos_en_modelo_y_servicio(self):
+        from .fondo import registrar_movimiento
+        ajeno = crear_periodo(self.e.ajeno)
+        movimiento = self.Movimiento(condominio=self.e.condominio, tipo="INGRESO", monto=1,
+            fecha=date(2026, 10, 31), descripcion="Ficticio", periodo=ajeno)
+        with self.assertRaises(ValidationError):
+            movimiento.full_clean()
+        with self.assertRaises(ValidationError):
+            registrar_movimiento(self.e.condominio, tipo="EGRESO", monto=1, fecha=date(2026, 10, 1),
+                descripcion="Ficticio", acuerdo="Acta", periodo=ajeno)
+
+
+class FondoVistasTest(TestCase):
+    def setUp(self):
+        from .fondo import registrar_movimiento
+        from .models import MovimientoFondo
+        self.Movimiento = MovimientoFondo
+        self.e = crear_escenario()
+        self.movimiento = registrar_movimiento(self.e.condominio, tipo="INICIAL", monto=1000,
+            fecha=date(2026, 10, 1), descripcion="Respaldo ficticio")
+        self.ajeno = registrar_movimiento(self.e.ajeno, tipo="INICIAL", monto=999,
+            fecha=date(2026, 10, 1), descripcion="Respaldo ajeno")
+        self.manuales = [reverse("gastos:fondo_inicial"), reverse("gastos:fondo_egreso"), reverse("gastos:fondo_ajuste")]
+        self.consultas = [reverse("gastos:fondo"), self.movimiento.get_absolute_url()]
+
+    def datos(self, **cambios):
+        return {"monto": "2.500", "fecha": "2026-10-01", "descripcion": "Mantención ficticia", "acuerdo": "Acta ficticia 1", **cambios}
+
+    def test_comite_consulta_y_no_registra(self):
+        self.client.force_login(self.e.comite)
+        for ruta in self.consultas:
+            self.assertEqual(self.client.get(ruta).status_code, 200)
+        for ruta in self.manuales:
+            self.assertEqual(self.client.get(ruta).status_code, 403)
+            self.assertEqual(self.client.post(ruta, self.datos()).status_code, 403)
+        self.assertEqual(self.Movimiento.objects.count(), 2)
+
+    def test_conserje_y_residente_sin_acceso_get_post(self):
+        for usuario in (self.e.conserje, self.e.residente):
+            self.client.force_login(usuario)
+            for ruta in self.consultas + self.manuales:
+                with self.subTest(usuario=usuario, ruta=ruta):
+                    self.assertEqual(self.client.get(ruta).status_code, 403)
+                    self.assertEqual(self.client.post(ruta, self.datos()).status_code, 403)
+        self.assertEqual(self.Movimiento.objects.count(), 2)
+
+    def test_ajeno_404_y_excluido_para_admin_y_comite(self):
+        for usuario in (self.e.administrador, self.e.comite):
+            self.client.force_login(usuario)
+            self.assertEqual(self.client.get(self.ajeno.get_absolute_url()).status_code, 404)
+            self.assertNotContains(self.client.get(reverse("gastos:fondo")), "Respaldo ajeno")
+
+    def test_administrador_formularios_y_asignacion_servidor(self):
+        self.client.force_login(self.e.administrador)
+        for ruta in self.manuales:
+            self.assertEqual(self.client.get(ruta).status_code, 200)
+        respuesta = self.client.post(reverse("gastos:fondo_egreso"), self.datos(
+            condominio=self.e.ajeno.pk, creado_por=self.e.residente.pk))
+        nuevo = self.Movimiento.objects.latest("pk")
+        self.assertRedirects(respuesta, nuevo.get_absolute_url())
+        self.assertEqual((nuevo.monto, nuevo.condominio, nuevo.creado_por), (-2500, self.e.condominio, self.e.administrador))
+        for sentido, esperado in [("SUMAR", 2500), ("RESTAR", -2500)]:
+            self.client.post(reverse("gastos:fondo_ajuste"), self.datos(sentido=sentido))
+            self.assertEqual(self.Movimiento.objects.latest("pk").monto, esperado)
+        self.assertContains(self.client.get(reverse("gastos:fondo")), "Saldo contable del fondo")
+        self.assertContains(self.client.get(reverse("gastos:fondo")), "Saldo contable negativo")
+
+    def test_formulario_rechaza_proveedor_ajeno_y_errores_asociados(self):
+        from apps.proveedores.models import Proveedor
+        self.client.force_login(self.e.administrador)
+        proveedor = Proveedor.objects.create(condominio=self.e.ajeno, rut="12345678-5", razon_social="Ficticio")
+        for cambios in [{"proveedor": proveedor.pk}, {"monto": "0"}, {"monto": "-1"}, {"monto": "1,5"},
+                        {"monto": "1000000000"}, {"descripcion": ""}, {"fecha": ""}, {"acuerdo": ""}]:
+            with self.subTest(cambios=cambios):
+                respuesta = self.client.post(reverse("gastos:fondo_egreso"), self.datos(**cambios))
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertTrue(respuesta.context["form"].errors)
+                self.assertContains(respuesta, 'aria-invalid="true"')
+        self.assertEqual(self.Movimiento.objects.count(), 2)
+
+    def test_apertura_avisada_y_post_inicial_valido(self):
+        self.client.force_login(self.e.administrador)
+        self.Movimiento.objects.filter(condominio=self.e.condominio).delete()
+        crear_periodo(self.e.condominio, estado="EMITIDO")
+        self.assertContains(self.client.get(reverse("gastos:fondo")), "Configura el saldo inicial")
+        self.assertRedirects(self.client.post(reverse("gastos:fondo_inicial"), self.datos(fecha="2026-11-01")),
+                             self.Movimiento.objects.latest("pk").get_absolute_url())
+
+    def test_paginacion_y_sin_admin_edicion_borrado(self):
+        from django.contrib import admin
+        from django.urls import NoReverseMatch
+        self.assertNotIn(self.Movimiento, admin.site._registry)
+        for nombre in ("fondo_editar", "fondo_eliminar"):
+            with self.assertRaises(NoReverseMatch):
+                reverse("gastos:" + nombre, args=[self.movimiento.pk])
+        self.client.force_login(self.e.comite)
+        self.Movimiento.objects.bulk_create([self.Movimiento(condominio=self.e.condominio, tipo="AJUSTE", monto=1,
+            fecha=date(2026, 10, 2), descripcion="Ficticio", acuerdo="Acta") for _ in range(26)])
+        respuesta = self.client.get(reverse("gastos:fondo"))
+        self.assertTrue(respuesta.context["is_paginated"])
+        self.assertEqual(len(respuesta.context["movimientos"]), 25)
+
+    def test_permisos_emision_y_periodo_ajeno_sin_efectos(self):
+        from apps.auditoria.models import RegistroAuditoria
+        periodo = crear_periodo(self.e.condominio)
+        ajeno = crear_periodo(self.e.ajeno)
+        previos = RegistroAuditoria.objects.count()
+        for usuario in (self.e.comite, self.e.residente, self.e.conserje):
+            self.client.force_login(usuario)
+            self.assertEqual(self.client.get(periodo.get_absolute_url()).status_code, 200 if usuario == self.e.comite else 403)
+            ruta = reverse("gastos:periodo_emitir", args=[periodo.pk])
+            self.assertEqual(self.client.get(ruta).status_code, 403)
+            self.assertEqual(self.client.post(ruta).status_code, 403)
+        self.client.force_login(self.e.administrador)
+        ruta = reverse("gastos:periodo_emitir", args=[ajeno.pk])
+        self.assertEqual(self.client.get(ruta).status_code, 404)
+        self.assertEqual(self.client.post(ruta).status_code, 404)
+        self.assertFalse(DetalleGastoComun.objects.exists())
+        self.assertEqual(RegistroAuditoria.objects.count(), previos)
+
+
+@skipUnlessDBFeature("has_select_for_update")
+class FondoConcurrenciaTest(TransactionTestCase):
+    """Dos conexiones y transacciones reales: deben serializar por condominio en MySQL."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+
+    def competir(self, operacion):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        from django.db import connections
+        barrera = Barrier(2)
+        def ejecutar():
+            try:
+                barrera.wait(timeout=10)
+                operacion()
+                return "creado"
+            except ValidationError:
+                return "rechazado"
+            finally:
+                connections.close_all()
+        self.assertEqual(connection.vendor, "mysql")
+        with ThreadPoolExecutor(max_workers=2) as hilos:
+            resultados = [hilos.submit(ejecutar) for _ in range(2)]
+            self.assertCountEqual([r.result(timeout=30) for r in resultados], ["creado", "rechazado"])
+
+    def test_dos_aperturas_simultaneas(self):
+        from .fondo import registrar_movimiento
+        from .models import MovimientoFondo
+        from apps.auditoria.models import RegistroAuditoria
+        self.competir(lambda: registrar_movimiento(self.e.condominio, tipo="INICIAL", monto=0,
+            fecha=date(2026, 10, 1), descripcion="Respaldo ficticio"))
+        self.assertEqual(MovimientoFondo.objects.count(), 1)
+        self.assertEqual(RegistroAuditoria.objects.filter(objeto_tipo="movimientofondo").count(), 1)
+
+    def test_dos_emisiones_simultaneas(self):
+        from .servicios import emitir_periodo
+        from .models import MovimientoFondo
+        from apps.auditoria.models import RegistroAuditoria
+        periodo = crear_periodo(self.e.condominio)
+        crear_egreso(periodo, self.e.administrador)
+        self.competir(lambda: emitir_periodo(periodo))
+        self.assertEqual(DetalleGastoComun.objects.count(), 3)
+        self.assertEqual(MovimientoFondo.objects.count(), 1)
+        self.assertEqual(RegistroAuditoria.objects.filter(objeto_tipo="periodogasto").count(), 1)
+        self.assertEqual(RegistroAuditoria.objects.filter(objeto_tipo="movimientofondo").count(), 1)
+
+    def test_orden_bloqueos_condominio_antes_del_periodo(self):
+        from django.test.utils import CaptureQueriesContext
+        from .servicios import emitir_periodo
+        periodo = crear_periodo(self.e.condominio)
+        crear_egreso(periodo, self.e.administrador)
+        with CaptureQueriesContext(connection) as consultas:
+            emitir_periodo(periodo)
+        bloqueos = [q["sql"] for q in consultas if "FOR UPDATE" in q["sql"]]
+        self.assertIn("condominios_condominio", bloqueos[0])
+        self.assertIn("gastos_periodogasto", bloqueos[1])
+
+
+class FondoMigracionTest(TransactionTestCase):
+    def tearDown(self):
+        call_command("migrate", verbosity=0)
+
+    def test_migracion_conserva_cobros_sin_ingresos_retroactivos(self):
+        antes = [("gastos", "0006_vencimiento_y_reglamento")]
+        despues = [("gastos", "0007_movimiento_fondo")]
+        ejecutor = MigrationExecutor(connection)
+        ejecutor.migrate(antes)
+        estado = ejecutor.loader.project_state(antes).apps
+        condominio = estado.get_model("condominios", "Condominio").objects.create(nombre="Legado ficticio")
+        edificio = estado.get_model("condominios", "Edificio").objects.create(condominio=condominio, nombre="A")
+        unidad = estado.get_model("condominios", "Unidad").objects.create(edificio=edificio, numero="1", alicuota=1)
+        periodo = estado.get_model("gastos", "PeriodoGasto").objects.create(condominio=condominio, anio=2026, mes=10,
+            estado="EMITIDO", fecha_vencimiento=date(2026, 11, 10))
+        cobro = estado.get_model("gastos", "DetalleGastoComun").objects.create(periodo=periodo, unidad=unidad,
+            monto=100, monto_fondo_reserva=5)
+        ejecutor = MigrationExecutor(connection)
+        ejecutor.migrate(despues)
+        nuevo = ejecutor.loader.project_state(despues).apps
+        self.assertEqual(nuevo.get_model("gastos", "DetalleGastoComun").objects.get(pk=cobro.pk).monto_fondo_reserva, 5)
+        self.assertFalse(nuevo.get_model("gastos", "MovimientoFondo").objects.exists())

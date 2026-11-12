@@ -25,7 +25,7 @@ from apps.core.pdf import ErrorPDF, _resolver_estatico, generar_pdf, renderizar_
 from apps.core.pruebas import crear_escenario, crear_usuario
 from apps.core.templatetags.condohub import pesos
 from apps.cuentas.models import Usuario
-from apps.gastos.models import DetalleGastoComun, Egreso, PeriodoGasto
+from apps.gastos.models import DetalleGastoComun, Egreso, MovimientoFondo, PeriodoGasto
 from apps.gastos.reportes import generar_reporte
 from apps.incidentes.models import Incidente
 from apps.notificaciones.models import Notificacion
@@ -262,6 +262,8 @@ def huella_demo():
         "periodos": _por_estado(PeriodoGasto.objects),
         "egresos": Egreso.objects.count(),
         "egresos_con_proveedor": Egreso.objects.filter(proveedor__isnull=False).count(),
+        "movimientos_fondo": {fila["tipo"]: {"cantidad": fila["n"], "suma": fila["s"]}
+            for fila in MovimientoFondo.objects.values("tipo").annotate(n=Count("pk"), s=Sum("monto")).order_by("tipo")},
         "suma_egresos": Egreso.objects.aggregate(s=Sum("monto"))["s"],
         "cobros": _por_estado(DetalleGastoComun.objects),
         "suma_cobros": DetalleGastoComun.objects.aggregate(s=Sum("monto"), f=Sum("monto_fondo_reserva")),
@@ -297,6 +299,11 @@ class CargarDemoTest(TestCase):
         "egresos": 28,
         "egresos_con_proveedor": 9,
         "suma_egresos": 7155439,
+        "movimientos_fondo": {
+            "INICIAL": {"cantidad": 2, "suma": 1500000},
+            "INGRESO": {"cantidad": 3, "suma": 249462},
+            "EGRESO": {"cantidad": 1, "suma": -75000},
+        },
         "cobros": {"PAGADO": 13, "PENDIENTE": 11},
         "suma_cobros": {"s": 4989239, "f": 249462},
         "pagos": 14,

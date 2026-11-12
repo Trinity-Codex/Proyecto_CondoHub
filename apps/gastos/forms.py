@@ -1,6 +1,6 @@
 """Formularios de gastos comunes."""
 from django import forms
-from django.core.validators import MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import Q
 
 from apps.condominios.models import Edificio
@@ -155,3 +155,32 @@ class FiltroReporteForm(FormularioBootstrap):
         self.fields["edificio"].queryset = Edificio.objects.filter(condominio=condominio)
         # Edificio.__str__ incluye el condominio ("Torre A (Vista Verde)"); aquí basta el nombre.
         self.fields["edificio"].label_from_instance = lambda edificio: edificio.nombre
+
+
+class MovimientoFondoForm(FormularioBootstrap):
+    """Monto positivo; el sentido del ajuste se elige explícitamente."""
+
+    monto = MontoField(label="Monto", min_value=0, max_value=MONTO_MAXIMO)
+    sentido = forms.ChoiceField(label="Sentido del ajuste", choices=[("SUMAR", "Sumar al fondo"), ("RESTAR", "Restar del fondo")])
+    fecha = forms.DateField(label="Fecha contable", widget=CampoFecha(), help_text="Fecha del movimiento respaldado.")
+    descripcion = forms.CharField(label="Descripción y respaldo", max_length=200,
+        help_text="Describe el origen del saldo o el motivo del movimiento. Usa antecedentes verificables.")
+    acuerdo = forms.CharField(label="Acuerdo o referencia justificativa", max_length=200,
+        help_text="Referencia del acta que autoriza el egreso o documento que justifica el ajuste.")
+    proveedor = forms.ModelChoiceField(queryset=Proveedor.objects.none(), required=False, empty_label="Sin proveedor",
+        help_text="Opcional. Proveedor al que se pagó el egreso.")
+
+    def __init__(self, *args, condominio, tipo, **kwargs):
+        super().__init__(*args, **kwargs)
+        if tipo != "AJUSTE":
+            self.fields.pop("sentido")
+        if tipo != "EGRESO":
+            self.fields.pop("proveedor")
+        else:
+            self.fields["proveedor"].queryset = Proveedor.objects.filter(condominio=condominio, activo=True)
+        if tipo == "INICIAL":
+            self.fields["acuerdo"].required = False
+            self.fields["acuerdo"].help_text = "Opcional. Referencia adicional; describe el respaldo del saldo inicial arriba."
+        else:
+            self.fields["monto"].min_value = 1
+            self.fields["monto"].validators.append(MinValueValidator(1))
