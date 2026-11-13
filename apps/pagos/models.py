@@ -192,5 +192,5 @@ def _residentes_que_ven(detalle):
     """
     cobro = DetalleGastoComun.objects.filter(pk=detalle.pk)
     residentes = Residente.objects.filter(unidad=detalle.unidad, activo=True).select_related("usuario")
-    # ponytail: una consulta por residente; una unidad tiene pocos residentes.
+    # Una consulta por residente: aceptable porque una unidad tiene pocos residentes.
     return [r.usuario for r in residentes if cobros_visibles(cobro, r.usuario).exists()]
