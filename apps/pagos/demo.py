@@ -2,7 +2,9 @@
 Datos demo de pagos (Issues #4, #5 y #62), sobre los períodos emitidos de apps/gastos/demo.py:
   - hace dos meses: pagaron todos menos A-102 y B-202 (quedan morosas);
   - mes anterior: la mitad pagó, B-201 hizo un abono PARCIAL y el resto debe
-    (sirve para el estado de cuenta, la cobranza y el reporte).
+    (sirve para el estado de cuenta, la cobranza y el reporte);
+  - mes anterior: un pago de A-101 registrado por error y ANULADO (#53), para que la cuenta
+    de la unidad, "Mi cuenta" del residente demo, su aviso y la auditoría muestren una anulación.
 Cada pago se fecha el último día del mes de su período.
 """
 import calendar
@@ -17,6 +19,20 @@ def cargar(datos):
     anterior = periodos["anterior"]
     _registrar_pagos(datos, anterior, solo=["A-201", "A-202", "A-301", "B-101", "B-301"])
     _registrar_pagos(datos, anterior, solo=["B-201"], monto=100000)  # abono parcial
+    _anular_pago_demo(datos, anterior)
+
+
+def _anular_pago_demo(datos, periodo):
+    """
+    A-101 (el residente demo) sigue debiendo el mes anterior: se le registra un pago por error
+    y se anula con Pago.anular(), igual que lo haría el administrador. El cobro vuelve a
+    PENDIENTE, así la cobranza y el reporte no cambian por tener este pago en la demo.
+    """
+    cobro = periodo.detalles.get(unidad=datos["unidades"]["A-101"])
+    admin = datos["usuarios"]["administrador"]
+    fecha = date(periodo.anio, periodo.mes, calendar.monthrange(periodo.anio, periodo.mes)[1])
+    pago = Pago.registrar(cobro, monto=cobro.total, fecha=fecha, registrado_por=admin)
+    pago.anular("La transferencia era de otra unidad (dato ficticio de la demo).", anulado_por=admin)
 
 
 def _registrar_pagos(datos, periodo, solo=None, excepto=(), monto=None):

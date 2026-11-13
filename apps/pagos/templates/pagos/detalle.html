@@ -31,8 +31,10 @@
       <ul class="list-group list-group-flush">
         {% for p in pagos %}
         <li class="list-group-item d-flex justify-content-between">
-          <span>{{ p.fecha|date:"d-m-Y" }} <span class="small text-muted">· {{ p.get_medio_display }}</span></span>
-          <span class="text-nowrap">{{ p.monto|pesos }}</span>
+          <span>{{ p.fecha|date:"d-m-Y" }} <span class="small text-muted">· {{ p.get_medio_display }}</span>
+            {# El residente ve el pago anulado y por qué (#53): explica por qué su saldo volvió a subir. #}
+            {% if p.anulado %}<br><span class="insignia insignia-con-deuda">Anulado</span> <span class="small">{{ p.motivo_anulacion }}</span>{% endif %}</span>
+          {% if p.anulado %}<del class="text-nowrap">{{ p.monto|pesos }}</del>{% else %}<span class="text-nowrap">{{ p.monto|pesos }}</span>{% endif %}
         </li>
         {% endfor %}
       </ul>
