@@ -286,6 +286,10 @@ class RegistrarPagosTest(TestCase):
         self.assertEqual(total, 15000)
 
 
+# Motivo de ejemplo que comparten la anulación y sus aserciones.
+MOTIVO_ANULACION = "Se registró en la unidad equivocada"
+
+
 class AnularPagoTest(TestCase):
     """Issue #53: el administrador anula un pago con motivo; el pago queda marcado y el cobro recalcula."""
 
@@ -303,7 +307,7 @@ class AnularPagoTest(TestCase):
         self.pago = Pago.registrar(self.cobro, monto=42000, registrado_por=self.e.administrador)
         self.url = reverse("pagos:anular_pago", args=[self.pago.pk])
 
-    def anular(self, motivo="Se registró en la unidad equivocada", usuario=None):
+    def anular(self, motivo=MOTIVO_ANULACION, usuario=None):
         self.client.force_login(usuario or self.e.administrador)
         return self.client.post(self.url, {"motivo": motivo})
 
@@ -319,7 +323,7 @@ class AnularPagoTest(TestCase):
         self.pago.refresh_from_db()
         self.cobro.refresh_from_db()
         self.assertTrue(self.pago.anulado)
-        self.assertEqual(self.pago.motivo_anulacion, "Se registró en la unidad equivocada")
+        self.assertEqual(self.pago.motivo_anulacion, MOTIVO_ANULACION)
         self.assertEqual(self.pago.anulado_por, self.e.administrador)
         self.assertIsNotNone(self.pago.anulado_en)
         self.assertEqual(self.cobro.estado, Estado.PENDIENTE)
@@ -334,7 +338,7 @@ class AnularPagoTest(TestCase):
         self.assertEqual((registro.objeto_tipo, registro.objeto_id), ("pago", str(self.pago.pk)))
         self.assertEqual(registro.usuario_id, self.e.administrador.pk)
         self.assertEqual(registro.condominio_id, self.e.condominio.pk)
-        self.assertEqual(registro.despues["motivo_anulacion"], "Se registró en la unidad equivocada")
+        self.assertEqual(registro.despues["motivo_anulacion"], MOTIVO_ANULACION)
 
     def test_avisa_solo_al_residente_que_ve_el_cobro(self):
         # Llegó a A101 en noviembre: el cobro de octubre no es suyo (contrato C2, #46).
@@ -360,6 +364,12 @@ class AnularPagoTest(TestCase):
     def test_el_modelo_tambien_exige_el_motivo(self):
         with self.assertRaises(ValidationError):
             self.pago.anular("  ", anulado_por=self.e.administrador)
+        self.assertSigueVigente()
+
+    def test_el_modelo_rechaza_un_motivo_de_mas_de_200_caracteres(self):
+        # La columna es de 200: sin esta validación, MySQL estricto respondería 500.
+        with self.assertRaises(ValidationError):
+            self.pago.anular("x" * 201, anulado_por=self.e.administrador)
         self.assertSigueVigente()
 
     def test_comite_residente_y_conserje_reciben_403(self):
@@ -417,8 +427,8 @@ class AnularPagoTest(TestCase):
         self.assertEqual(mi_cuenta.context["total_adeudado"], fila.saldo)
         self.assertEqual(self.client.get(reverse("core:inicio")).context["mi_deuda"], fila.saldo)
 
-    def test_el_panel_admin_no_permite_marcar_la_anulacion(self):
-        """Marcarla en /admin/ se saltaría el motivo, la auditoría, el aviso y el recálculo del cobro."""
+    def test_el_panel_admin_es_solo_de_consulta(self):
+        """Editar en /admin/ se saltaría el saldo, el motivo, la auditoría, el aviso y el recálculo del cobro."""
         superusuario = crear_usuario("super@prueba.cl", is_staff=True, is_superuser=True)
         self.client.force_login(superusuario)
         url = reverse("admin:pagos_pago_change", args=[self.pago.pk])
@@ -428,8 +438,10 @@ class AnularPagoTest(TestCase):
             "medio": "TRANSFERENCIA", "observacion": "", "registrado_por": "",
             "anulado": "on", "motivo_anulacion": "Desde el admin",
         }
-        # El guardado se acepta (302), pero los campos de anulación se ignoran.
-        self.assertEqual(self.client.post(url, datos).status_code, 302)
+        # Ni siquiera un superusuario puede guardar ni borrar: el pago queda igual.
+        self.assertEqual(self.client.post(url, datos).status_code, 403)
+        borrar = reverse("admin:pagos_pago_delete", args=[self.pago.pk])
+        self.assertEqual(self.client.post(borrar, {"post": "yes"}).status_code, 403)
         self.assertSigueVigente()
         self.assertEqual(self.pago.motivo_anulacion, "")
 

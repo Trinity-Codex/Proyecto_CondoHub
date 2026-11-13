@@ -36,7 +36,7 @@ class Pago(Sujeto, models.Model):
     Hereda de Sujeto (patrón Observer, igual que Incidente): al registrarse avisa
     a los residentes de la unidad sin saber cómo se les avisa (campana, correo...).
     El nombre related_name="pagos" está acordado con Walther: sus reportes (#5)
-    suman "pagos__monto".
+    suman "pagos__monto" filtrando los anulados (contrato C4, #53).
     """
 
     class Medio(models.TextChoices):
@@ -78,7 +78,6 @@ class Pago(Sujeto, models.Model):
     def condominio(self):
         return self.detalle.periodo.condominio
 
-    # @spec:pagos-registro-de-pagos
     @classmethod
     @transaction.atomic
     def registrar(cls, detalle, monto, fecha=None, medio=Medio.TRANSFERENCIA, observacion="", registrado_por=None):
@@ -128,7 +127,6 @@ class Pago(Sujeto, models.Model):
         )
         return pago
 
-    # @spec:pagos-anulacion-de-pagos
     @transaction.atomic
     def anular(self, motivo, anulado_por):
         """
@@ -144,6 +142,8 @@ class Pago(Sujeto, models.Model):
         motivo = (motivo or "").strip()
         if not motivo:
             raise ValidationError("Indica el motivo de la anulación.")
+        if len(motivo) > self._meta.get_field("motivo_anulacion").max_length:
+            raise ValidationError("El motivo no puede tener más de 200 caracteres.")
         detalle = (
             DetalleGastoComun.objects.select_for_update()
             .select_related("periodo__condominio", "unidad")

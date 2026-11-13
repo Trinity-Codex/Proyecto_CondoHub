@@ -28,7 +28,6 @@ def cobros_del_residente(usuario, condominio):
     return cobros_visibles(cobros, usuario)  # solo los meses de su residencia (Issue #46)
 
 
-# @spec:pagos-registro-de-pagos
 def pagado_del_cobro(cobro):
     """
     Suma de los pagos VIGENTES del cobro (contrato C4, #53): un pago anulado no rebaja la deuda.

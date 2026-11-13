@@ -149,7 +149,6 @@ class RegistrarPagoView(RolRequeridoMixin, FormView):
         return redirect(reverse("pagos:cuenta_unidad", args=[self.detalle.unidad_id]))
 
 
-# @spec:pagos-anulacion-de-pagos
 class AnularPagoView(RolRequeridoMixin, CondominioQuerysetMixin, SingleObjectMixin, FormView):
     """
     Anula un pago con un motivo obligatorio (Issue #53). Solo el administrador: el comité y
@@ -183,5 +182,5 @@ class AnularPagoView(RolRequeridoMixin, CondominioQuerysetMixin, SingleObjectMix
             # Por ejemplo, otra persona lo anuló justo antes.
             form.add_error(None, error)
             return self.form_invalid(form)
-        messages.success(self.request, "Pago anulado. Se avisó a los residentes de la unidad.")
+        messages.success(self.request, "Pago anulado. Se avisó a los residentes que tenían este cobro.")
         return redirect(reverse("pagos:cuenta_unidad", args=[self.object.detalle.unidad_id]))

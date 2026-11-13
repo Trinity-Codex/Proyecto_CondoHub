@@ -12,7 +12,7 @@
 
 ## 3. Sumas que ignoran anulados
 
-- [x] 3.1 "Mi cuenta" y el panel de inicio usan `vigentes()`.
+- [x] 3.1 "Mi cuenta" y el panel de inicio cuentan solo pagos vigentes: `pagado_del_cobro()` aplica la regla de `vigentes()` sobre el `prefetch_related("pagos")` para no hacer una consulta por cobro.
 - [x] 3.2 `anotar_pagado` en `apps/gastos/reportes.py`: cambiar `Sum("pagos__monto")` por `Sum("pagos__monto", filter=Q(pagos__anulado=False))`. No usar `vigentes()` dentro del `Sum`: un queryset no es una expresión de agregado. Avisar a Walther al unir.
 
 ## 4. Pruebas y demo
