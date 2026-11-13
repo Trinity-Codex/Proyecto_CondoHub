@@ -1,0 +1,3 @@
+{% comment %}Ayuda y errores de un campo (ids <id>_helptext y <id>_error). Lo incluyen _campo.html y _opciones.html. Todos los errores van dentro de un solo elemento para que aria-describedby los anuncie todos.{% endcomment %}
+{% if campo.help_text %}<div class="form-text" id="{{ campo.auto_id }}_helptext">{{ campo.help_text }}</div>{% endif %}
+{% if campo.errors %}<div class="invalid-feedback d-block" id="{{ campo.auto_id }}_error">{% for error in campo.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}

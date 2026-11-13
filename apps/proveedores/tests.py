@@ -100,3 +100,38 @@ class ProveedorTest(TestCase):
         self.client.force_login(self.e.administrador)
         self.assertEqual(self.client.get(reverse("proveedores:editar", args=[ajeno.pk])).status_code, 404)
         self.assertEqual(self.client.post(reverse("proveedores:estado", args=[ajeno.pk])).status_code, 404)
+
+class RutConFormatoTest(TestCase):
+    """Issue #77: RUT con puntos en el formulario, el listado y el texto del proveedor."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.proveedor = Proveedor.objects.create(
+            condominio=self.e.condominio, rut="76086428-5", razon_social="Aseo Ltda.", rubro="Aseo"
+        )
+
+    def test_duplicado_con_y_sin_puntos_es_rechazado(self):
+        self.client.force_login(self.e.administrador)
+        for rut in ["76.086.428-5", "76086428-5"]:
+            with self.subTest(rut=rut):
+                respuesta = self.client.post(reverse("proveedores:nuevo"), datos(rut=rut))
+                self.assertContains(respuesta, "Ya existe un proveedor con este RUT en el condominio.")
+        self.assertEqual(Proveedor.objects.count(), 1)
+
+    def test_la_edicion_muestra_el_rut_con_puntos(self):
+        self.client.force_login(self.e.administrador)
+        self.assertContains(self.client.get(reverse("proveedores:editar", args=[self.proveedor.pk])), 'value="76.086.428-5"')
+
+    def test_formulario_con_error_vuelve_con_puntos(self):
+        self.client.force_login(self.e.administrador)
+        respuesta = self.client.post(reverse("proveedores:nuevo"), datos(rut="12345678-5", razon_social=""))
+        self.assertContains(respuesta, 'value="12.345.678-5"')
+
+    def test_listado_muestra_puntos_a_administrador_y_comite(self):
+        for usuario in (self.e.administrador, self.e.comite):
+            with self.subTest(usuario=usuario.email):
+                self.client.force_login(usuario)
+                self.assertContains(self.client.get(reverse("proveedores:lista")), "76.086.428-5")
+
+    def test_texto_del_proveedor_usa_puntos(self):
+        self.assertEqual(str(self.proveedor), "Aseo Ltda. (76.086.428-5)")

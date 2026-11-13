@@ -14,7 +14,7 @@ Rutas principales de CondoHub. Cada app tiene su propio urls.py y aquí se
     /pagos/           -> estado de cuenta, cobranza y pagos
     /auditoria/       -> registro de auditoría (solo administrador)
     /privacidad/      -> aviso de privacidad (público, sin sesión)
-    /cartera/         -> deuda por antigüedad (administrador y comité)
+    /cartera/         -> cartera de condominios (administrador general y superusuario)
     /rendicion/       -> rendición mensual (administrador y comité)
     /admin/           -> administración de Django (solo superusuario de la plataforma)
 """

@@ -4,18 +4,46 @@
 
 {% block contenido %}
 <div class="row justify-content-center">
-  <div class="col-lg-6">
+  <div class="col-lg-8">
     <h1 class="h3 mb-3">{% if object %}Editar {{ object }}{% else %}Abrir período de gastos{% endif %}</h1>
-    <div class="card"><div class="card-body">
-      <form method="post" novalidate>
-        {% csrf_token %}
-        {% include "_formulario.html" with form=form %}
-        <div class="d-flex gap-2">
-          <button class="btn btn-primary" type="submit">{% if object %}Guardar cambios{% else %}Abrir período{% endif %}</button>
-          <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'gastos:periodos' %}{% endif %}">Cancelar</a>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include "_formulario_cabecera.html" with form=form %}
+      <section class="card mb-3 seccion-formulario" aria-labelledby="seccion-1">
+        <div class="card-body">
+          <h2 class="seccion-titulo" id="seccion-1"><span class="seccion-numero" aria-hidden="true">1</span>Período</h2>
+          <p class="seccion-intro">Mes y año de los gastos que se cobrarán a las unidades.</p>
+          <div class="row g-3">
+            <div class="col-md-6">{% include "_campo.html" with campo=form.mes %}</div>
+            <div class="col-md-6">{% include "_campo.html" with campo=form.anio %}</div>
+          </div>
         </div>
-      </form>
-    </div></div>
+      </section>
+      <section class="card mb-3 seccion-formulario" aria-labelledby="seccion-2">
+        <div class="card-body">
+          <h2 class="seccion-titulo" id="seccion-2"><span class="seccion-numero" aria-hidden="true">2</span>Reparto</h2>
+          <p class="seccion-intro">Cuánto va al fondo de reserva y cómo se divide el total entre las unidades.</p>
+          <div class="row g-3">
+            <div class="col-md-6">{% include "_campo.html" with campo=form.porcentaje_fondo_reserva %}</div>
+            <div class="col-md-6">{% include "_campo.html" with campo=form.criterio_prorrateo %}</div>
+            <div class="col-12">{% include "_campo.html" with campo=form.referencia_reglamento %}</div>
+          </div>
+        </div>
+      </section>
+      <section class="card mb-3 seccion-formulario" aria-labelledby="seccion-3">
+        <div class="card-body">
+          <h2 class="seccion-titulo" id="seccion-3"><span class="seccion-numero" aria-hidden="true">3</span>Pago</h2>
+          <p class="seccion-intro">Hasta cuándo se puede pagar sin quedar atrasado.</p>
+          <div class="row g-3">
+            <div class="col-md-6">{% include "_campo.html" with campo=form.fecha_vencimiento %}</div>
+          </div>
+        </div>
+      </section>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary" type="submit">{% if object %}Guardar cambios{% else %}Abrir período{% endif %}</button>
+        <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'gastos:periodos' %}{% endif %}">Cancelar</a>
+      </div>
+    </form>
   </div>
 </div>
 {% endblock %}

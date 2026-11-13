@@ -8,6 +8,7 @@ from django.test import RequestFactory, SimpleTestCase, TestCase, override_setti
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.auditoria.models import RegistroAuditoria
 from apps.condominios.models import Membresia
 from apps.core.pruebas import CLAVE, crear_escenario, crear_usuario
 
@@ -532,3 +533,104 @@ class LimiteIntentosAdminTest(TestCase):
         self.client.post(reverse("admin:login"), {"username": "persona@prueba.cl", "password": CLAVE, "next": "/admin/"})
         self.assertEqual(IntentoFallido.objects.filter(correo="persona@prueba.cl").count(), 1)
         self.assertNotIn("_auth_user_id", self.client.session)
+
+
+class RutConFormatoTest(TestCase):
+    """Issue #77: el RUT se guarda normalizado y los listados lo muestran con puntos."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+
+    def test_alta_con_y_sin_puntos_guarda_normalizado(self):
+        self.client.force_login(self.e.administrador)
+        for correo, rut in [("a@prueba.cl", "12.345.678-5"), ("b@prueba.cl", "1.234.567-4"), ("c@prueba.cl", "10.000.013-k")]:
+            with self.subTest(rut=rut):
+                datos = {"email": correo, "first_name": "Ana", "last_name": "P", "rut": rut, "rol": Membresia.Rol.CONSERJE}
+                self.client.post(reverse("cuentas:usuario_nuevo"), datos)
+        self.assertEqual(
+            set(Usuario.objects.filter(email__in=["a@prueba.cl", "b@prueba.cl", "c@prueba.cl"]).values_list("rut", flat=True)),
+            {"12345678-5", "1234567-4", "10000013-K"},
+        )
+
+    def test_alta_con_error_vuelve_con_el_rut_con_puntos(self):
+        self.client.force_login(self.e.administrador)
+        datos = {"email": "no-es-correo", "first_name": "Ana", "last_name": "P", "rut": "12345678-5", "rol": Membresia.Rol.CONSERJE}
+        self.assertContains(self.client.post(reverse("cuentas:usuario_nuevo"), datos), 'value="12.345.678-5"')
+
+    def test_perfil_guarda_normalizado_y_lo_muestra_con_puntos(self):
+        self.client.force_login(self.e.residente)
+        datos = {"first_name": "Vale", "last_name": "Soto", "rut": "15.975.346-8", "telefono": ""}
+        self.client.post(reverse("cuentas:perfil"), datos)
+        self.e.residente.refresh_from_db()
+        self.assertEqual(self.e.residente.rut, "15975346-8")
+        self.assertContains(self.client.get(reverse("cuentas:perfil")), 'value="15.975.346-8"')
+
+    def test_perfil_con_rut_vacio_sigue_valido(self):
+        self.client.force_login(self.e.residente)
+        datos = {"first_name": "Vale", "last_name": "Soto", "rut": "", "telefono": ""}
+        self.assertRedirects(self.client.post(reverse("cuentas:perfil"), datos), reverse("cuentas:perfil"))
+
+    def test_perfil_rechaza_rut_ajeno_con_puntos(self):
+        crear_usuario("otro@prueba.cl", rut="12345678-5")
+        self.client.force_login(self.e.residente)
+        datos = {"first_name": "Vale", "last_name": "Soto", "rut": "12.345.678-5", "telefono": ""}
+        self.assertContains(self.client.post(reverse("cuentas:perfil"), datos), "Ya existe otra cuenta con ese RUT.")
+
+    def test_listado_de_usuarios_muestra_puntos(self):
+        self.e.residente.rut = "12345678-5"
+        self.e.residente.save()
+        self.client.force_login(self.e.administrador)
+        self.assertContains(self.client.get(reverse("cuentas:usuarios")), "12.345.678-5")
+
+    def test_formularios_de_rut_llevan_el_aviso_accesible(self):
+        self.client.force_login(self.e.administrador)
+        html = self.client.get(reverse("cuentas:usuario_nuevo")).content.decode()
+        self.assertIn('id="id_rut_aviso"', html)
+        self.assertIn("data-rut", html)
+
+
+# --------------------------------------------------------------------------
+# Eventos de auditoría de cuentas (Refs #27, contrato C1)
+# --------------------------------------------------------------------------
+class AuditoriaCuentasTest(TestCase):
+    def setUp(self):
+        self.e = crear_escenario()
+
+    def registros(self, condominio=None):
+        condominio = condominio or self.e.condominio
+        return list(RegistroAuditoria.objects.filter(condominio_id=condominio.pk).order_by("id"))
+
+    def alta(self, **campos):
+        self.client.force_login(self.e.administrador)
+        datos = {"email": "nuevo@prueba.cl", "first_name": "Ana", "last_name": "Pérez", "rut": "12.345.678-5",
+                 "rol": Membresia.Rol.CONSERJE, **campos}
+        return self.client.post(reverse("cuentas:usuario_nuevo"), datos)
+
+    def test_alta_de_una_cuenta_nueva_registra_la_cuenta_y_el_rol(self):
+        self.alta()
+        nueva = Usuario.objects.get(email="nuevo@prueba.cl")
+        cuenta, rol = self.registros()
+        self.assertEqual((cuenta.accion, cuenta.objeto_tipo, cuenta.objeto_id), ("crear", "usuario", str(nueva.pk)))
+        self.assertEqual(cuenta.despues["correo"], "nuevo@prueba.cl")
+        self.assertEqual((rol.accion, rol.antes, rol.despues), ("cambiar_rol", {"roles": []}, {"roles": ["CONSERJE"]}))
+        self.assertEqual(rol.usuario_id, self.e.administrador.pk)
+
+    def test_rol_nuevo_a_una_cuenta_existente_registra_solo_el_rol(self):
+        self.alta(email=self.e.residente.email, rol=Membresia.Rol.COMITE)
+        (rol,) = self.registros()
+        self.assertEqual((rol.objeto_id, rol.antes, rol.despues), (str(self.e.residente.pk), {"roles": ["RESIDENTE"]}, {"roles": ["COMITE", "RESIDENTE"]}))
+
+    def test_mi_perfil_registra_los_datos_que_cambian_en_cada_condominio(self):
+        Membresia.objects.create(usuario=self.e.residente, condominio=self.e.ajeno, rol=Membresia.Rol.COMITE)
+        self.client.force_login(self.e.residente)
+        self.client.post(reverse("cuentas:perfil"), {"first_name": "residente", "last_name": "", "rut": "", "telefono": "+56 9 1234 5678"})
+        for condominio in (self.e.condominio, self.e.ajeno):
+            with self.subTest(condominio=condominio):
+                (registro,) = self.registros(condominio)
+                self.assertEqual((registro.accion, registro.usuario_id), ("modificar", self.e.residente.pk))
+                self.assertEqual((registro.antes, registro.despues), ({"telefono": ""}, {"telefono": "+56 9 1234 5678"}))
+
+    def test_mi_perfil_sin_cambios_o_solo_la_preferencia_de_correos_no_registra(self):
+        self.client.force_login(self.e.residente)
+        self.client.post(reverse("cuentas:perfil"), {"first_name": "residente", "last_name": "", "rut": "", "telefono": ""})
+        self.assertEqual(self.registros(), [])

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block titulo %}{{ titulo }} del fondo{% endblock %}
+{% block contenido %}
+<div class="row justify-content-center"><div class="col-lg-7">
+  <h1 class="h3 mb-3">{{ titulo }} del fondo</h1>
+  <p class="text-muted">Registra solo montos respaldados. El saldo es contable y no representa el efectivo recaudado.</p>
+  <div class="card"><div class="card-body">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include "_formulario.html" with form=form %}
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-primary" type="submit">Guardar movimiento</button>
+        <a class="btn btn-outline-secondary" href="{% url 'gastos:fondo' %}">Cancelar</a>
+      </div>
+    </form>
+  </div></div>
+</div></div>
+{% endblock %}

@@ -1,13 +1,22 @@
 {% extends "base.html" %}
-{% block titulo %}Comunicados{% endblock %}
+{% block titulo %}{% if ver_vencidos %}Comunicados vencidos{% else %}Comunicados{% endif %}{% endblock %}
 
 {% block contenido %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h3 mb-0"><i class="bi bi-megaphone"></i> Comunicados</h1>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h3 mb-0"><i class="bi bi-megaphone"></i> {% if ver_vencidos %}Comunicados vencidos{% else %}Comunicados{% endif %}</h1>
   {% if es_admin %}
   <a class="btn btn-primary" href="{% url 'comunicados:nuevo' %}"><i class="bi bi-plus-lg"></i> Nuevo comunicado</a>
   {% endif %}
 </div>
+
+{# Vigencia (Issue #58): la lista principal muestra solo los vigentes. #}
+<p class="small mb-3">
+  {% if ver_vencidos %}
+  <a href="{% url 'comunicados:lista' %}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Volver a los comunicados vigentes</a>
+  {% elif cantidad_vencidos %}
+  <a href="?vigencia=vencidos"><i class="bi bi-archive" aria-hidden="true"></i> Ver vencidos ({{ cantidad_vencidos }})</a>
+  {% endif %}
+</p>
 
 {% for c in comunicados %}
 <div class="card mb-3">
@@ -17,16 +26,25 @@
         {% if c.fijado %}<i class="bi bi-pin-angle-fill icono-fijado" title="Fijado"></i>{% endif %}
         <a href="{{ c.get_absolute_url }}" class="text-decoration-none">{{ c.titulo }}</a>
       </h2>
-      <span class="badge {% if c.edificio %}insignia-edificio{% else %}text-bg-secondary{% endif %} align-self-start">
-        {% if c.edificio %}{{ c.edificio.nombre }}{% else %}General{% endif %}
+      <span class="d-flex flex-wrap gap-1 align-self-start">
+        {% if ver_vencidos %}<span class="insignia">Vencido</span>{% endif %}
+        <span class="badge {% if c.edificio %}insignia-edificio{% else %}text-bg-secondary{% endif %}">
+          {% if c.edificio %}{{ c.edificio.nombre }}{% else %}General{% endif %}
+        </span>
       </span>
     </div>
-    <div class="small text-muted mb-2">{{ c.fecha_publicacion|date:"d-m-Y H:i" }} · {{ c.autor }}</div>
+    <div class="small text-muted mb-2">
+      {{ c.fecha_publicacion|date:"d-m-Y H:i" }} · {{ c.autor }}
+      {% if c.vigente_hasta %} · {% if ver_vencidos %}Venció el {{ c.vigente_hasta|date:"d-m-Y" }}{% else %}Visible hasta el {{ c.vigente_hasta|date:"d-m-Y" }}{% endif %}{% endif %}
+    </div>
     <p class="mb-0 texto-largo">{{ c.contenido|truncatewords:40 }}</p>
+    {% if es_admin %}
+    <div class="small mt-2"><i class="bi bi-check2-all" aria-hidden="true"></i> Unidades que confirmaron la lectura: {{ c.confirmadas }} de {{ c.destinatarias }}</div>
+    {% endif %}
   </div>
 </div>
 {% empty %}
-<div class="alert alert-light border">Aún no hay comunicados publicados.</div>
+<div class="alert alert-light border">{% if ver_vencidos %}No hay comunicados vencidos.{% else %}No hay comunicados vigentes.{% endif %}</div>
 {% endfor %}
 
 {% include "_paginacion.html" %}

@@ -1,10 +1,24 @@
 """
-Datos demo de auditoria (Issue #62, cargar_demo por app).
+Datos demo de auditoría (Issue #27, cargar_demo por app).
 
-Por ahora vacío: los datos llegan con el Issue #27. Usa lo que dejaron las apps
-anteriores en "datos" (ver apps/core/management/commands/cargar_demo.py).
+Crea unos pocos registros para que la vista del PR siguiente tenga algo que mostrar.
+Como los registros son inmutables, `cargar_demo --reiniciar` no los borra: el condominio
+se recrea con otro id y los registros viejos quedan sin condominio vigente. Es aceptable
+para datos de demostración (ver el comentario en `cargar_demo`).
 """
+from apps.auditoria.servicios import Accion, registrar
 
 
 def cargar(datos):
-    """Sin datos demo todavía (ver el comentario del módulo)."""
+    admin = datos["usuarios"]["administrador"]
+    vista_verde = datos["vista_verde"]
+
+    # Primero la creación, para que la línea de tiempo de la vista quede en orden.
+    # Es un evento sin valores anteriores, hecho por un comando (sin usuario).
+    registrar(None, vista_verde, Accion.CREAR, vista_verde)
+    # Un cambio con valores anteriores y nuevos: solo queda registrado el campo que cambió.
+    registrar(
+        admin, vista_verde, Accion.MODIFICAR, vista_verde,
+        antes={"direccion": "Calle Antigua 100"},
+        despues={"direccion": vista_verde.direccion},
+    )

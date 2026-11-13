@@ -59,6 +59,8 @@
 <div class="row g-4">
   {# ---- Egresos del período ---- #}
   <div class="col-lg-8">
+    {# Filtro por categoría (GET: ?categoria=ASEO), Issue #80 #}
+    {% include "_chips.html" with etiqueta="Filtrar egresos por categoría" %}
     <div class="card">
       <div class="card-header d-flex justify-content-between">
         <span><i class="bi bi-receipt"></i> Egresos</span>
@@ -82,11 +84,11 @@
               {% endif %}
             </tr>
             {% empty %}
-            <tr><td colspan="5" class="text-center text-muted py-4">Aún no hay egresos en este período.</td></tr>
+            <tr><td colspan="5" class="text-center text-muted py-4">{% if filtrado %}No hay egresos de esta categoría.{% else %}Aún no hay egresos en este período.{% endif %}</td></tr>
             {% endfor %}
           </tbody>
           {% if egresos %}
-          <tfoot><tr class="fw-semibold"><td colspan="3">Total del período</td><td class="text-end text-nowrap">{{ total|pesos }}</td>{% if es_admin and periodo.esta_abierto %}<td></td>{% endif %}</tr></tfoot>
+          <tfoot><tr class="fw-semibold"><td colspan="3">Total del período{% if filtrado %} (todas las categorías){% endif %}</td><td class="text-end text-nowrap">{{ total|pesos }}</td>{% if es_admin and periodo.esta_abierto %}<td></td>{% endif %}</tr></tfoot>
           {% endif %}
         </table>
       </div>

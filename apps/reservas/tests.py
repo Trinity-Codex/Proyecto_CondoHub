@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from apps.core.pruebas import crear_escenario
 
-from .models import Reserva
+from .models import EspacioComun, Reserva
 
 MANANA = date.today() + timedelta(days=1)
 
@@ -123,3 +123,34 @@ class VistasReservaTest(TestCase):
         self.client.force_login(self.e.residente)
         respuesta = self.client.post(reverse("reservas:cancelar", args=[reserva.pk]), {"volver": "https://sitio-malicioso.com/"})
         self.assertRedirects(respuesta, reverse("reservas:mis_reservas"))
+
+
+class TarifaEspacioTest(TestCase):
+    """Issue #76: la tarifa acepta puntos de miles; 0 sigue siendo gratis."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.client.force_login(self.e.administrador)
+
+    def datos(self, tarifa, nombre="Sala de eventos"):
+        return {
+            "nombre": nombre, "descripcion": "", "capacidad": 30, "tarifa": tarifa,
+            "hora_apertura": "09:00", "hora_cierre": "22:00", "activo": "on",
+        }
+
+    def crear(self, tarifa, nombre="Sala de eventos"):
+        return self.client.post(reverse("reservas:espacio_nuevo"), self.datos(tarifa, nombre))
+
+    def test_tarifa_con_puntos_y_cero(self):
+        for texto, esperado in [("0", 0), ("5.000", 5000), ("$ 12.500", 12500)]:
+            self.crear(texto, nombre=f"Sala {texto}")
+            self.assertEqual(EspacioComun.objects.get(nombre=f"Sala {texto}").tarifa, esperado)
+
+    def test_tarifa_invalida_se_rechaza(self):
+        for texto in ["-1", "1,5", "0.500"]:
+            self.assertIn("tarifa", self.crear(texto).context["form"].errors, texto)
+
+    def test_formulario_con_data_monto_y_acceso_por_rol(self):
+        self.assertContains(self.client.get(reverse("reservas:espacio_nuevo")), "data-monto")
+        self.client.force_login(self.e.residente)
+        self.assertEqual(self.client.get(reverse("reservas:espacio_nuevo")).status_code, 403)

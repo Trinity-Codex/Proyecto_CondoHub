@@ -10,18 +10,37 @@
 </ol></nav>
 
 <div class="row justify-content-center">
-  <div class="col-lg-6">
+  <div class="col-lg-8">
     <h1 class="h3 mb-3">{% if object %}Editar egreso{% else %}Registrar egreso{% endif %} <span class="text-muted fs-5">· {{ periodo }}</span></h1>
-    <div class="card"><div class="card-body">
-      <form method="post" novalidate>
-        {% csrf_token %}
-        {% include "_formulario.html" with form=form %}
-        <div class="d-flex gap-2">
-          <button class="btn btn-primary" type="submit">Guardar</button>
-          <a class="btn btn-outline-secondary" href="{{ periodo.get_absolute_url }}">Cancelar</a>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include "_formulario_cabecera.html" with form=form %}
+      <section class="card mb-3 seccion-formulario" aria-labelledby="seccion-1">
+        <div class="card-body">
+          <h2 class="seccion-titulo" id="seccion-1"><span class="seccion-numero" aria-hidden="true">1</span>Gasto</h2>
+          <p class="seccion-intro">Qué se pagó y en qué categoría entra.</p>
+          <div class="row g-3">
+            <div class="col-md-6">{% include "_campo.html" with campo=form.categoria %}</div>
+            <div class="col-12">{% include "_campo.html" with campo=form.descripcion %}</div>
+          </div>
         </div>
-      </form>
-    </div></div>
+      </section>
+      <section class="card mb-3 seccion-formulario" aria-labelledby="seccion-2">
+        <div class="card-body">
+          <h2 class="seccion-titulo" id="seccion-2"><span class="seccion-numero" aria-hidden="true">2</span>Monto y documento</h2>
+          <p class="seccion-intro">Cuánto fue, cuándo y a quién se pagó.</p>
+          <div class="row g-3">
+            <div class="col-md-6">{% include "_campo.html" with campo=form.monto %}</div>
+            <div class="col-md-6">{% include "_campo.html" with campo=form.fecha %}</div>
+            <div class="col-md-6">{% include "_campo.html" with campo=form.proveedor %}</div>
+          </div>
+        </div>
+      </section>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary" type="submit">Guardar</button>
+        <a class="btn btn-outline-secondary" href="{{ periodo.get_absolute_url }}">Cancelar</a>
+      </div>
+    </form>
   </div>
 </div>
 {% endblock %}
