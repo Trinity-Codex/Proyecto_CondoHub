@@ -1,15 +1,20 @@
 """Pruebas del estado de cuenta del residente (Issue #3, RF03)."""
 import datetime
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 from django.urls import reverse
 
-from apps.condominios.models import Membresia
+from apps.auditoria.models import RegistroAuditoria
+from apps.condominios.models import Membresia, Residente
 from apps.core.pruebas import crear_escenario, crear_usuario
 from apps.gastos.models import DetalleGastoComun, Egreso, PeriodoGasto
+from apps.gastos.reportes import anotar_pagado, generar_reporte
 from apps.gastos.servicios import emitir_periodo
 from apps.notificaciones.models import Notificacion
+
+from .models import Pago
 
 Estado = DetalleGastoComun.Estado
 
@@ -279,3 +284,175 @@ class RegistrarPagosTest(TestCase):
 
         total = DetalleGastoComun.objects.filter(pk=self.cobro.pk).aggregate(t=Sum("pagos__monto"))["t"]
         self.assertEqual(total, 15000)
+
+
+# Motivo de ejemplo que comparten la anulación y sus aserciones.
+MOTIVO_ANULACION = "Se registró en la unidad equivocada"
+
+
+class AnularPagoTest(TestCase):
+    """Issue #53: el administrador anula un pago con motivo; el pago queda marcado y el cobro recalcula."""
+
+    AVISO = "Anulamos un pago"
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.periodo = PeriodoGasto.objects.create(
+            condominio=self.e.condominio, anio=2026, mes=10, estado=PeriodoGasto.Estado.EMITIDO
+        )
+        # Cobro de A101 por $42.000, pagado completo con un solo pago.
+        self.cobro = DetalleGastoComun.objects.create(
+            periodo=self.periodo, unidad=self.e.a101, monto=40000, monto_fondo_reserva=2000
+        )
+        self.pago = Pago.registrar(self.cobro, monto=42000, registrado_por=self.e.administrador)
+        self.url = reverse("pagos:anular_pago", args=[self.pago.pk])
+
+    def anular(self, motivo=MOTIVO_ANULACION, usuario=None):
+        self.client.force_login(usuario or self.e.administrador)
+        return self.client.post(self.url, {"motivo": motivo})
+
+    def assertSigueVigente(self):
+        self.pago.refresh_from_db()
+        self.cobro.refresh_from_db()
+        self.assertFalse(self.pago.anulado)
+        self.assertEqual(self.cobro.estado, Estado.PAGADO)
+
+    def test_anular_el_unico_pago_reabre_el_cobro(self):
+        respuesta = self.anular()
+        self.assertRedirects(respuesta, reverse("pagos:cuenta_unidad", args=[self.e.a101.pk]))
+        self.pago.refresh_from_db()
+        self.cobro.refresh_from_db()
+        self.assertTrue(self.pago.anulado)
+        self.assertEqual(self.pago.motivo_anulacion, MOTIVO_ANULACION)
+        self.assertEqual(self.pago.anulado_por, self.e.administrador)
+        self.assertIsNotNone(self.pago.anulado_en)
+        self.assertEqual(self.cobro.estado, Estado.PENDIENTE)
+        # El pago no se borra: sigue en la base, solo deja de contar.
+        self.assertEqual(Pago.objects.filter(pk=self.pago.pk).count(), 1)
+        self.client.force_login(self.e.residente)
+        self.assertEqual(self.client.get(reverse("pagos:estado_cuenta")).context["total_adeudado"], 42000)
+
+    def test_la_anulacion_queda_en_la_auditoria(self):
+        self.anular()
+        registro = RegistroAuditoria.objects.get(accion="anular")
+        self.assertEqual((registro.objeto_tipo, registro.objeto_id), ("pago", str(self.pago.pk)))
+        self.assertEqual(registro.usuario_id, self.e.administrador.pk)
+        self.assertEqual(registro.condominio_id, self.e.condominio.pk)
+        self.assertEqual(registro.despues["motivo_anulacion"], MOTIVO_ANULACION)
+
+    def test_avisa_solo_al_residente_que_ve_el_cobro(self):
+        # Llegó a A101 en noviembre: el cobro de octubre no es suyo (contrato C2, #46).
+        recien_llegado = crear_usuario("nuevo@prueba.cl")
+        Residente.objects.create(usuario=recien_llegado, unidad=self.e.a101, desde=datetime.date(2026, 11, 1))
+        self.anular("Pago duplicado, a, b")
+        aviso = Notificacion.objects.get(usuario=self.e.residente, titulo=self.AVISO)
+        self.assertEqual(aviso.url, reverse("pagos:cobro_detalle", args=[self.cobro.pk]))
+        # Las comas del motivo se respetan; solo el monto lleva punto de miles.
+        self.assertIn("$42.000", aviso.mensaje)
+        self.assertIn("Motivo: Pago duplicado, a, b", aviso.mensaje)
+        self.assertFalse(Notificacion.objects.filter(usuario=recien_llegado, titulo=self.AVISO).exists())
+        self.assertFalse(Notificacion.objects.filter(usuario=self.e.residente_b, titulo=self.AVISO).exists())
+
+    def test_el_motivo_es_obligatorio(self):
+        for motivo in ("", "   "):
+            respuesta = self.anular(motivo)
+            self.assertEqual(respuesta.status_code, 200)
+            self.assertIn("motivo", respuesta.context["form"].errors)
+        self.assertSigueVigente()
+        self.assertFalse(RegistroAuditoria.objects.filter(accion="anular").exists())
+
+    def test_el_modelo_tambien_exige_el_motivo(self):
+        with self.assertRaises(ValidationError):
+            self.pago.anular("  ", anulado_por=self.e.administrador)
+        self.assertSigueVigente()
+
+    def test_el_modelo_rechaza_un_motivo_de_mas_de_200_caracteres(self):
+        # La columna es de 200: sin esta validación, MySQL estricto respondería 500.
+        with self.assertRaises(ValidationError):
+            self.pago.anular("x" * 201, anulado_por=self.e.administrador)
+        self.assertSigueVigente()
+
+    def test_comite_residente_y_conserje_reciben_403(self):
+        for usuario in (self.e.comite, self.e.residente, self.e.conserje):
+            self.client.force_login(usuario)
+            self.assertEqual(self.client.get(self.url).status_code, 403)
+            self.assertEqual(self.anular(usuario=usuario).status_code, 403)
+        self.assertSigueVigente()
+
+    def test_un_pago_de_otro_condominio_da_404(self):
+        admin_ajeno = crear_usuario("admin.ajeno@prueba.cl")
+        Membresia.objects.create(usuario=admin_ajeno, condominio=self.e.ajeno, rol=Membresia.Rol.ADMINISTRADOR)
+        self.client.force_login(admin_ajeno)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.assertEqual(self.anular(usuario=admin_ajeno).status_code, 404)
+        self.assertSigueVigente()
+
+    def test_un_pago_ya_anulado_no_se_vuelve_a_anular(self):
+        self.anular()
+        self.assertEqual(self.anular("Otra vez").status_code, 404)
+        with self.assertRaises(ValidationError):
+            Pago.objects.get(pk=self.pago.pk).anular("Otra vez", anulado_por=self.e.administrador)
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="anular").count(), 1)
+
+    def test_anular_un_abono_parcial_deja_el_cobro_pendiente_con_el_saldo_completo(self):
+        self.anular()
+        abono = Pago.registrar(self.cobro, monto=10000)
+        abono.anular("Monto mal digitado", anulado_por=self.e.administrador)
+        self.cobro.refresh_from_db()
+        self.assertEqual(self.cobro.estado, Estado.PENDIENTE)
+        self.client.force_login(self.e.residente)
+        detalle = self.client.get(reverse("pagos:cobro_detalle", args=[self.cobro.pk]))
+        self.assertEqual((detalle.context["pagado"], detalle.context["saldo"]), (0, 42000))
+        self.assertContains(detalle, "Monto mal digitado")  # el residente ve por qué subió su saldo
+
+    def test_las_sumas_ignoran_los_pagos_anulados(self):
+        self.anular()
+        self.assertEqual(list(Pago.objects.vigentes()), [])
+        self.assertEqual(Pago.objects.count(), 1)  # el manager por defecto sigue viendo todos
+        # El saldo del nuevo pago se calcula sin el anulado: se acepta pagar el total otra vez.
+        Pago.registrar(self.cobro, monto=42000)
+        self.cobro.refresh_from_db()
+        self.assertEqual(self.cobro.estado, Estado.PAGADO)
+        self.assertEqual(sum(p.monto for p in Pago.objects.vigentes()), 42000)
+
+    def test_el_reporte_de_morosidad_cuadra_con_mi_cuenta_tras_anular(self):
+        self.anular()
+        Pago.registrar(self.cobro, monto=5000)
+        cobro = anotar_pagado(DetalleGastoComun.objects.filter(pk=self.cobro.pk)).get()
+        self.assertEqual(cobro.pagado, 5000)
+        (fila,) = [f for f in generar_reporte(self.periodo).filas if f.unidad == self.e.a101]
+        self.client.force_login(self.e.residente)
+        mi_cuenta = self.client.get(reverse("pagos:estado_cuenta"))
+        self.assertEqual(fila.saldo, 37000)
+        self.assertEqual(mi_cuenta.context["total_adeudado"], fila.saldo)
+        self.assertEqual(self.client.get(reverse("core:inicio")).context["mi_deuda"], fila.saldo)
+
+    def test_el_panel_admin_es_solo_de_consulta(self):
+        """Editar en /admin/ se saltaría el saldo, el motivo, la auditoría, el aviso y el recálculo del cobro."""
+        superusuario = crear_usuario("super@prueba.cl", is_staff=True, is_superuser=True)
+        self.client.force_login(superusuario)
+        url = reverse("admin:pagos_pago_change", args=[self.pago.pk])
+        self.assertNotContains(self.client.get(url), 'name="anulado"')
+        datos = {
+            "detalle": self.cobro.pk, "fecha": self.pago.fecha.isoformat(), "monto": 42000,
+            "medio": "TRANSFERENCIA", "observacion": "", "registrado_por": "",
+            "anulado": "on", "motivo_anulacion": "Desde el admin",
+        }
+        # Ni siquiera un superusuario puede guardar ni borrar: el pago queda igual.
+        self.assertEqual(self.client.post(url, datos).status_code, 403)
+        borrar = reverse("admin:pagos_pago_delete", args=[self.pago.pk])
+        self.assertEqual(self.client.post(borrar, {"post": "yes"}).status_code, 403)
+        self.assertSigueVigente()
+        self.assertEqual(self.pago.motivo_anulacion, "")
+
+    def test_la_cuenta_muestra_el_pago_anulado_y_el_boton_solo_al_administrador(self):
+        cuenta = reverse("pagos:cuenta_unidad", args=[self.e.a101.pk])
+        self.client.force_login(self.e.comite)
+        self.assertNotContains(self.client.get(cuenta), self.url)
+        self.client.force_login(self.e.administrador)
+        self.assertContains(self.client.get(cuenta), self.url)
+        self.anular()
+        respuesta = self.client.get(cuenta)
+        self.assertNotContains(respuesta, self.url)  # ya no se ofrece anularlo de nuevo
+        self.assertContains(respuesta, 'class="insignia insignia-con-deuda">Anulado')
+        self.assertEqual(respuesta.context["total_adeudado"], 42000)

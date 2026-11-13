@@ -292,7 +292,7 @@ class CargarDemoTest(TestCase):
         "espacios": 4,
         "reservas": {"CONFIRMADA": 1},
         "comunicados": 3,
-        "notificaciones": 22,
+        "notificaciones": 24,  # + el pago anulado de la demo: su aviso y el de la anulación (#53)
         "incidentes": {"EN_PROCESO": 1, "RECIBIDO": 1},
         "proveedores": {False: 1, True: 3},
         "periodos": {"ABIERTO": 1, "EMITIDO": 3},  # + el mes anterior de Los Aromos (#54)
@@ -306,8 +306,8 @@ class CargarDemoTest(TestCase):
         },
         "cobros": {"PAGADO": 13, "PENDIENTE": 11},
         "suma_cobros": {"s": 4989239, "f": 249462},
-        "pagos": 14,
-        "suma_pagos": 3196063,
+        "pagos": 15,  # + el pago anulado de la demo (#53)
+        "suma_pagos": 3460817,  # + el pago anulado de la demo (#53)
     }
 
     def cargar(self, *argumentos):
