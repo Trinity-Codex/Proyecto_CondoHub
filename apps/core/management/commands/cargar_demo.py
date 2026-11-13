@@ -22,6 +22,7 @@ edita el demo.py de tu app: no hace falta tocar este archivo.
 """
 from importlib import import_module
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -55,6 +56,8 @@ class Command(BaseCommand):
             Condominio.objects.filter(nombre__in=NOMBRES_DEMO).delete()
 
         datos = {}
+        if hasattr(settings, "DEMO_FECHA_REFERENCIA"):
+            datos["fecha_referencia_demo"] = settings.DEMO_FECHA_REFERENCIA
         for app in APPS_DEMO:
             import_module(f"apps.{app}.demo").cargar(datos)
 
