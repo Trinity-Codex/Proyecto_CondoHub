@@ -28,9 +28,16 @@ def cobros_del_residente(usuario, condominio):
     return cobros_visibles(cobros, usuario)  # solo los meses de su residencia (Issue #46)
 
 
+# @spec:pagos-registro-de-pagos
 def pagado_del_cobro(cobro):
-    """Suma de los pagos registrados contra el cobro."""
-    return sum(p.monto for p in cobro.pagos.all())
+    """
+    Suma de los pagos VIGENTES del cobro (contrato C4, #53): un pago anulado no rebaja la deuda.
+    Es la misma regla que Pago.objects.vigentes(), pero aplicada sobre cobro.pagos.all() para
+    aprovechar el prefetch_related("pagos") de quien llama (cobranza, recordatorios, descarga
+    de datos); cobro.pagos.vigentes() haría una consulta por cobro.
+    Saldo, total adeudado, Mi cuenta, el panel y la cobranza calculan todos a partir de aquí.
+    """
+    return sum(p.monto for p in cobro.pagos.all() if not p.anulado)
 
 
 def saldo_del_cobro(cobro):

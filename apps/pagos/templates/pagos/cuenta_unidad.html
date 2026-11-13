@@ -53,8 +53,15 @@
       <tr class="table-light small">
         <td class="ps-4 text-muted" colspan="6">
           <div class="d-flex justify-content-between gap-3">
-            <span><i class="bi bi-arrow-return-right"></i> {{ p.fecha|date:"d-m-Y" }} · {{ p.get_medio_display }}{% if p.observacion %} · {{ p.observacion }}{% endif %}</span>
-            <span class="text-nowrap text-body">Pago {{ p.monto|pesos }}</span>
+            <span><i class="bi bi-arrow-return-right"></i> {{ p.fecha|date:"d-m-Y" }} · {{ p.get_medio_display }}{% if p.observacion %} · {{ p.observacion }}{% endif %}
+              {# Un pago anulado sigue a la vista con su motivo (#53), pero ya no cuenta en Pagado ni en Saldo. #}
+              {% if p.anulado %}<br><span class="insignia insignia-con-deuda">Anulado</span> el {{ p.anulado_en|date:"d-m-Y" }}: {{ p.motivo_anulacion }}{% endif %}</span>
+            <span class="d-flex align-items-center gap-2">
+              {% if p.anulado %}<del class="text-nowrap">Pago {{ p.monto|pesos }}</del>
+              {% else %}<span class="text-nowrap text-body">Pago {{ p.monto|pesos }}</span>
+              {% if es_admin %}<a class="btn btn-sm btn-outline-danger text-nowrap" href="{% url 'pagos:anular_pago' p.pk %}" aria-label="Anular el pago de {{ p.monto|pesos }} del {{ p.fecha|date:'d-m-Y' }}"><i class="bi bi-x-circle" aria-hidden="true"></i><span class="d-none d-md-inline"> Anular</span></a>{% endif %}
+              {% endif %}
+            </span>
           </div>
         </td>
       </tr>
