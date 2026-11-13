@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load condohub %}
+{% block titulo %}Movimiento del fondo{% endblock %}
+{% block contenido %}
+<h1 class="h3 mb-3">{{ movimiento.get_tipo_display }} del fondo</h1>
+<div class="card mb-3"><div class="card-body text-break">
+  <dl class="row mb-0">
+    <dt class="col-sm-4">Monto contable</dt><dd class="col-sm-8">{{ movimiento.monto|pesos }}</dd>
+    <dt class="col-sm-4">Fecha contable</dt><dd class="col-sm-8">{{ movimiento.fecha|date:"d-m-Y" }}</dd>
+    <dt class="col-sm-4">Descripción y respaldo</dt><dd class="col-sm-8">{{ movimiento.descripcion }}</dd>
+    <dt class="col-sm-4">Acuerdo o referencia</dt><dd class="col-sm-8">{{ movimiento.acuerdo|default:"—" }}</dd>
+    <dt class="col-sm-4">Proveedor</dt><dd class="col-sm-8">{{ movimiento.proveedor.razon_social|default:"Sin proveedor" }}</dd>
+    <dt class="col-sm-4">Período de origen</dt><dd class="col-sm-8">{{ movimiento.periodo|default:"Movimiento manual" }}</dd>
+    <dt class="col-sm-4">Registrado por</dt><dd class="col-sm-8">{{ movimiento.creado_por.get_full_name|default:"Sistema" }}</dd>
+  </dl>
+</div></div>
+<p class="text-muted">Movimiento inmutable. Una corrección requiere un ajuste documentado.</p>
+<a class="btn btn-outline-secondary" href="{% url 'gastos:fondo' %}">Volver al fondo</a>
+{% endblock %}

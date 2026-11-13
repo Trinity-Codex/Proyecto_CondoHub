@@ -6,6 +6,7 @@ from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 
+from apps.auditoria.models import RegistroAuditoria
 from apps.condominios.models import Residente
 from apps.core.pruebas import crear_escenario
 from apps.gastos.models import DetalleGastoComun, PeriodoGasto
@@ -270,3 +271,22 @@ class DescargarMisDatosTest(TestCase):
         respuesta = self.client.get(reverse("cuentas:perfil"))
         self.assertContains(respuesta, self.url)
         self.assertContains(respuesta, reverse("privacidad:mis_solicitudes"))
+
+
+class AuditoriaSolicitudesTest(TestCase):
+    """Eventos de auditoría de las solicitudes del titular (Refs #27): sin el detalle ni la respuesta."""
+
+    def test_presentar_y_cerrar_quedan_registrados(self):
+        e = crear_escenario()
+        solicitud = SolicitudTitular(
+            usuario=e.residente, condominio=e.condominio, tipo=SolicitudTitular.Tipo.SUPRESION, detalle="Mi teléfono 9876"
+        )
+        solicitud.presentar()
+        solicitud.cerrar("Lo borramos: era el 9876.", por=e.administrador)
+        presentar, cerrar = RegistroAuditoria.objects.filter(objeto_tipo="solicitudtitular").order_by("id")
+        self.assertEqual((presentar.accion, presentar.usuario_id), ("crear", e.residente.pk))
+        self.assertEqual(presentar.despues, {"tipo": "SUPRESION", "estado": "PENDIENTE"})
+        self.assertEqual((cerrar.accion, cerrar.usuario_id), ("modificar", e.administrador.pk))
+        self.assertEqual((cerrar.antes, cerrar.despues), ({"estado": "PENDIENTE"}, {"estado": "CERRADA"}))
+        # Ni el detalle ni la respuesta se copian a la auditoría.
+        self.assertNotIn("9876", str(presentar.despues) + str(cerrar.antes) + str(cerrar.despues))

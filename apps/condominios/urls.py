@@ -7,6 +7,7 @@ app_name = "condominios"
 
 urlpatterns = [
     path("unidades/", views.UnidadesView.as_view(), name="unidades"),
+    path("unidades/sugerencias/", views.SugerenciasUnidadesView.as_view(), name="unidades_sugerencias"),
     # Edificios
     path("edificios/nuevo/", views.EdificioCreateView.as_view(), name="edificio_nuevo"),
     path("edificios/<int:pk>/editar/", views.EdificioUpdateView.as_view(), name="edificio_editar"),

@@ -252,6 +252,96 @@ class CsvTest(EscenarioReporte):
         self.assertIn("Torre B;B101", lineas[1])
 
 
+class FiltroSituacionTest(EscenarioReporte):
+    """Issue #80: en septiembre A101 está al día, B101 pendiente y A102 morosa (debe agosto)."""
+
+    url = reverse("gastos:reporte")
+
+    def pedir(self, **parametros):
+        self.client.force_login(self.e.administrador)
+        return self.client.get(self.url, {"periodo": self.sep.pk, **parametros})
+
+    def test_cada_valor_filtra_la_tabla_y_los_chips_cuentan_todo(self):
+        esperado = {"al_dia": self.e.a101, "pendiente": self.e.b101, "morosa": self.e.a102}
+        for clave, unidad in esperado.items():
+            with self.subTest(situacion=clave):
+                respuesta = self.pedir(situacion=clave)
+                self.assertEqual([f.unidad for f in respuesta.context["filas"]], [unidad])
+                cantidades = {c["valor"]: c["cantidad"] for c in respuesta.context["chips"]}
+                self.assertEqual(cantidades, {"": 3, "al_dia": 1, "pendiente": 1, "morosa": 1})
+                # Los totales no cambian con el filtro.
+                self.assertEqual(respuesta.context["reporte"].total_emitido, 126000)
+                self.assertContains(respuesta, "Limpiar filtros")
+
+    def test_situacion_desconocida_se_ignora(self):
+        respuesta = self.pedir(situacion="xyz")
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(len(respuesta.context["filas"]), 3)
+        self.assertNotContains(respuesta, "Limpiar filtros")
+
+    def test_la_tabla_va_por_urgencia_y_el_csv_conserva_su_orden(self):
+        respuesta = self.pedir()
+        self.assertEqual([f.unidad for f in respuesta.context["filas"]], [self.e.a102, self.e.b101, self.e.a101])
+        csv = self.client.get(reverse("gastos:reporte_csv"), {"periodo": self.sep.pk}).content.decode("utf-8")
+        self.assertEqual([l.split(";")[1] for l in csv.splitlines()[1:4]], ["A101", "A102", "B101"])
+
+    def test_dentro_de_cada_grupo_la_mayor_deuda_va_primero(self):
+        # En octubre las tres deben; con B101 en un monto menor, A101 y A102 van antes que B101.
+        DetalleGastoComun.objects.filter(periodo=self.oct, unidad=self.e.b101).update(monto=1000)
+        self.client.force_login(self.e.administrador)
+        respuesta = self.client.get(self.url, {"periodo": self.oct.pk})
+        filas = respuesta.context["filas"]
+        for grupo in ("Morosa", "Pendiente", "Al día"):
+            deudas = [f.deuda_total for f in filas if f.situacion == grupo]
+            self.assertEqual(deudas, sorted(deudas, reverse=True))
+
+    def test_manda_situacion_sobre_solo_deuda(self):
+        respuesta = self.pedir(situacion="al_dia", solo_deuda="on")
+        self.assertEqual([f.unidad for f in respuesta.context["filas"]], [self.e.a101])
+        # Sin situación, solo_deuda sigue funcionando.
+        self.assertEqual(len(self.pedir(solo_deuda="on").context["filas"]), 2)
+
+    def test_chips_conservan_periodo_edificio_y_quitan_page(self):
+        respuesta = self.pedir(edificio=self.e.torre_a.pk, situacion="morosa", page="2")
+        urls = {c["valor"]: c["url"] for c in respuesta.context["chips"]}
+        base = f"?periodo={self.sep.pk}&edificio={self.e.torre_a.pk}"
+        self.assertEqual(urls["pendiente"], f"{base}&situacion=pendiente")
+        self.assertEqual(respuesta.context["url_limpiar"], base)
+        self.assertEqual(urls[""], base)
+
+    def test_los_chips_respetan_el_edificio(self):
+        respuesta = self.pedir(edificio=self.e.torre_b.pk)
+        cantidades = {c["valor"]: c["cantidad"] for c in respuesta.context["chips"]}
+        self.assertEqual(cantidades, {"": 1, "al_dia": 0, "pendiente": 1, "morosa": 0})
+
+    def test_aislamiento_otro_condominio_no_suma(self):
+        ajeno = PeriodoGasto.objects.create(condominio=self.e.ajeno, anio=2026, mes=9, estado=EMITIDO)
+        DetalleGastoComun.objects.create(periodo=ajeno, unidad=self.e.unidad_ajena, monto=1000, monto_fondo_reserva=0)
+        respuesta = self.pedir()
+        self.assertEqual(respuesta.context["chips"][0]["cantidad"], 3)
+        self.assertNotContains(respuesta, "Torre única")
+
+    def test_csv_respeta_situacion(self):
+        self.client.force_login(self.e.administrador)
+        csv = self.client.get(reverse("gastos:reporte_csv"), {"periodo": self.sep.pk, "situacion": "pendiente"})
+        lineas = csv.content.decode("utf-8").splitlines()
+        self.assertEqual(len(lineas), 1 + 1 + 1)
+        self.assertIn("Torre B;B101", lineas[1])
+        self.assertTrue(lineas[-1].startswith("Total (todas las unidades);;"))
+
+    def test_residente_y_conserje_reciben_403(self):
+        for usuario in (self.e.residente, self.e.conserje):
+            self.client.force_login(usuario)
+            self.assertEqual(self.client.get(self.url, {"situacion": "morosa"}).status_code, 403)
+            self.assertEqual(self.client.get(reverse("gastos:reporte_csv"), {"situacion": "morosa"}).status_code, 403)
+
+    def test_el_formulario_conserva_la_situacion_y_las_insignias_usan_la_paleta(self):
+        respuesta = self.pedir(situacion="morosa")
+        self.assertContains(respuesta, '<input type="hidden" name="situacion" value="morosa">', html=True)
+        self.assertContains(respuesta, "insignia insignia-moroso")
+        self.assertNotContains(respuesta, "badge text-bg")
+
+
 class CeldaSeguraTest(SimpleTestCase):
     def test_los_textos_que_parecen_formulas_se_neutralizan(self):
         self.assertEqual(celda_segura("=HYPERLINK(\"x\")"), "'=HYPERLINK(\"x\")")

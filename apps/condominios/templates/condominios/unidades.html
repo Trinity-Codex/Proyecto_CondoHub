@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load condohub %}
 {% block titulo %}Unidades y residentes{% endblock %}
 
 {% block contenido %}
@@ -14,6 +15,29 @@
     {% endif %}
   </div>
 </div>
+
+{% comment %}
+  Búsqueda (GET: ?q=504), Issue #82. Sin JS es un formulario normal; static/js/busqueda.js le suma las
+  sugerencias (combobox de ARIA 1.2) desde la URL de data-busqueda. La ayuda del comité no menciona el RUT:
+  el comité no busca por RUT (apps/condominios/busqueda.py).
+{% endcomment %}
+<form method="get" action="{% url 'condominios:unidades' %}" role="search" class="busqueda-formulario mb-3">
+  <label for="busqueda-unidades" class="form-label fw-semibold">Buscar unidad o residente</label>
+  <div class="d-flex gap-2">
+    <div class="busqueda flex-grow-1">
+      <input type="search" class="form-control" id="busqueda-unidades" name="q" value="{{ busqueda_q }}" maxlength="100"
+             placeholder="Ej.: 504 o Ana Pérez" aria-describedby="busqueda-unidades-ayuda"
+             data-busqueda="{% url 'condominios:unidades_sugerencias' %}">
+    </div>
+    {% if ocupacion_activa %}<input type="hidden" name="ocupacion" value="{{ ocupacion_activa }}">{% endif %}
+    <button class="btn btn-primary" type="submit"><i class="bi bi-search" aria-hidden="true"></i> Buscar</button>
+  </div>
+  <div id="busqueda-unidades-ayuda" class="form-text">{% if es_admin %}Número de unidad, nombre o RUT.{% else %}Número de unidad o nombre.{% endif %}</div>
+  <div class="visually-hidden" aria-live="polite" data-busqueda-estado></div>
+</form>
+
+{# Filtro por ocupación (GET: ?ocupacion=sin_residentes), Issue #80 #}
+{% include "_chips.html" with etiqueta="Filtrar unidades por ocupación" %}
 
 {% for edificio in edificios %}
 <div class="card mb-4" id="edificio-{{ edificio.pk }}">
@@ -40,7 +64,7 @@
           <td>
             {% for r in u.residentes.all %}
             <div class="small d-flex align-items-center gap-1">
-              <span class="text-nowrap">{{ r.usuario }}<br><span class="text-muted">{{ r.get_tipo_display }} · desde {{ r.desde|date:"d-m-Y" }}</span></span>
+              <span class="text-nowrap">{{ r.usuario }}<br><span class="text-muted">{% if es_admin and r.usuario.rut %}RUT {{ r.usuario.rut|rut }}<br>{% endif %}{{ r.get_tipo_display }} · desde {{ r.desde|date:"d-m-Y" }}</span></span>
               {% if es_admin %}
               <form method="post" action="{% url 'condominios:residente_baja' r.pk %}" class="d-inline"
                     onsubmit="return confirm('¿Dar de baja a {{ r.usuario|escapejs }} de la unidad {{ u.numero|escapejs }}?');">
@@ -62,7 +86,7 @@
           {% endif %}
         </tr>
         {% empty %}
-        <tr><td colspan="{% if es_admin %}6{% else %}5{% endif %}" class="text-muted">Sin unidades.</td></tr>
+        <tr><td colspan="{% if es_admin %}6{% else %}5{% endif %}" class="text-muted">{% if hay_filtros %}Ninguna unidad con este filtro.{% else %}Sin unidades.{% endif %}</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -1,6 +1,7 @@
 """Modelo de proveedores: empresas o personas que prestan servicios al condominio."""
 from django.db import models
 
+from apps.core.formato import formatear_rut
 from apps.cuentas.validadores import normalizar_rut, validar_rut
 
 
@@ -33,4 +34,4 @@ class Proveedor(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.razon_social} ({self.rut})"
+        return f"{self.razon_social} ({formatear_rut(self.rut)})"

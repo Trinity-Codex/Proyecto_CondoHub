@@ -18,7 +18,7 @@ from apps.condominios.models import Unidad
 from apps.core.permisos import ADMINISTRADOR, COMITE, RESIDENTE, RolRequeridoMixin
 from apps.gastos.models import DetalleGastoComun
 
-from .consultas import cobros_del_residente, con_saldos, total_adeudado
+from .consultas import cobros_del_residente, con_saldos, reporte_del_ultimo_periodo, total_adeudado
 from .forms import PagoForm
 from .models import Pago
 
@@ -77,6 +77,8 @@ class CobranzaView(RolRequeridoMixin, TemplateView):
             filas.append({"unidad": unidad, "deuda": total_adeudado(cobros), "cobros": len(cobros)})
         contexto["filas"] = filas
         contexto["deuda_total"] = sum(f["deuda"] for f in filas)
+        # Indicadores del último período emitido (Issue #57), los mismos números del reporte.
+        contexto["cobranza"] = reporte_del_ultimo_periodo(self.request.condominio)
         return contexto
 
 

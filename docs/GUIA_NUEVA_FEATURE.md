@@ -162,6 +162,63 @@ Variables útiles en cualquier vista (las pone `apps/core/middleware.py`):
 | `request.roles` | Roles del usuario en ese condominio, ej. `{"RESIDENTE", "COMITE"}` |
 | `tiene_rol(request, ADMINISTRADOR, COMITE)` | `True` si tiene alguno de esos roles |
 
+### Vistas que no son de un solo condominio: la cartera (`apps/cartera/permisos.py`)
+
+El administrador general (Issue #54) no tiene condominio activo ni rol en ninguno: el superusuario le asigna
+condominios desde `/admin/` (modelo `AsignacionCartera`) y solo los consulta. Por eso sus vistas **no** usan
+`RolRequeridoMixin` ni `CondominioQuerysetMixin`; usan estas dos piezas:
+
+```python
+from apps.cartera.permisos import CarteraRequeridaMixin, condominios_de_cartera
+
+condominios_de_cartera(request.user)   # condominios activos asignados; el superusuario, todos los activos
+
+
+class MiVistaDeCartera(CarteraRequeridaMixin, TemplateView):   # sin sesión: login; sin cartera: 403
+    def get_context_data(self, **kwargs):
+        condominio = get_object_or_404(self.condominios, pk=self.kwargs["pk"])  # no asignado: 404
+```
+
+Toda consulta de una vista así parte de `condominios_de_cartera(...)`. El reporte de recaudación se puede abrir
+para un condominio dado sin cambiar el activo: `ReporteBase` en `apps/gastos/views.py` toma el condominio de
+`get_condominio_reporte()`, y la cartera lo reemplaza (ver `apps/cartera/views.py`).
+
+### Descargar una tabla en CSV (`apps/core/exportar.py`)
+
+```python
+from apps.core.exportar import respuesta_csv
+
+return respuesta_csv("morosidad-2026-10.csv", ["Unidad", "Saldo"], [[unidad.numero, saldo] for ...])
+```
+
+Devuelve el archivo para Excel (separador «;», UTF-8 con BOM) y pasa cada celda por `celda_segura`, que antepone
+un apóstrofo a los textos que empiezan con `=`, `+`, `-`, `@`, tabulación o retorno de carro. No armes un CSV a mano.
+
+### Filtros, chips y búsqueda en un listado (`apps/core/listados.py`)
+
+`FiltrosGetMixin` lee los filtros por GET (`?estado=...`), arma los chips con su cantidad (`_chips.html`) y deja
+en el contexto `filtros_url`, `hay_filtros` y `url_limpiar`. Si además el listado acepta búsqueda (`?q=`),
+declara `busqueda = True`: `self.texto_busqueda()` devuelve el texto normalizado (sin espacios sobrantes,
+hasta 100 caracteres y 5 palabras) y «Limpiar filtros» aparece también con `q`. Qué columnas se buscan lo
+decide tu app, siempre sobre el queryset ya acotado por condominio y rol (nunca `Modelo.objects.all()`).
+El ejemplo real es Unidades (`apps/condominios/views.py` y `apps/condominios/busqueda.py`):
+
+```python
+class UnidadesView(FiltrosGetMixin, UnidadesAccesoMixin, CondominioQuerysetMixin, ListView):
+    parametros_filtro = {"ocupacion": list(OCUPACIONES)}
+    busqueda = True
+
+    def _buscar(self, unidades):
+        return filtrar_unidades(unidades, self.texto_busqueda(), ver_rut=ver_rut(self.request))
+```
+
+Para sugerencias mientras se escribe, `static/js/busqueda.js` (ya cargado en `base.html`) se activa solo en un
+`<input type="search" name="q" data-busqueda="{% url '...' %}">` dentro de un `<form method="get">` que tenga
+una región `<div class="visually-hidden" aria-live="polite" data-busqueda-estado></div>`. El endpoint
+responde `{"resultados": [{"edificio", "unidad", "residentes": [{"nombre", "rut"?}]}], "hay_mas"}`: si lo
+reutilizas en otro listado, adapta el JS a tus campos y entrega en el JSON solo lo que tu listado ya muestra a
+ese rol. Mira `condominios/unidades.html` y `SugerenciasUnidadesView`.
+
 ## Paso 5. Las rutas
 
 `apps/mascotas/urls.py`:
@@ -236,6 +293,32 @@ Van en `apps/mascotas/templates/mascotas/`. Siempre extienden `base.html`.
 En las plantillas tienes disponibles: `es_admin`, `es_comite`, `es_residente`, `es_conserje`,
 `condominio_activo` y `user` (vienen de `apps/core/context_processors.py`).
 Íconos: https://icons.getbootstrap.com/ · Componentes: https://getbootstrap.com/docs/5.3/
+
+### Campos accesibles (contrato C6)
+
+`{% include "_formulario.html" with form=form %}` dibuja cada campo con `templates/_campo.html`: etiqueta, control,
+ayuda y errores enlazados con `aria-describedby` y `aria-invalid`, asterisco `aria-hidden` en los obligatorios y
+placeholder con contraste AA. Si necesitas una grilla o un prefijo, incluye el campo suelto:
+
+```django
+<div class="col-md-6">{% include "_campo.html" with campo=form.monto prefijo="$" %}</div>
+```
+
+**Montos en pesos (#76):** para un campo de dinero usa `MontoField` (`apps/core/campos.py`): acepta «$ 1.250.000», «1.250.000» y «1250000»,
+rechaza decimales y puntos mal agrupados, y `_campo.html` le pone el prefijo «$» solo. En un `forms.Form`:
+`monto = MontoField(label="Monto", min_value=1)`; en un `ModelForm`, `field_classes = {"monto": MontoField}` en el `Meta`
+(se conservan los validadores del modelo y no pongas un `NumberInput` en `widgets`). El JS `static/js/formato.js` agrega los puntos
+mientras se escribe y nunca cambia un monto que no sea válido. Para mostrar dinero usa `{{ valor|pesos }}`.
+
+**RUT (#77):** para un campo de RUT usa `RutField` (`apps/core/campos.py`): acepta con o sin puntos y «k» minúscula, valida igual que
+`validar_rut` y `cleaned_data` sale normalizado (`12345678-5`). En un `forms.Form`: `rut = RutField(label="RUT")`; en un `ModelForm`,
+`field_classes = {"rut": RutField}` en el `Meta`. `_campo.html` agrega solo la región `aria-live` del aviso y el JS da formato en vivo.
+Para mostrar un RUT usa `{{ valor|rut }}` (`{% load condohub %}`); `{{ valor|rut|default:"—" }}` si puede faltar. Las funciones puras
+(`normalizar_rut`, `calcular_dv`, `formatear_rut`) viven en `apps/core/formato.py`; `apps.cuentas.validadores` las sigue exportando.
+
+Los `RadioSelect` y `CheckboxSelectMultiple` salen en un `fieldset` con `legend` (`_opciones.html`, lo elige `_campo.html`).
+Los filtros `control` y `es_casilla` están en `{% load formularios %}`. Las listas desplegables muestran «Seleccione…»
+(lo hace `BootstrapMixin`; tu `empty_label` propio se respeta).
 
 ## Paso 7. El enlace en el menú
 

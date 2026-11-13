@@ -1,0 +1,25 @@
+{% comment %}
+  Chips de estado con cantidad (Issue #80). Uso:
+    {% include "_chips.html" with chips=chips etiqueta="Filtrar por estado" %}
+  `chips` lo arma apps/core/listados.py::armar_chips. Cada chip es un enlace GET (funciona sin JavaScript);
+  el activo lleva aria-current. El número se oculta a los lectores y en su lugar se lee «12 incidentes».
+  «Limpiar filtros» sale solo si hay_filtros (lo deja FiltrosGetMixin).
+{% endcomment %}
+{% if chips %}
+<nav class="chips mb-3" aria-label="{{ etiqueta }}">
+  <ul class="chips-lista">
+    {% for chip in chips %}
+    <li>
+      <a class="chip chip-{{ chip.clave_color }}" href="{{ chip.url }}"{% if chip.activo %} aria-current="true"{% endif %}>
+        <span class="chip-texto">{{ chip.texto }}</span>
+        <span class="chip-cantidad" aria-hidden="true">{{ chip.cantidad }}</span>
+        <span class="visually-hidden">, {{ chip.descripcion }}</span>
+      </a>
+    </li>
+    {% endfor %}
+    {% if hay_filtros %}
+    <li><a class="chips-limpiar" href="{{ url_limpiar }}"><i class="bi bi-x-circle" aria-hidden="true"></i> Limpiar filtros</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}

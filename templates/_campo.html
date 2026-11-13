@@ -1,0 +1,22 @@
+{% comment %}
+  Componente de campo accesible (contrato C6, Issue #75). Dibuja etiqueta, control, ayuda y errores
+  de un solo campo, enlazados con aria-describedby (ids <id>_helptext y <id>_error; los campos de RUT suman <id>_aviso, la región aria-live del JS).
+  Uso:
+      {% include "_campo.html" with campo=form.x %}
+      {% include "_campo.html" with campo=form.monto prefijo="$" %}   {# prefijo: texto opcional del input-group; MontoInput lo trae solo ("$") #}
+  Para armar grillas, envuélvelo en una columna: <div class="col-md-6">{% include "_campo.html" with campo=form.x %}</div>
+  Los grupos de opciones (RadioSelect, CheckboxSelectMultiple) se dibujan con _opciones.html.
+{% endcomment %}{% load formularios %}{% firstof prefijo campo.field.widget.prefijo as prefijo_campo %}{% if campo.field.widget.use_fieldset %}{% include "_opciones.html" with campo=campo %}{% elif campo|es_casilla %}
+<div class="form-check">
+  {{ campo|control }}
+  <label class="form-check-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+  {% include "_campo_mensajes.html" %}
+</div>
+{% else %}
+<div>
+  <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}{% if campo.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+  {% if prefijo_campo %}<div class="input-group"><span class="input-group-text" data-prefijo>{{ prefijo_campo }}</span>{{ campo|control }}</div>{% else %}{{ campo|control }}{% endif %}
+  {% if campo.field.widget.aviso_vivo %}<div class="form-text" id="{{ campo.auto_id }}_aviso" aria-live="polite" data-rut-aviso></div>{% endif %}
+  {% include "_campo_mensajes.html" %}
+</div>
+{% endif %}

@@ -11,7 +11,8 @@ Crea:
   - 1 usuario por rol (todos con la clave CLAVE_DEMO, ver tabla en README.md).
   - Edificios y unidades con alícuotas que suman 1, espacios comunes,
     comunicados, incidentes, reservas y gastos comunes (dos meses emitidos, con pagos totales
-    y parciales y unidades morosas, y el mes actual abierto).
+    y parciales y unidades morosas, y el mes actual abierto; Los Aromos, con el mes anterior emitido).
+  - 1 administrador general, gerencia@condohub.cl, con los dos condominios en su cartera (Issue #54).
 
 Cada app tiene sus datos en apps/<app>/demo.py, con una función cargar(datos) (Issue #62).
 Este comando solo las llama en orden, dentro de una transacción. "datos" es un diccionario
@@ -62,4 +63,6 @@ class Command(BaseCommand):
         self.stdout.write(f"Clave de todos los usuarios demo: {CLAVE_DEMO}")
         for correo, *_ in USUARIOS.values():
             self.stdout.write(f"  - {correo}")
+        # El administrador general (Issue #54) no está en USUARIOS: lo crea apps/cartera/demo.py.
+        self.stdout.write(f"  - {datos['usuarios']['gerencia'].email} (administrador general: cartera de los dos condominios)")
         self.stdout.write(f"Suma de alícuotas de {vista_verde}: {vista_verde.suma_alicuotas()}")

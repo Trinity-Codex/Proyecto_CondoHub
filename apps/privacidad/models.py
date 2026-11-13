@@ -14,6 +14,7 @@ from django.db import models, transaction
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.auditoria.servicios import Accion, registrar
 from apps.condominios.models import Membresia
 from apps.notificaciones.observador import Evento, Sujeto
 
@@ -65,6 +66,8 @@ class SolicitudTitular(Sujeto, models.Model):
     def presentar(self):
         """Guarda la solicitud y avisa a los administradores del condominio."""
         self.save()
+        # Auditoría (#27): sin el detalle, que puede traer datos personales.
+        registrar(self.usuario, self.condominio, Accion.CREAR, self, despues={"tipo": self.tipo, "estado": self.estado})
         administradores = [
             m.usuario
             for m in Membresia.objects.filter(
@@ -94,6 +97,10 @@ class SolicitudTitular(Sujeto, models.Model):
         self.cerrada = timezone.now()
         self.cerrada_por = por
         self.save(update_fields=["respuesta", "estado", "cerrada", "cerrada_por"])
+        registrar(  # auditoría (#27): sin la respuesta, que puede traer datos personales
+            por, self.condominio, Accion.MODIFICAR, self,
+            antes={"estado": self.Estado.PENDIENTE}, despues={"estado": self.estado},
+        )
         self.notificar(
             Evento(
                 condominio=self.condominio,

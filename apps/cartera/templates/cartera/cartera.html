@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% load condohub %}
+{% block titulo %}Cartera{% endblock %}
+
+{% block contenido %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h3 mb-0"><i class="bi bi-wallet"></i> Cartera</h1>
+  {% if cartera %}
+  <a class="btn btn-outline-success" href="{% url 'cartera:csv' %}?mes={{ clave_mes }}"><i class="bi bi-filetype-csv"></i> Descargar CSV (Excel)</a>
+  {% endif %}
+</div>
+
+{% if not cartera %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle"></i> Todavía no hay períodos emitidos en tus condominios. La cartera aparece cuando se emiten los gastos comunes de un mes.
+</div>
+{% else %}
+
+{# ---- Mes (GET: la URL guarda el mes y se puede compartir) ---- #}
+<form method="get" class="card card-body mb-4">
+  <div class="row g-3 align-items-end">
+    <div class="col-sm-8 col-lg-4">
+      {% include "_campo.html" with campo=form.mes %}
+    </div>
+    <div class="col-sm-4 col-lg-2 d-grid">
+      <button class="btn btn-primary"><i class="bi bi-funnel"></i> Ver</button>
+    </div>
+  </div>
+</form>
+
+{% comment %}
+  Una fila por condominio asignado, solo cifras: sin nombres ni RUT de residentes (RNF08).
+  En el celular (RNF03) se ocultan Emitido, Recaudado, Morosas y la columna Situación: la insignia
+  pasa bajo el nombre y quedan el % de recaudación y la deuda anterior.
+{% endcomment %}
+<div class="card">
+  <div class="card-header d-flex flex-wrap justify-content-between gap-2">
+    <span><i class="bi bi-calendar3"></i> {{ nombre_mes }}</span>
+    <span class="small text-muted">Con morosas = hay unidades con deuda de meses anteriores</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead><tr>
+        <th scope="col">Condominio</th>
+        <th scope="col" class="text-end d-none d-md-table-cell">Emitido</th>
+        <th scope="col" class="text-end d-none d-md-table-cell">Recaudado</th>
+        <th scope="col" class="text-end">% recaudación</th>
+        <th scope="col" class="text-end">Deuda anterior</th>
+        <th scope="col" class="text-end d-none d-md-table-cell">Unidades morosas</th>
+        <th scope="col" class="d-none d-md-table-cell">Situación</th>
+        <th scope="col"><span class="visually-hidden">Reporte</span></th>
+      </tr></thead>
+      <tbody>
+        {% for fila in cartera.filas %}
+        <tr>
+          <td>{{ fila.condominio.nombre }}{% if fila.tiene_periodo %}<div class="d-md-none">{% include "cartera/_situacion.html" %}</div>{% endif %}</td>
+          {% if fila.tiene_periodo %}
+          <td class="text-end d-none d-md-table-cell">{{ fila.emitido|pesos }}</td>
+          <td class="text-end d-none d-md-table-cell">{{ fila.recaudado|pesos }}</td>
+          <td class="text-end">{{ fila.porcentaje_recaudacion }} %</td>
+          <td class="text-end">{{ fila.deuda_anterior|pesos }}</td>
+          <td class="text-end d-none d-md-table-cell">{{ fila.unidades_morosas }}</td>
+          <td class="d-none d-md-table-cell">{% include "cartera/_situacion.html" %}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-primary" href="{% url 'cartera:reporte' fila.condominio.pk %}?periodo={{ fila.periodo.pk }}"
+               aria-label="Ver el reporte de {{ fila.condominio.nombre }}"><i class="bi bi-graph-up"></i><span class="d-none d-md-inline"> Ver reporte</span></a>
+          </td>
+          {% else %}
+          <td colspan="7" class="text-muted">Sin período emitido</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="fw-semibold"><tr>
+        <td>Total</td>
+        <td class="text-end d-none d-md-table-cell">{{ cartera.total_emitido|pesos }}</td>
+        <td class="text-end d-none d-md-table-cell">{{ cartera.total_recaudado|pesos }}</td>
+        <td class="text-end">{{ cartera.porcentaje_recaudacion }} %</td>
+        <td class="text-end">{{ cartera.deuda_anterior|pesos }}</td>
+        <td class="text-end d-none d-md-table-cell">{{ cartera.unidades_morosas }}</td>
+        <td class="d-none d-md-table-cell"></td>
+        <td></td>
+      </tr></tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

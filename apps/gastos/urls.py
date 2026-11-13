@@ -6,6 +6,11 @@ from . import views
 app_name = "gastos"
 
 urlpatterns = [
+    path("fondo/", views.FondoListView.as_view(), name="fondo"),
+    path("fondo/inicial/", views.FondoCreateView.as_view(tipo="INICIAL"), name="fondo_inicial"),
+    path("fondo/egreso/", views.FondoCreateView.as_view(tipo="EGRESO"), name="fondo_egreso"),
+    path("fondo/ajuste/", views.FondoCreateView.as_view(tipo="AJUSTE"), name="fondo_ajuste"),
+    path("fondo/<int:pk>/", views.FondoDetailView.as_view(), name="fondo_detalle"),
     path("", views.PeriodoListView.as_view(), name="periodos"),
     path("periodos/nuevo/", views.PeriodoCreateView.as_view(), name="periodo_nuevo"),
     path("periodos/<int:pk>/", views.PeriodoDetailView.as_view(), name="periodo_detalle"),
