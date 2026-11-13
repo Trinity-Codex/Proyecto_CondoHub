@@ -6,7 +6,7 @@
 
 - [x] 2.1 Agregar prueba: no avisa a quien llegó después del período (`apps/pagos/tests.py`, `RegistrarPagosTest`).
 - [x] 2.2 Agregar prueba: no avisa a quien ya fue dado de baja (`apps/pagos/tests.py`, `RegistrarPagosTest`).
-- [ ] 2.3 Correr `python manage.py test apps` completo con MySQL 8. Pendiente: no hay servidor MySQL en esta máquina; la prueba local se hizo con SQLite.
+- [x] 2.3 Correr `python manage.py test apps` completo con MySQL 8. Hecho en la CI del PR (MySQL 8, en verde tras unir main).
 
 ## 3. Datos demo
 
