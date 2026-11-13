@@ -417,6 +417,22 @@ class AnularPagoTest(TestCase):
         self.assertEqual(mi_cuenta.context["total_adeudado"], fila.saldo)
         self.assertEqual(self.client.get(reverse("core:inicio")).context["mi_deuda"], fila.saldo)
 
+    def test_el_panel_admin_no_permite_marcar_la_anulacion(self):
+        """Marcarla en /admin/ se saltaría el motivo, la auditoría, el aviso y el recálculo del cobro."""
+        superusuario = crear_usuario("super@prueba.cl", is_staff=True, is_superuser=True)
+        self.client.force_login(superusuario)
+        url = reverse("admin:pagos_pago_change", args=[self.pago.pk])
+        self.assertNotContains(self.client.get(url), 'name="anulado"')
+        datos = {
+            "detalle": self.cobro.pk, "fecha": self.pago.fecha.isoformat(), "monto": 42000,
+            "medio": "TRANSFERENCIA", "observacion": "", "registrado_por": "",
+            "anulado": "on", "motivo_anulacion": "Desde el admin",
+        }
+        # El guardado se acepta (302), pero los campos de anulación se ignoran.
+        self.assertEqual(self.client.post(url, datos).status_code, 302)
+        self.assertSigueVigente()
+        self.assertEqual(self.pago.motivo_anulacion, "")
+
     def test_la_cuenta_muestra_el_pago_anulado_y_el_boton_solo_al_administrador(self):
         cuenta = reverse("pagos:cuenta_unidad", args=[self.e.a101.pk])
         self.client.force_login(self.e.comite)
