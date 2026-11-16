@@ -39,6 +39,20 @@
 </head>
 <body class="d-flex flex-column min-vh-100">
 
+{% comment %}
+  Demo visual en Render (#111): request.demo_solo_lectura solo existe con
+  config.settings_render_demo (apps/core/middleware_demo.py). El servidor ya rechaza las
+  escrituras; el aviso y demo_solo_lectura.js solo orientan. data-ruta-login: el formulario
+  de inicio de sesión no tiene action y vive en otra plantilla.
+{% endcomment %}
+{% if request.demo_solo_lectura %}
+<div id="aviso-demo" class="alert alert-warning rounded-0 border-0 border-bottom mb-0 py-2 text-center small" role="note"
+     data-ruta-login="{% url 'cuentas:iniciar_sesion' %}">
+  <i class="bi bi-eye" aria-hidden="true"></i> <strong>Demo de solo lectura · Datos ficticios</strong>
+  <span class="d-block d-sm-inline">Puedes recorrer las pantallas; los cambios no se guardan.</span>
+</div>
+{% endif %}
+
 {% if user.is_authenticated %}
 {# Menú blanco: el logo usa el azul marino, que no se vería sobre un fondo oscuro. #}
 <nav class="navbar navbar-expand-lg barra-principal">
@@ -128,7 +142,7 @@
           <ul class="dropdown-menu dropdown-menu-end">
             {% for c in mis_condominios %}
             <li>
-              <form method="post" action="{% url 'core:cambiar_condominio' c.pk %}">
+              <form method="post" action="{% url 'core:cambiar_condominio' c.pk %}" data-demo-permitido>
                 {% csrf_token %}
                 <button class="dropdown-item {% if c == condominio_activo %}active{% endif %}">{{ c.nombre }}</button>
               </form>
@@ -182,7 +196,7 @@
             {% endif %}
             <li><hr class="dropdown-divider"></li>
             <li>
-              <form method="post" action="{% url 'cuentas:cerrar_sesion' %}">
+              <form method="post" action="{% url 'cuentas:cerrar_sesion' %}" data-demo-permitido>
                 {% csrf_token %}
                 <button class="dropdown-item"><i class="bi bi-box-arrow-right"></i> Cerrar sesión</button>
               </form>
@@ -217,6 +231,7 @@
         integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 <script src="{% static 'js/formato.js' %}" defer></script>
 <script src="{% static 'js/busqueda.js' %}" defer></script>
+{% if request.demo_solo_lectura %}<script src="{% static 'demo_solo_lectura.js' %}" defer></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>
