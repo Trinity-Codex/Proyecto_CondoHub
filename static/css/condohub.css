@@ -148,6 +148,22 @@ h1, h2, h3, .h1, .h2, .h3, .h4, .h5, .marca {
   --bs-btn-active-border-color: var(--condohub-azul-oscuro);
 }
 
+/* Las acciones secundarias conservan contraste sobre el fondo de la página. */
+.btn-outline-secondary {
+  --bs-btn-color: var(--estado-reserva-texto);
+  --bs-btn-border-color: var(--estado-reserva);
+  --bs-btn-hover-bg: var(--estado-reserva-texto);
+  --bs-btn-hover-border-color: var(--estado-reserva-texto);
+  --bs-btn-active-bg: var(--estado-reserva-texto);
+  --bs-btn-active-border-color: var(--estado-reserva-texto);
+}
+
+/* El foco sigue visible junto al borde del botón, también al proyectar. */
+.btn:focus-visible {
+  outline: 3px solid var(--condohub-azul);
+  outline-offset: 2px;
+}
+
 /* ---------------------------------------------------------------- Tarjetas */
 .card {
   border-color: #e3e9ef;

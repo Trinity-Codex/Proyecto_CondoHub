@@ -9,9 +9,9 @@
 {% if aviso_apertura %}
 <div class="alert alert-warning" role="status">{{ aviso_apertura }}</div>
 {% else %}
-<div class="card mb-3"><div class="card-body">
+<div class="card tarjeta-indicador mb-3"><div class="card-body">
   <h2 class="h6">Saldo contable del fondo</h2>
-  <p class="h3 mb-2">{{ saldo|pesos }}</p>
+  <p class="h3 fw-semibold mb-2">{{ saldo|pesos }}</p>
   {% if saldo < 0 %}<p class="mb-2">Saldo contable negativo.</p>{% endif %}
   <p class="text-muted mb-0">Incluye los aportes emitidos, aunque estén impagos. No equivale al efectivo recaudado.</p>
 </div></div>
