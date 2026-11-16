@@ -1,7 +1,7 @@
 # Demo de percepción · 16 de noviembre de 2026
 
 Preparación de [#101](https://github.com/Trinity-Codex/Proyecto_CondoHub/issues/101).
-**Estado al 16-nov: presentación pendiente; ensayo integrado pendiente.** Este guion está preparado para revisión; su uso depende de las pantallas comprobadas antes de la reunión. La [acta de preparación](../demo_percepcion/ensayo-final.md) identifica el SHA, las entregas y los bloqueos. No acredita un ensayo el domingo 15 ni un congelamiento retrospectivo.
+**Estado al 16-nov: ensayo técnico local realizado; presentación y ensayo humano pendientes.** Código integrado `6c0fa2fd37393be436c5c779d46245d1138ead90`, CI verde. La [acta técnica](../demo_percepcion/ensayo-final.md) registra 81 GET, 56 capturas, cifras, límites y hallazgos. Proveedores se muestra en escritorio por la pérdida de contacto en móvil. No acredita ensayo del equipo/proyector/conexión del cliente, ni congelamiento retrospectivo.
 
 ## Objetivo y reparto
 
@@ -15,15 +15,15 @@ Los tiempos incluyen transiciones. Abrir detalles desde las listas: los identifi
 
 | Minuto | Quién | Pantalla y mensaje | Alternativa si falta la pantalla o su evidencia |
 |---|---|---|---|
-| 0–1 | Walther | Acceso e inicio `/`: «Centralizamos comunidad y administración en un sitio accesible desde el celular. Todo lo mostrado es ficticio». Explicar roles y selector de condominio. | Explicar la visión con este guion; no atribuir a main el pulido de PR abiertos. |
-| 1–3 | Maximiliano | Como administrador: `/condominio/unidades/`, `/comunicados/`, detalle desde lista. Mostrar unidad/edificio, comunicado general y dirigido; explicar lectura por unidad solo si el ejemplo está comprobado. | Sin #95/#96/#99 verificados, mostrar únicamente las listas revisadas o describir el flujo; no prometer publicaciones recientes o lectura precargada. |
+| 0–1 | Walther | Acceso e inicio `/`: «Centralizamos comunidad y administración en un sitio accesible desde el celular. Todo lo mostrado es ficticio». Explicar roles y selector de condominio. | Usar la captura admin-inicio del snapshot indicado; explicar que es respaldo, no ejecución actual. |
+| 1–3 | Maximiliano | Como administrador: `/condominio/unidades/`, `/comunicados/`, detalle desde lista. Mostrar unidad/edificio, comunicado general y dirigido; explicar lectura por unidad solo si el ejemplo está comprobado. | Si una publicación expiró, elegir otra vigente y conservar la explicación de destinatarios; no falsear la fecha. Hay comunicado dirigido con lectura comprobada. |
 | 3–7 | Walther | `/gastos/`: septiembre/octubre emitidos y noviembre abierto. Abrir octubre desde la lista y `/gastos/reporte/`, seleccionando octubre de 2026. Explicar emitido, recaudado, saldo y deuda anterior; después `/gastos/fondo/` y movimientos. | Si las cifras difieren de la foto aprobada, omitir importes y detener ese bloque. Usar solo una captura identificada por SHA/fecha como respaldo, sin llamarla ejecución actual. |
 | 7–8 | Walther | Cerrar sesión con el botón; entrar como gerencia y abrir `/cartera/?mes=2026-10`. Comparar ambos condominios para el mismo mes. Es consulta consolidada: gerencia no administra la comunidad ni ve nombres/RUT de residentes en esta vista. | Si gerencia no está comprobada, explicar la cartera sin usar superusuario para eludir permisos. Volver luego a la cuenta necesaria. |
-| 8–10 | Winderson | Como administrador: `/pagos/cobranza/`, cuenta de unidad desde lista y `/proveedores/`. Mostrar un total, un abono y un pendiente ya existentes si están verificados. Registrar pago es función del administrador; comité consulta. | Los pagos de Los Aromos de #98 no están en main: elegir ejemplos existentes de Vista Verde comprobados antes, o explicar el flujo sin inventar recaudación. El formulario puede mostrarse sin enviarlo. |
-| 10–12 | Maximiliano / Winderson | Como residente: `/pagos/mi-cuenta/`, `/reservas/`, `/reservas/mis-reservas/` y `/incidentes/`. Maximiliano explica disponibilidad/reserva; Winderson seguimiento de incidentes. Mostrar estados que existan y fechas vigentes. | Sin reservas futuras de #96 o incidente resuelto de #98, describirlos como ejemplos pendientes de integrar. Si el residente no está verificado, omitir la navegación; no mostrar datos con otro rol como sustituto. |
+| 8–10 | Winderson | Como administrador: `/pagos/cobranza/`, cuenta de unidad desde lista y `/proveedores/`. Mostrar un total, un abono y un pendiente ya existentes si están verificados. Registrar pago es función del administrador; comité consulta. | Mostrar proveedores en escritorio: en móvil se ocultan rubro/contacto/teléfono/correo, sin detalle para comité. Para pagos, Los Aromos tiene total, abono y pendiente comprobados; no registrar otro pago durante la presentación. |
+| 10–12 | Maximiliano / Winderson | Como residente: `/pagos/mi-cuenta/`, `/reservas/`, `/reservas/mis-reservas/` y `/incidentes/`. Maximiliano explica disponibilidad/reserva; Winderson seguimiento de incidentes. Mostrar estados que existan y fechas vigentes. | Si la presentación ocurre después de las fechas verificadas, revisar primero vigencia y reservas; no presentar una reserva pasada como próxima. No mostrar datos con otro rol para salvar un 403. |
 | 12–15 | Los tres | Preguntas de feedback, límites y siguiente paso. Walther confirma lo entendido; los colaboradores agregan observaciones de su bloque. | Si queda poco tiempo, priorizar las dos primeras preguntas de la pauta y acordar cómo completar las demás. |
 
-Si una pantalla falla, no insistir ni editar en vivo: registrar ruta/rol/problema y seguir por la alternativa. Las capturas financieras de #94 pertenecen a su rama, no a una integración completa. Las capturas integradas de respaldo siguen pendientes según el acta.
+Si una pantalla falla, no insistir ni editar en vivo: registrar ruta/rol/problema y seguir por la alternativa. El respaldo integrado está en `.demo_cliente/ensayo-6c0fa2f/`, con índice `mediciones.json` (rol, ruta, resolución, SHA y fecha). Usar esas capturas en lugar de las antiguas de #94. Comprobar su acceso en el equipo de presentación: sigue pendiente.
 
 ### Versión breve de 5–7 minutos
 
@@ -35,43 +35,58 @@ Si una pantalla falla, no insistir ni editar en vivo: registrar ruta/rol/problem
 
 ## Operación local aislada
 
-Referencia de operación: [DEMO_CLIENTE_LOCAL.md](../DEMO_CLIENTE_LOCAL.md). Usar Windows/PowerShell en la raíz del repositorio, Python 3.12 y `venv` con las dependencias de `requirements.txt` ya instaladas. Git y conexión a GitHub sirven para verificar el snapshot. MySQL se usa en los controles de desarrollo/CI; la demo usa su SQLite exclusiva. No usar `iniciar.bat` para este recorrido: arranca el entorno habitual.
+Referencia general: [DEMO_CLIENTE_LOCAL.md](../DEMO_CLIENTE_LOCAL.md). Para **esta foto integrada** usar el módulo temporal descrito aquí, no `config.settings_demo` directamente: este último apunta a la base anterior. Windows/PowerShell, Python 3.12, `venv` y dependencias de `requirements.txt` ya instaladas. No usar `iniciar.bat`, no editar `.env` ni operar la base habitual.
 
-Equipo, navegador, proyector, conexión y hora real de la reunión: **PENDIENTE de confirmar/probar**. Bootstrap, íconos y fuentes tienen recursos externos: probar la conexión del lugar; no prometer funcionamiento sin internet. No alterar `.env` ni la base habitual.
+La foto nueva ya está preparada en este equipo. Ambos archivos siguientes son locales e ignorados:
 
-### Antes de arrancar
+- Settings: `.demo_cliente/settings_ensayo_6c0fa2f.py`.
+- SQLite: `C:\Users\Walther\Desktop\Proyectos Claude\Proyecto_CondoHub\.demo_cliente\ensayo-6c0fa2f.sqlite3`.
+
+El módulo contiene únicamente:
+
+```python
+from config.settings_demo import *
+DATABASES["default"]["NAME"] = BASE_DIR / ".demo_cliente" / "ensayo-6c0fa2f.sqlite3"
+```
+
+Se creó con nombre nuevo después de comprobar la ruta resuelta dentro de `.demo_cliente/`, sin enlaces que salieran de ella y sin sobrescribir archivos. Conserva localhost, correo de consola y cookies demo. La base anterior `demo.sqlite3` está intacta, acreditada por hash y metadatos en el acta. No copiar estos artefactos a Git. En otro equipo, esta configuración/base no llegan con el PR: preparar allí una foto nueva y verificarla antes de presentar; no asumir que existe.
+
+### Inicio en este equipo
+
+Estos comandos usan la foto comprobada. El settings debe existir y su contenido/ruta coincidir con lo anterior. Revisar el SHA de código y que 8016 esté libre; si está ocupado, identificar al dueño sin detenerlo.
 
 ```powershell
 Set-Location 'C:\Users\Walther\Desktop\Proyectos Claude\Proyecto_CondoHub'
 git status --short --branch
 git rev-parse HEAD
 git ls-remote origin refs/heads/main
+Get-Content .demo_cliente/settings_ensayo_6c0fa2f.py
 Get-NetTCPConnection -State Listen -LocalPort 8016 -ErrorAction SilentlyContinue
 ```
 
-Registrar el SHA de código que se usará y su CI en el acta. Si 8016 está ocupado, no detener el proceso: identificar su dueño y coordinar. No utilizar 8000 ni cerrar servidores ajenos. No cambiar de rama mientras otra sesión esté trabajando. Las uniones requieren una decisión expresa de Walther; este documento no autoriza merge.
-
-### Preparar y servir
-
-Ejecutar la preparación, revisar su salida y continuar solo si terminó correctamente:
+Una sola sesión demo por perfil del navegador. Copiar este bloque completo a la terminal del servidor; guarda y restaura `PYTHONPATH` sin modificar variables permanentes:
 
 ```powershell
-venv\Scripts\python.exe manage.py preparar_demo_cliente --settings=config.settings_demo
+$pythonpathPrevio = $env:PYTHONPATH
+try {
+    $env:PYTHONPATH = if ($pythonpathPrevio) {
+        "$PWD\.demo_cliente;$pythonpathPrevio"
+    } else {
+        "$PWD\.demo_cliente"
+    }
+    venv\Scripts\python.exe manage.py preparar_demo_cliente --settings=settings_ensayo_6c0fa2f
+    if ($LASTEXITCODE -ne 0) { throw 'Preparación fallida; no iniciar servidor' }
+    venv\Scripts\python.exe manage.py runserver 127.0.0.1:8016 --settings=settings_ensayo_6c0fa2f --noreload
+} finally {
+    $env:PYTHONPATH = $pythonpathPrevio
+}
 ```
 
-Debe anunciar `django.db.backends.sqlite3` y exactamente:
+El wrapper debe anunciar `django.db.backends.sqlite3` y la ruta **ensayo-6c0fa2f.sqlite3** indicada arriba antes de migrar/cargar. Si no coincide, detenerse. No reemplazarlo por comandos sin protección. La repetición conserva datos: se comprobó igualdad de todas las tablas antes/después de la segunda preparación. No usar `--reiniciar`, borrar, mover ni sustituir bases.
 
-```text
-C:\Users\Walther\Desktop\Proyectos Claude\Proyecto_CondoHub\.demo_cliente\demo.sqlite3
-```
+Abrir [la demo local](http://127.0.0.1:8016/). `ALLOWED_HOSTS` admite `127.0.0.1`. El correo es de consola; no afirmar entrega externa. La preparación puede mostrar la clave demo existente: no copiarla a logs compartidos, capturas ni notas. Los logs de evidencia omiten esa línea.
 
-El comando valida aislamiento antes de migrar/cargar. Si falla, detenerse y revisar la causa; no sustituirlo por `migrate` o `cargar_demo` sin los settings de demo. Con resultado correcto, en su propia terminal:
-
-```powershell
-venv\Scripts\python.exe manage.py runserver 127.0.0.1:8016 --settings=config.settings_demo
-```
-
-Abrir [la demo local](http://127.0.0.1:8016/). `ALLOWED_HOSTS` admite `127.0.0.1`; usar esa dirección. El correo se imprime en consola, no se demuestra entrega externa. Las cookies demo están separadas del entorno habitual, pero se comparten entre puertos que usen estos mismos settings: evitar sesiones demo paralelas con roles distintos en el mismo perfil del navegador.
+Las cookies están separadas del entorno habitual, pero se comparten entre puertos que usen estos settings. El ensayo cargó estilos reales: variable Bootstrap `--bs-body-font-size=1rem`, íconos y fuentes comprobados, sin fallback inyectado ni errores de consola registrados. Esto no prueba la conexión del lugar: equipo, navegador, proyector y conexión del cliente siguen **PENDIENTES**. No prometer funcionamiento sin internet.
 
 ### Cuentas ficticias
 
@@ -99,7 +114,7 @@ Cambiar de cuenta mediante el botón de cierre de sesión (POST), luego iniciar 
 | Vista Verde | Septiembre y octubre de 2026 emitidos; noviembre abierto | $1.140.537 |
 | Los Aromos | Octubre de 2026 emitido | $533.925 |
 
-Vista Verde: apertura $1.000.000 al 31-ago + aportes $110.476 y $105.061 − egreso ficticio $75.000 = $1.140.537. Los Aromos: apertura $500.000 + aporte $33.925 = $533.925. Son movimientos contables del fondo, **no efectivo recaudado**. Los pagos no generan un segundo aporte; la cartera representa el mes seleccionado, no una caja consolidada. En main, Los Aromos aún no tiene los pagos extra de #98: no usar los $416.213 del QA de su rama como recaudación integrada.
+Vista Verde: apertura $1.000.000 al 31-ago + aportes $110.476 y $105.061 − egreso ficticio $75.000 = $1.140.537. Los Aromos: apertura $500.000 + aporte $33.925 = $533.925. Son movimientos contables del fondo, **no efectivo recaudado**. Los pagos no generan un segundo aporte; la cartera representa el mes seleccionado, no una caja consolidada. En la foto nueva integrada, Los Aromos recauda $416.213 en octubre. Cartera de octubre: emitido $2.918.700, recaudado $1.663.475; no sumar septiembre al mismo corte mensual.
 
 ### Base existente y recuperación segura
 
@@ -107,7 +122,7 @@ Repetir `preparar_demo_cliente` migra y conserva registros: no duplica ni regene
 
 Ante un error: conservar la base y el mensaje (sin claves), identificar SHA/settings/ruta y corregir la causa antes de repetir. No borrar, reiniciar ni sustituir la SQLite actual; tampoco tocar desarrollo.
 
-Vía segura para los nuevos datos, **pendiente de definir y verificar tras las integraciones**: conservar la base actual y preparar una SQLite con nombre nuevo dentro de `.demo_cliente/` (por ejemplo `ensayo-integrado-<SHA>.sqlite3`), mediante una configuración temporal explícita usada tanto en preparación como en servidor. Los settings actuales fijan `demo.sqlite3` y no ofrecen una opción CLI para cambiarla: no inventar una bandera. Revisar esa operación por separado antes de ejecutarla; registrar motor/ruta/SHA y comprobar la foto completa. Mientras falte, usar solo los ejemplos existentes verificados y comunicar la limitación.
+La vía segura ya se ejecutó: configuración temporal y SQLite nueva `ensayo-6c0fa2f.sqlite3`, conservando la anterior. Si llegan más loaders, no cambiar de nombre ni preparar otra foto de forma improvisada: conservar ésta, elegir otra ruta nueva dentro de `.demo_cliente/` y verificar de nuevo código/configuración/carga/evidencia. No sobrescribir las capturas del snapshot comprobado.
 
 ### Cierre
 
@@ -121,10 +136,10 @@ No debe quedar un listener propio en 8016; si aparece otro proceso, identificarl
 
 ## Límites para comunicar
 
-- Auditoría: existe el núcleo de registro/eventos; la pantalla sigue provisional. No mostrarla como un historial terminado.
+- Auditoría: núcleo/eventos integrados, pantalla todavía provisional y solo administrador; comité recibe 403. El menú mantiene «En preparación». No mostrarla como historial terminado ni habilitar permisos por una entrega local todavía sin PR integrado.
 - Rendición: pantalla provisional, pendiente de #55.
 - Aviso de cobro PDF (#6) y comprobante (#56): no presentarlos como disponibles. El helper PDF existente no equivale a esas funciones.
-- Anulación de pagos (#53): PR #73 abierto en borrador; no está integrada. PR #74 también sigue borrador y no altera el comportamiento de notificación de main.
+- Anulación de pagos (#53) y avisos por residencia (#46): PR #73/#74 ya unidos. El ejemplo de A-101 en octubre contiene un pago anulado con motivo ficticio: no rebaja el saldo, que sigue en $264.754. Se muestra como consulta; no anular ni registrar pagos durante la demo. No confundir esta función con el PDF/comprobante aún pendientes.
 - PWA: hay manifest e íconos; funcionamiento sin conexión (#26) pendiente. No cortar internet como demostración.
 - Despliegue (#29), respaldo (#50) y prueba guiada formal (#59) conservan su alcance propio; esta preparación no los implementa ni los cierra.
 
