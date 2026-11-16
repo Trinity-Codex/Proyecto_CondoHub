@@ -30,7 +30,8 @@ from apps.gastos.models import MovimientoFondo, PeriodoGasto
 def huella_modo_cliente():
     """
     Huella de la demo del cliente: la normal más lo que #98 agrega solo en ese modo
-    (pagos de Los Aromos, un incidente resuelto y dos proveedores de Los Aromos).
+    (pagos de Los Aromos, un incidente resuelto y dos proveedores de Los Aromos) y lo de #96
+    (reservas próximas y comunicados vigentes).
     Se arma desde HUELLA para que un cambio en la carga normal no obligue a tocarla dos veces.
     """
     huella = copy.deepcopy(pruebas_core.CargarDemoTest.HUELLA)
@@ -41,6 +42,10 @@ def huella_modo_cliente():
     huella["cobros"]["PENDIENTE"] -= 2
     huella["suma_pagos"] += 416213  # los dos totales de Los Aromos más el abono de $60.000
     huella["notificaciones"] += 5  # avisos de esos pagos y del incidente resuelto
+    # Issue #96: dos reservas próximas y dos comunicados vigentes (uno dirigido a la Torre A).
+    huella["reservas"]["CONFIRMADA"] += 2
+    huella["comunicados"] += 2
+    huella["notificaciones"] += 5  # avisos de los dos comunicados nuevos
     return huella
 
 
