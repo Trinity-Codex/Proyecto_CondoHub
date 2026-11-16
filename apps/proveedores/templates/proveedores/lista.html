@@ -14,16 +14,17 @@
 <div class="table-responsive">
   <table class="table table-hover align-middle mb-0">
     <caption class="visually-hidden">Proveedores del condominio</caption>
+    {# En el celular (RNF03) se ocultan rubro y contacto para que razón social, RUT, estado y acciones quepan sin desplazar la tabla. #}
     <thead>
-      <tr><th scope="col">Razón social</th><th scope="col">RUT</th><th scope="col">Rubro</th><th scope="col">Contacto</th><th scope="col">Estado</th>{% if es_admin %}<th scope="col"><span class="visually-hidden">Acciones</span></th>{% endif %}</tr>
+      <tr><th scope="col">Razón social</th><th scope="col">RUT</th><th scope="col" class="d-none d-md-table-cell">Rubro</th><th scope="col" class="d-none d-md-table-cell">Contacto</th><th scope="col">Estado</th>{% if es_admin %}<th scope="col"><span class="visually-hidden">Acciones</span></th>{% endif %}</tr>
     </thead>
     <tbody>
       {% for p in proveedores %}
       <tr class="{% if not p.activo %}text-muted{% endif %}">
         <td>{{ p.razon_social }}</td>
         <td class="text-nowrap">{{ p.rut|rut }}</td>
-        <td>{{ p.rubro }}</td>
-        <td>
+        <td class="d-none d-md-table-cell">{{ p.rubro }}</td>
+        <td class="d-none d-md-table-cell">
           {{ p.contacto|default:"—" }}
           {% if p.telefono %}<div class="small">{{ p.telefono }}</div>{% endif %}
           {% if p.correo %}<div class="small">{{ p.correo }}</div>{% endif %}
@@ -35,7 +36,7 @@
         </td>
         {% if es_admin %}
         <td class="text-end text-nowrap">
-          <a class="btn btn-sm btn-outline-secondary" href="{% url 'proveedores:editar' p.pk %}"><i class="bi bi-pencil"></i> Editar</a>
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'proveedores:editar' p.pk %}" aria-label="Editar {{ p.razon_social }}"><i class="bi bi-pencil" aria-hidden="true"></i><span class="d-none d-md-inline"> Editar</span></a>
           <form method="post" action="{% url 'proveedores:estado' p.pk %}" class="d-inline">
             {% csrf_token %}
             <button class="btn btn-sm {% if p.activo %}btn-outline-danger{% else %}btn-outline-success{% endif %}" type="submit">

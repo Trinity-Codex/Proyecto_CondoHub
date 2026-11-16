@@ -16,15 +16,16 @@
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0">
       <caption class="visually-hidden">Incidentes reportados</caption>
-      <thead><tr><th scope="col">#</th><th scope="col">Título</th><th scope="col">Categoría</th><th scope="col">Unidad</th><th scope="col">Reportado</th><th scope="col">Estado</th></tr></thead>
+      {# En el celular (RNF03) quedan #, título y estado, como en cobranza; categoría, unidad y fecha están en el detalle. #}
+      <thead><tr><th scope="col">#</th><th scope="col">Título</th><th scope="col" class="d-none d-md-table-cell">Categoría</th><th scope="col" class="d-none d-md-table-cell">Unidad</th><th scope="col" class="d-none d-md-table-cell">Reportado</th><th scope="col">Estado</th></tr></thead>
       <tbody>
         {% for i in incidentes %}
         <tr>
           <td>{{ i.pk }}</td>
           <td><a href="{{ i.get_absolute_url }}" class="text-decoration-none">{{ i.titulo }}</a></td>
-          <td>{{ i.get_categoria_display }}</td>
-          <td>{{ i.unidad|default:"Área común" }}</td>
-          <td class="small">{{ i.fecha_reporte|date:"d-m-Y" }}<br><span class="text-muted">{{ i.reportado_por }}</span></td>
+          <td class="d-none d-md-table-cell">{{ i.get_categoria_display }}</td>
+          <td class="d-none d-md-table-cell">{{ i.unidad|default:"Área común" }}</td>
+          <td class="small d-none d-md-table-cell">{{ i.fecha_reporte|date:"d-m-Y" }}<br><span class="text-muted">{{ i.reportado_por }}</span></td>
           <td>{% include "incidentes/_estado.html" with incidente=i %}</td>
         </tr>
         {% empty %}

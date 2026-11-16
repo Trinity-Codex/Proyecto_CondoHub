@@ -2,7 +2,8 @@
 {% block titulo %}Incidente #{{ incidente.pk }}{% endblock %}
 
 {% block contenido %}
-<nav aria-label="Ruta"><ol class="breadcrumb">
+{# mb-4 y no el mb-3 de Bootstrap: la fila g-4 de abajo sube 1,5 rem con su margen negativo y pisaría la ruta. #}
+<nav aria-label="Ruta"><ol class="breadcrumb mb-4">
   <li class="breadcrumb-item"><a href="{% url 'incidentes:lista' %}">Incidentes</a></li>
   <li class="breadcrumb-item active" aria-current="page">#{{ incidente.pk }}</li>
 </ol></nav>
