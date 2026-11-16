@@ -3,8 +3,8 @@
 {% block titulo %}Proveedores{% endblock %}
 
 {% block contenido %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h3 mb-0"><i class="bi bi-truck"></i> Proveedores</h1>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h3 mb-0"><i class="bi bi-truck" aria-hidden="true"></i> Proveedores</h1>
   {% if es_admin %}
   <a class="btn btn-primary" href="{% url 'proveedores:nuevo' %}"><i class="bi bi-plus-lg"></i> Nuevo proveedor</a>
   {% endif %}
@@ -13,6 +13,7 @@
 <div class="card">
 <div class="table-responsive">
   <table class="table table-hover align-middle mb-0">
+    <caption class="visually-hidden">Proveedores del condominio</caption>
     <thead>
       <tr><th scope="col">Razón social</th><th scope="col">RUT</th><th scope="col">Rubro</th><th scope="col">Contacto</th><th scope="col">Estado</th>{% if es_admin %}<th scope="col"><span class="visually-hidden">Acciones</span></th>{% endif %}</tr>
     </thead>
@@ -20,7 +21,7 @@
       {% for p in proveedores %}
       <tr class="{% if not p.activo %}text-muted{% endif %}">
         <td>{{ p.razon_social }}</td>
-        <td>{{ p.rut|rut }}</td>
+        <td class="text-nowrap">{{ p.rut|rut }}</td>
         <td>{{ p.rubro }}</td>
         <td>
           {{ p.contacto|default:"—" }}
@@ -28,8 +29,9 @@
           {% if p.correo %}<div class="small">{{ p.correo }}</div>{% endif %}
         </td>
         <td>
-          {% if p.activo %}<span class="badge text-bg-success">Activo</span>
-          {% else %}<span class="badge text-bg-secondary">Inactivo</span>{% endif %}
+          {# Insignias del sistema (#80): Activo en verde "al día"; Inactivo con la neutra por defecto. #}
+          {% if p.activo %}<span class="insignia insignia-al-dia">Activo</span>
+          {% else %}<span class="insignia">Inactivo</span>{% endif %}
         </td>
         {% if es_admin %}
         <td class="text-end text-nowrap">

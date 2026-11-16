@@ -11,8 +11,9 @@
   <div class="col-lg-7">
     <div class="card">
       <div class="card-body p-4">
-        <div class="d-flex justify-content-between align-items-start gap-2">
-          <h1 class="h4">#{{ incidente.pk }} {{ incidente.titulo }}</h1>
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+          {# h3 como el título de las demás pantallas de detalle (gastos, comunicados); la insignia queda a la derecha y baja de línea en el celular. #}
+          <h1 class="h3 mb-3">#{{ incidente.pk }} {{ incidente.titulo }}</h1>
           {% include "incidentes/_estado.html" %}
         </div>
         <dl class="row small mb-3">
@@ -45,7 +46,7 @@
           {% include "_formulario.html" with form=form_estado %}
           <button class="btn btn-primary" type="submit">Actualizar estado</button>
         </form>
-        <p class="text-muted small mt-2 mb-0"><i class="bi bi-bell"></i> Se notificará a {{ incidente.reportado_por }}.</p>
+        <p class="text-muted small mt-2 mb-0"><i class="bi bi-bell" aria-hidden="true"></i> Se notificará a {{ incidente.reportado_por }}.</p>
       </div>
     </div>
   </div>
