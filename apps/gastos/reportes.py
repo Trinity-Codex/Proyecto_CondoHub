@@ -46,7 +46,7 @@ def anotar_pagado(cobros):
     total = F("monto") + F("monto_fondo_reserva")
     pagado = Case(
         When(estado=DetalleGastoComun.Estado.PAGADO, then=total),
-        default=Coalesce(Sum("pagos__monto"), 0),
+        default=Coalesce(Sum("pagos__monto", filter=Q(pagos__anulado=False)), 0),
         output_field=IntegerField(),
     )
     # Ojo: la anotación no puede llamarse "total" porque el modelo ya tiene una

@@ -1,4 +1,5 @@
 """Aislamiento y contrato de los datos ficticios del Issue #93."""
+import copy
 import json
 import os
 import subprocess
@@ -24,6 +25,28 @@ from apps.cuentas.models import Usuario
 from config import settings_demo
 from apps.gastos.fondo import movimientos_fondo, saldo_fondo
 from apps.gastos.models import MovimientoFondo, PeriodoGasto
+
+
+def huella_modo_cliente():
+    """
+    Huella de la demo del cliente: la normal más lo que #98 agrega solo en ese modo
+    (pagos de Los Aromos, un incidente resuelto y dos proveedores de Los Aromos) y lo de #96
+    (reservas próximas y comunicados vigentes).
+    Se arma desde HUELLA para que un cambio en la carga normal no obligue a tocarla dos veces.
+    """
+    huella = copy.deepcopy(pruebas_core.CargarDemoTest.HUELLA)
+    huella["incidentes"]["RESUELTO"] = 1
+    huella["proveedores"][True] += 2
+    huella["pagos"] += 3
+    huella["cobros"]["PAGADO"] += 2  # o-101 y o-102; el abono de o-201 lo deja pendiente
+    huella["cobros"]["PENDIENTE"] -= 2
+    huella["suma_pagos"] += 416213  # los dos totales de Los Aromos más el abono de $60.000
+    huella["notificaciones"] += 5  # avisos de esos pagos y del incidente resuelto
+    # Issue #96: dos reservas próximas y dos comunicados vigentes (uno dirigido a la Torre A).
+    huella["reservas"]["CONFIRMADA"] += 2
+    huella["comunicados"] += 2
+    huella["notificaciones"] += 5  # avisos de los dos comunicados nuevos
+    return huella
 
 
 class PrepararDemoClienteTest(SimpleTestCase):
@@ -152,7 +175,8 @@ class DatosDemoClienteTest(TestCase):
         with patch("apps.gastos.demo.date") as fecha:
             fecha.today.return_value = date(2025, 2, 15)
             call_command("cargar_demo", stdout=StringIO())
-        self.assertEqual(pruebas_core.huella_demo(), pruebas_core.CargarDemoTest.HUELLA)
+        self.maxDiff = None
+        self.assertEqual(pruebas_core.huella_demo(), huella_modo_cliente())
         for nombre, saldo, meses, apertura in [
             ("Condominio Vista Verde", 1140537, [9, 10, 11], 1000000),
             ("Edificio Los Aromos", 533925, [10], 500000),
