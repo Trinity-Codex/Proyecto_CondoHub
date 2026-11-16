@@ -16,13 +16,13 @@
     <caption class="visually-hidden">Proveedores del condominio</caption>
     {# En el celular (RNF03) se ocultan rubro y contacto para que razón social, RUT, estado y acciones quepan sin desplazar la tabla. #}
     <thead>
-      <tr><th scope="col">Razón social</th><th scope="col">RUT</th><th scope="col" class="d-none d-md-table-cell">Rubro</th><th scope="col" class="d-none d-md-table-cell">Contacto</th><th scope="col">Estado</th>{% if es_admin %}<th scope="col"><span class="visually-hidden">Acciones</span></th>{% endif %}</tr>
+      <tr><th scope="col">Razón social</th><th scope="col" class="d-none d-md-table-cell">RUT</th><th scope="col" class="d-none d-md-table-cell">Rubro</th><th scope="col" class="d-none d-md-table-cell">Contacto</th><th scope="col">Estado</th>{% if es_admin %}<th scope="col"><span class="visually-hidden">Acciones</span></th>{% endif %}</tr>
     </thead>
     <tbody>
       {% for p in proveedores %}
       <tr class="{% if not p.activo %}text-muted{% endif %}">
-        <td>{{ p.razon_social }}</td>
-        <td class="text-nowrap">{{ p.rut|rut }}</td>
+        <td>{{ p.razon_social }}{# En el celular el RUT va bajo el nombre: su columna no cabe junto a estado y acciones. #}<div class="small text-muted text-nowrap d-md-none">{{ p.rut|rut }}</div></td>
+        <td class="text-nowrap d-none d-md-table-cell">{{ p.rut|rut }}</td>
         <td class="d-none d-md-table-cell">{{ p.rubro }}</td>
         <td class="d-none d-md-table-cell">
           {{ p.contacto|default:"—" }}
