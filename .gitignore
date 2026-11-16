@@ -37,3 +37,6 @@ docs/analisis_competencia/
 # Los regenera "openspec init --tools claude" en cada PC
 .claude/commands/opsx/
 .claude/skills/openspec-*/
+
+# Demo del cliente: base y evidencias locales ficticias
+.demo_cliente/

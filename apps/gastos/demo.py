@@ -18,14 +18,17 @@ from apps.gastos.servicios import emitir_periodo
 
 
 def cargar(datos):
-    hoy = date.today()
+    hoy = datos.get("fecha_referencia_demo") or date.today()
     mes_anterior = hoy.replace(day=1) - timedelta(days=1)  # último día del mes anterior
     hace_dos_meses = mes_anterior.replace(day=1) - timedelta(days=1)
 
-    # Cifras ficticias: apertura anterior a todos los períodos de esta demo.
+    # La variante del cliente abre antes de septiembre; la carga normal conserva su fecha.
+    apertura = hace_dos_meses.replace(day=1)
+    if "fecha_referencia_demo" in datos:
+        apertura -= timedelta(days=1)
     for clave, monto in [("vista_verde", 1000000), ("los_aromos", 500000)]:
         registrar_movimiento(datos[clave], tipo="INICIAL", monto=monto,
-            fecha=hace_dos_meses.replace(day=1), descripcion="Saldo inicial ficticio: conciliación de ejemplo",
+            fecha=apertura, descripcion="Saldo inicial ficticio: conciliación de ejemplo",
             usuario=datos["usuarios"]["administrador"])
 
     antiguo = _periodo_con_egresos(datos, hace_dos_meses, ajuste=1.02)

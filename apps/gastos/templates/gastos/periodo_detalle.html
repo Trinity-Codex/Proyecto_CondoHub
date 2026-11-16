@@ -11,7 +11,7 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
   <h1 class="h3 mb-0">{{ periodo }} <span class="fs-6 align-middle">{% include "gastos/_estado.html" %}</span></h1>
   {% if es_admin and periodo.esta_abierto %}
-  <div class="d-flex gap-2">
+  <div class="d-flex flex-wrap gap-2">
     <a class="btn btn-outline-secondary" href="{% url 'gastos:periodo_editar' periodo.pk %}"><i class="bi bi-pencil"></i> Editar período</a>
     <a class="btn btn-outline-primary" href="{% url 'gastos:egreso_nuevo' periodo.pk %}"><i class="bi bi-plus-lg"></i> Registrar egreso</a>
     <a class="btn btn-primary" href="{% url 'gastos:periodo_emitir' periodo.pk %}"><i class="bi bi-send-check"></i> Emitir gastos comunes</a>
@@ -29,7 +29,7 @@
 
 {# ---- Cobro de cada unidad (DetalleGastoComun) ---- #}
 <div class="card mb-4">
-  <div class="card-header d-flex justify-content-between">
+  <div class="card-header d-flex flex-wrap justify-content-between gap-2">
     <span><i class="bi bi-house-door"></i> Cobro por unidad</span>
     <span>Total a cobrar: {{ totales_cobros.gastos|add:totales_cobros.fondo|pesos }}</span>
   </div>
@@ -62,7 +62,7 @@
     {# Filtro por categoría (GET: ?categoria=ASEO), Issue #80 #}
     {% include "_chips.html" with etiqueta="Filtrar egresos por categoría" %}
     <div class="card">
-      <div class="card-header d-flex justify-content-between">
+      <div class="card-header d-flex flex-wrap justify-content-between gap-2">
         <span><i class="bi bi-receipt"></i> Egresos</span>
         <span>Total: {{ total|pesos }}</span>
       </div>
