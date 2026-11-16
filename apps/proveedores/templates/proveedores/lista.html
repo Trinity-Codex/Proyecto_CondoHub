@@ -35,7 +35,8 @@
           {% else %}<span class="insignia">Inactivo</span>{% endif %}
         </td>
         {% if es_admin %}
-        <td class="text-end text-nowrap">
+        {# Sin text-nowrap: en el celular el segundo botón baja de línea en vez de salirse de la tabla. #}
+        <td class="text-end">
           <a class="btn btn-sm btn-outline-secondary" href="{% url 'proveedores:editar' p.pk %}" aria-label="Editar {{ p.razon_social }}"><i class="bi bi-pencil" aria-hidden="true"></i><span class="d-none d-md-inline"> Editar</span></a>
           <form method="post" action="{% url 'proveedores:estado' p.pk %}" class="d-inline">
             {% csrf_token %}
