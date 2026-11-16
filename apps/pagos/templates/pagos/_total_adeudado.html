@@ -1,0 +1,12 @@
+{# Tarjeta del total adeudado (Issue #97), compartida por la cuenta de la unidad y "Mi estado de cuenta". Uso: {% include "pagos/_total_adeudado.html" %} (necesita total_adeudado y pesos cargado por la página). #}
+{% load condohub %}
+<div class="card mb-4 {% if total_adeudado %}border-danger{% else %}border-success{% endif %}">
+  <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div>
+      <div class="text-muted small">Total adeudado</div>
+      <div class="fs-3 fw-semibold">{{ total_adeudado|pesos }}</div>
+    </div>
+    {% if total_adeudado %}<span class="insignia insignia-con-deuda">Con deuda</span>
+    {% else %}<span class="insignia insignia-al-dia">Al día</span>{% endif %}
+  </div>
+</div>

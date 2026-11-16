@@ -13,4 +13,5 @@ urlpatterns = [
     path("cobranza/", views.CobranzaView.as_view(), name="cobranza"),
     path("unidad/<int:pk>/", views.CuentaUnidadView.as_view(), name="cuenta_unidad"),
     path("cobro/<int:pk>/pago/", views.RegistrarPagoView.as_view(), name="registrar_pago"),
+    path("pago/<int:pk>/anular/", views.AnularPagoView.as_view(), name="anular_pago"),
 ]

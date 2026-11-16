@@ -1,4 +1,4 @@
-"""Formulario para registrar un pago (Issue #4, RF04)."""
+"""Formularios para registrar un pago (Issue #4, RF04) y anularlo (Issue #53)."""
 from django import forms
 from django.utils import timezone
 
@@ -53,3 +53,18 @@ class PagoForm(FormularioBootstrap):
         if fecha > timezone.localdate():
             raise forms.ValidationError("La fecha del pago no puede ser futura.")
         return fecha
+
+
+class AnularPagoForm(FormularioBootstrap):
+    """
+    Motivo de la anulación (Issue #53). Es obligatorio porque es lo que el cierre mensual y la
+    auditoría muestran para explicar la corrección; Pago.anular() lo vuelve a exigir.
+    """
+
+    motivo = forms.CharField(
+        label="Motivo de la anulación", max_length=200,
+        widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Ej.: El pago se registró en la unidad equivocada"}),
+        help_text="Obligatorio. Lo verán el residente en su aviso y la auditoría.",
+        # CharField quita los espacios (strip=True): un motivo de solo espacios queda vacío y se rechaza.
+        error_messages={"required": "Indica el motivo de la anulación."},
+    )

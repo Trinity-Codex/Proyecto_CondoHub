@@ -1,0 +1,5 @@
+{# Insignia del estado de un cobro (Issue #97): una sola fuente para la cuenta de la unidad, el estado de cuenta y el detalle. Uso: {% include "pagos/_estado_cobro.html" with estado=c.estado %} #}
+{# Misma paleta que gastos/_situacion.html: Pendiente es "con deuda" y Moroso conserva su color propio. #}
+{% if estado == "PAGADO" %}<span class="insignia insignia-al-dia">Pagado</span>
+{% elif estado == "MOROSO" %}<span class="insignia insignia-moroso">Moroso</span>
+{% else %}<span class="insignia insignia-con-deuda">Pendiente</span>{% endif %}
