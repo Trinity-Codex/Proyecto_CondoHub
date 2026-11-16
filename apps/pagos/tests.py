@@ -226,6 +226,25 @@ class RegistrarPagosTest(TestCase):
         # Los residentes de otras unidades no reciben nada.
         self.assertFalse(Notificacion.objects.filter(usuario=self.e.residente_b, titulo="Registramos tu pago").exists())
 
+    def test_no_avisa_a_quien_llego_despues_del_periodo(self):
+        # Llegó el 1 de noviembre; el cobro es de octubre: no lo ve, así que no debe recibir el aviso
+        # (si lo recibiera, el enlace le daría 404).
+        tarde = crear_usuario("tarde@prueba.cl")
+        Residente.objects.create(usuario=tarde, unidad=self.e.a101, desde=datetime.date(2026, 11, 1))
+        self.pagar(42000)
+        self.assertTrue(Notificacion.objects.filter(usuario=self.e.residente, titulo="Registramos tu pago").exists())
+        self.assertFalse(Notificacion.objects.filter(usuario=tarde, titulo="Registramos tu pago").exists())
+
+    def test_no_avisa_a_quien_ya_fue_dado_de_baja(self):
+        # Vivió en la unidad hasta fines de septiembre: el cobro de octubre ya no le corresponde.
+        baja = crear_usuario("baja@prueba.cl")
+        Residente.objects.create(
+            usuario=baja, unidad=self.e.a101, desde=datetime.date(2020, 1, 1),
+            hasta=datetime.date(2026, 9, 30), activo=False,
+        )
+        self.pagar(42000)
+        self.assertFalse(Notificacion.objects.filter(usuario=baja, titulo="Registramos tu pago").exists())
+
     def test_solo_el_administrador_registra_pagos(self):
         for usuario in (self.e.comite, self.e.conserje, self.e.residente):
             self.client.force_login(usuario)

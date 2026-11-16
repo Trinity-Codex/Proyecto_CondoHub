@@ -23,4 +23,4 @@
 
 ## 5. Cierre
 
-- [ ] 5.1 Archivar este cambio en el mismo Pull Request, después de `avisar-pago-solo-a-quien-ve-el-cobro`, porque ambos modifican `Registro de pagos`.
+- [x] 5.1 Archivar este cambio en el mismo Pull Request, después de `avisar-pago-solo-a-quien-ve-el-cobro`, porque ambos modifican `Registro de pagos`.

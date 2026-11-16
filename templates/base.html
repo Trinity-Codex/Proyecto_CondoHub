@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
-  <link href="{% static 'css/condohub.css' %}" rel="stylesheet">
+  <link href="{% static 'css/condohub.css' %}?v=20261116" rel="stylesheet">
   {# PWA: permite "instalar" el sitio en el celular como una app (RNF03). #}
   <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
   <link rel="icon" href="{% static 'img/favicon.ico' %}" sizes="48x48">
@@ -96,11 +96,11 @@
             <li><a class="dropdown-item {% if vista == 'reporte' %}active{% endif %}" href="{% url 'gastos:reporte' %}"><i class="bi bi-graph-up"></i> Reporte de morosidad</a></li>
             <li><a class="dropdown-item {% if seccion == 'proveedores' %}active{% endif %}" href="{% url 'proveedores:lista' %}"><i class="bi bi-truck"></i> Proveedores</a></li>
             {# Apps del PMV 27-nov (#62): rendición para administrador y comité; auditoría solo para el administrador. La cartera (#54) es un enlace propio. #}
-            <li><a class="dropdown-item {% if seccion == 'rendicion' %}active{% endif %}" href="{% url 'rendicion:inicio' %}"><i class="bi bi-clipboard-data"></i> Rendición mensual</a></li>
+            <li><a class="dropdown-item {% if seccion == 'rendicion' %}active{% endif %}" href="{% url 'rendicion:inicio' %}"><i class="bi bi-clipboard-data"></i> Rendición mensual <span class="d-block small">En preparación</span></a></li>
             {% if es_admin %}
             <li><hr class="dropdown-divider"></li>
             <li><h6 class="dropdown-header">Control</h6></li>
-            <li><a class="dropdown-item {% if seccion == 'auditoria' %}active{% endif %}" href="{% url 'auditoria:inicio' %}"><i class="bi bi-journal-check"></i> Auditoría</a></li>
+            <li><a class="dropdown-item {% if seccion == 'auditoria' %}active{% endif %}" href="{% url 'auditoria:inicio' %}"><i class="bi bi-journal-check"></i> Auditoría <span class="d-block small">En preparación</span></a></li>
             {% endif %}
           </ul>
         </li>

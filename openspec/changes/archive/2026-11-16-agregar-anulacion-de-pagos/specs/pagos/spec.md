@@ -46,6 +46,10 @@ El sistema SHALL permitir que el administrador registre pagos de un cobro con fe
 - **WHEN** el administrador registra un pago de un cobro de febrero en una unidad donde un residente llegó en marzo y otro estaba desde febrero
 - **THEN** solo el residente de febrero recibe el aviso, y el residente de marzo no recibe aviso ni enlace a ese cobro
 
+#### Scenario: Residente dado de baja no recibe aviso
+- **WHEN** el administrador registra un pago en una unidad donde una persona ya fue dado de baja
+- **THEN** esa persona no recibe el aviso
+
 #### Scenario: Acceso por rol
 - **WHEN** un miembro del comité o un residente intenta registrar un pago
 - **THEN** el sistema responde 403 y no se crea ningún pago

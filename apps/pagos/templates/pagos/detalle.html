@@ -8,6 +8,9 @@
   <li class="breadcrumb-item active" aria-current="page">{{ cobro.periodo }} · {{ cobro.unidad }}</li>
 </ol></nav>
 
+{# Título único de la página (antes no tenía h1): mismo patrón ícono + h3 que el resto de pagos. mb-4 y no mb-3: la fila g-4 de abajo sube 1,5 rem con su margen negativo y pisaría el título. #}
+<h1 class="h3 mb-4"><i class="bi bi-receipt" aria-hidden="true"></i> Cobro {{ cobro.periodo }} · {{ cobro.unidad }}</h1>
+
 <div class="row g-4">
   <div class="col-lg-6">
     <div class="card h-100">
@@ -22,7 +25,7 @@
         <li class="list-group-item d-flex justify-content-between"><span>Tu parte de los gastos</span><span>{{ cobro.monto|pesos }}</span></li>
         <li class="list-group-item d-flex justify-content-between"><span>Fondo de reserva ({{ cobro.periodo.porcentaje_fondo_reserva|floatformat:"-2" }} %)</span><span>{{ cobro.monto_fondo_reserva|pesos }}</span></li>
         <li class="list-group-item d-flex justify-content-between fw-semibold"><span>Total a pagar</span><span>{{ cobro.total|pesos }}</span></li>
-        <li class="list-group-item d-flex justify-content-between"><span>Estado</span><span>{{ cobro.get_estado_display }}</span></li>
+        <li class="list-group-item d-flex justify-content-between align-items-center"><span>Estado</span>{% include "pagos/_estado_cobro.html" with estado=cobro.estado %}</li>
         <li class="list-group-item d-flex justify-content-between"><span>Pagado</span><span>{{ pagado|pesos }}</span></li>
         <li class="list-group-item d-flex justify-content-between fw-semibold"><span>Saldo pendiente</span><span>{{ saldo|pesos }}</span></li>
       </ul>

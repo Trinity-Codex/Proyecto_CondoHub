@@ -115,13 +115,17 @@ class Pago(Sujeto, models.Model):
             detalle.estado = DetalleGastoComun.Estado.PAGADO
             detalle.save(update_fields=["estado"])
 
+        # Solo avisa a quien ve este cobro: un residente que llegó después del período, o que ya se fue,
+        # no lo tiene en su cuenta y el enlace le daría 404 (Issue #46, cobros_visibles).
         residentes = Residente.objects.filter(unidad=detalle.unidad, activo=True).select_related("usuario")
+        cobro_solo = DetalleGastoComun.objects.filter(pk=detalle.pk)
+        destinatarios = [r.usuario for r in residentes if cobros_visibles(cobro_solo, r.usuario).exists()]
         pago.notificar(
             Evento(
                 condominio=detalle.periodo.condominio,
                 titulo="Registramos tu pago",
                 mensaje=f"Pago de ${monto:,} para {detalle.periodo} ({detalle.unidad}).".replace(",", "."),
-                destinatarios=[r.usuario for r in residentes],
+                destinatarios=destinatarios,
                 url=reverse("pagos:cobro_detalle", args=[detalle.pk]),
             )
         )
