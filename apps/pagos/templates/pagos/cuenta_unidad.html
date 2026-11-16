@@ -10,16 +10,7 @@
 
 <h1 class="h3 mb-3"><i class="bi bi-wallet2"></i> Estado de cuenta de {{ unidad }}</h1>
 
-<div class="card mb-4 {% if total_adeudado %}border-danger{% else %}border-success{% endif %}">
-  <div class="card-body d-flex justify-content-between align-items-center">
-    <div>
-      <div class="text-muted small">Total adeudado</div>
-      <div class="fs-3 fw-semibold">{{ total_adeudado|pesos }}</div>
-    </div>
-    {% if total_adeudado %}<span class="badge text-bg-danger">Con deuda</span>
-    {% else %}<span class="badge text-bg-success">Al día</span>{% endif %}
-  </div>
-</div>
+{% include "pagos/_total_adeudado.html" %}
 
 {% comment %}
   En el celular (RNF03) se ocultan Total y Pagado (d-none d-md-table-cell) y el botón
@@ -37,11 +28,7 @@
         <td class="text-end text-nowrap d-none d-md-table-cell">{{ c.total|pesos }}</td>
         <td class="text-end text-nowrap d-none d-md-table-cell">{{ c.pagado|pesos }}</td>
         <td class="text-end text-nowrap fw-semibold">{{ c.saldo|pesos }}</td>
-        <td>
-          {% if c.estado == "PAGADO" %}<span class="badge text-bg-success">Pagado</span>
-          {% elif c.estado == "MOROSO" %}<span class="badge text-bg-danger">Moroso</span>
-          {% else %}<span class="badge text-bg-warning">Pendiente</span>{% endif %}
-        </td>
+        <td>{% include "pagos/_estado_cobro.html" with estado=c.estado %}</td>
         <td class="text-end">
           {# Solo el administrador registra pagos; el comité solo consulta. #}
           {% if es_admin and c.saldo %}
