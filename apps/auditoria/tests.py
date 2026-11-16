@@ -1,6 +1,7 @@
-"""Pruebas de auditoria: página provisional y permisos por rol (contrato C0, #62)."""
-from datetime import date
+"""Pruebas de auditoria: permisos por rol (C0, #62), lista con filtros (#27) y registro inmutable."""
+from datetime import date, datetime
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib import admin as admin_django
 from django.test import TestCase
@@ -12,8 +13,22 @@ from apps.auditoria.servicios import Accion, registrar
 from apps.core.pruebas import crear_escenario
 
 
+def _registrar_el(cuando, usuario, condominio, accion=Accion.CREAR):
+    """
+    Crea un registro con `creado` en `cuando`. `creado` es auto_now_add y el modelo es inmutable,
+    así que no se puede editar la fecha después: se simula el reloj solo durante la creación.
+    """
+    with patch("django.utils.timezone.now", return_value=cuando):
+        return registrar(usuario, condominio, accion, condominio)
+
+
+def _fecha(dia, hora=12, minuto=0):
+    """Fecha con zona horaria del proyecto: el filtro compara por día local, no por UTC."""
+    return datetime(2026, 3, dia, hora, minuto, tzinfo=timezone.get_current_timezone())
+
+
 class PaginaProvisionalTest(TestCase):
-    """Solo entra el administrador (200); los demás roles reciben 403 y sin sesión se pide iniciarla."""
+    """Administrador y comité entran (200); conserje y residente reciben 403 y sin sesión se pide iniciarla."""
 
     def setUp(self):
         self.e = crear_escenario()
@@ -22,7 +37,7 @@ class PaginaProvisionalTest(TestCase):
     def test_quien_puede_entrar(self):
         esperados = [
             (self.e.administrador, 200),
-            (self.e.comite, 403),
+            (self.e.comite, 200),
             (self.e.conserje, 403),
             (self.e.residente, 403),
         ]
@@ -40,6 +55,93 @@ class PaginaProvisionalTest(TestCase):
     def test_el_menu_tiene_el_enlace(self):
         self.client.force_login(self.e.administrador)
         self.assertContains(self.client.get(reverse("core:inicio")), self.url)
+
+
+class ListaAuditoriaTest(TestCase):
+    """La lista se limita al condominio, filtra por fecha y usuario, y es de solo lectura."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.url = reverse("auditoria:inicio")
+        # Registros del condominio propio: dos días distintos y dos usuarios.
+        self.r_admin = _registrar_el(_fecha(10, 0, 0), self.e.administrador, self.e.condominio, Accion.MODIFICAR)
+        self.r_comite = _registrar_el(_fecha(12, 23, 59), self.e.comite, self.e.condominio, Accion.ANULAR)
+        # Registros de "Ajeno": otro usuario, y fechas (5 y 20) que el condominio propio no usa.
+        self.r_ajeno = _registrar_el(_fecha(5), self.e.residente_ajeno, self.e.ajeno)
+        self.r_ajeno_fecha = _registrar_el(_fecha(20), self.e.administrador, self.e.ajeno)
+
+    def ids(self, respuesta):
+        return {r.pk for r in respuesta.context["registros"]}
+
+    def test_administrador_y_comite_ven_solo_su_condominio(self):
+        for usuario in (self.e.administrador, self.e.comite):
+            with self.subTest(usuario=usuario):
+                self.client.force_login(usuario)
+                respuesta = self.client.get(self.url)
+                self.assertEqual(self.ids(respuesta), {self.r_admin.pk, self.r_comite.pk})
+                self.assertContains(respuesta, "Anular")
+
+    def test_estado_vacio(self):
+        self.client.force_login(self.e.administrador)
+        respuesta = self.client.get(self.url, {"desde": "2026-03-15", "hasta": "2026-03-16"})
+        self.assertContains(respuesta, "No hay registros de auditoría")
+
+    def test_filtro_por_fechas_con_bordes_inclusivos(self):
+        self.client.force_login(self.e.administrador)
+        casos = [
+            ({"desde": "2026-03-12"}, {self.r_comite.pk}),  # borde: 23:59 del día 12 entra
+            ({"hasta": "2026-03-10"}, {self.r_admin.pk}),  # borde: 00:00 del día 10 entra
+            ({"desde": "2026-03-10", "hasta": "2026-03-12"}, {self.r_admin.pk, self.r_comite.pk}),
+            ({"desde": "2026-03-11", "hasta": "2026-03-11"}, set()),
+        ]
+        for filtros, esperado in casos:
+            with self.subTest(filtros=filtros):
+                self.assertEqual(self.ids(self.client.get(self.url, filtros)), esperado)
+
+    def test_filtro_por_usuario(self):
+        self.client.force_login(self.e.administrador)
+        respuesta = self.client.get(self.url, {"usuario": str(self.e.comite.pk)})
+        self.assertEqual(self.ids(respuesta), {self.r_comite.pk})
+
+    def test_filtrar_por_usuario_de_otro_condominio_no_devuelve_sus_registros(self):
+        # residente_ajeno solo tiene registros en "Ajeno": no es una opción válida aquí.
+        self.client.force_login(self.e.administrador)
+        respuesta = self.client.get(self.url, {"usuario": str(self.e.residente_ajeno.pk)})
+        self.assertFalse(self.ids(respuesta) & {self.r_ajeno.pk, self.r_ajeno_fecha.pk})
+        self.assertTrue(respuesta.context["filtro"].errors)
+
+    def test_filtrar_por_fechas_de_otro_condominio_no_devuelve_sus_registros(self):
+        self.client.force_login(self.e.comite)
+        for filtros in ({"desde": "2026-03-20", "hasta": "2026-03-20"}, {"desde": "2026-03-05", "hasta": "2026-03-05"}):
+            with self.subTest(filtros=filtros):
+                self.assertEqual(self.ids(self.client.get(self.url, filtros)), set())
+
+    def test_desde_mayor_que_hasta_es_error_y_no_filtra(self):
+        self.client.force_login(self.e.administrador)
+        respuesta = self.client.get(self.url, {"desde": "2026-03-12", "hasta": "2026-03-10"})
+        self.assertTrue(respuesta.context["filtro"].non_field_errors())
+        self.assertEqual(self.ids(respuesta), {self.r_admin.pk, self.r_comite.pk})
+
+    def test_la_paginacion_conserva_los_filtros(self):
+        for _ in range(50):
+            registrar(self.e.administrador, self.e.condominio, Accion.CREAR, self.e.condominio)
+        self.client.force_login(self.e.administrador)
+        respuesta = self.client.get(self.url, {"usuario": str(self.e.administrador.pk)})
+        self.assertEqual(len(respuesta.context["registros"]), 50)
+        self.assertContains(respuesta, f"usuario={self.e.administrador.pk}&amp;page=2")
+
+    def test_post_responde_405_y_no_cambia_los_registros(self):
+        self.client.force_login(self.e.administrador)
+        antes = RegistroAuditoria.objects.count()
+        self.assertEqual(self.client.post(self.url, {"accion": "crear"}).status_code, 405)
+        self.assertEqual(RegistroAuditoria.objects.count(), antes)
+
+    def test_la_pagina_no_tiene_enlaces_de_edicion_ni_de_borrado(self):
+        self.client.force_login(self.e.administrador)
+        html = self.client.get(self.url).content.decode().lower()
+        for texto in ("editar", "borrar", "eliminar", "/admin/auditoria"):
+            with self.subTest(texto=texto):
+                self.assertNotIn(texto, html)
 
 
 class RegistroInmutableTest(TestCase):
