@@ -294,7 +294,8 @@ class CargarDemoTest(TestCase):
         "comunicados": 3,
         # 21 y no 22: el aviso de Pago.registrar solo llega a quien ve el cobro
         # (residencia vigente); el residente recién llegado de demo.py no lo recibe.
-        "notificaciones": 21,
+        # + 2 por el pago anulado de A-101: su aviso y el de la anulación (#53).
+        "notificaciones": 23,
         "incidentes": {"EN_PROCESO": 1, "RECIBIDO": 1},
         "proveedores": {False: 1, True: 3},
         "periodos": {"ABIERTO": 1, "EMITIDO": 3},  # + el mes anterior de Los Aromos (#54)
@@ -308,8 +309,8 @@ class CargarDemoTest(TestCase):
         },
         "cobros": {"PAGADO": 13, "PENDIENTE": 11},
         "suma_cobros": {"s": 4989239, "f": 249462},
-        "pagos": 14,
-        "suma_pagos": 3196063,
+        "pagos": 15,  # + el pago anulado de la demo (#53)
+        "suma_pagos": 3460817,  # + el pago anulado de la demo (#53)
     }
 
     def cargar(self, *argumentos):
