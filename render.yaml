@@ -2,7 +2,7 @@
 # No crea bases ni servicios adicionales. El operador configura el secreto en el panel.
 services:
   - type: web
-    name: condohub-demo
+    name: condohub-demo-visual
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile.render-demo

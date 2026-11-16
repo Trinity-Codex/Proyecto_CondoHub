@@ -13,7 +13,10 @@ python manage.py collectstatic --noinput
 
 # Comando existente (#93): solo SQLite dentro de .demo_cliente/, migra y carga los datos
 # ficticios sin duplicarlos. Nunca flush ni cargar_demo --reiniciar.
-python manage.py preparar_demo_cliente --settings=config.settings_render_demo
+# El cargador interactivo imprime las cuentas ficticias. En Render quedan solo los
+# errores en stderr y una confirmación de que el comando terminó correctamente.
+python manage.py preparar_demo_cliente --settings=config.settings_render_demo >/dev/null
+printf '%s\n' 'Datos ficticios preparados.'
 
 # Un worker: poca memoria en Free y una sola escritura a la vez en SQLite (sesiones).
 # El contenedor solo recibe tráfico del proxy de Render, que siempre fija X-Forwarded-Proto.

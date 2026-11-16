@@ -7,6 +7,7 @@ import sys
 import tempfile
 import textwrap
 from pathlib import Path
+from secrets import token_urlsafe
 from unittest.mock import patch
 
 from django.apps import apps
@@ -21,6 +22,7 @@ from apps.comunicados.models import Comunicado
 from apps.core.pruebas import CLAVE, crear_escenario, crear_usuario
 from apps.cuentas.models import Usuario
 from apps.notificaciones.models import Notificacion
+from config.settings import MIDDLEWARE as MIDDLEWARE_NORMAL
 
 MIDDLEWARE_DEMO = "apps.core.middleware_demo.SoloLecturaDemoMiddleware"
 AVISO = "Demo de solo lectura · Datos ficticios"
@@ -28,6 +30,14 @@ BLOQUEO = "Acción no disponible en la demo"
 # Clave de prueba generada aquí, sin valor real: solo cumple el largo que exige la configuración.
 CLAVE_PRUEBA = "prueba-render-" + "abcdefghij" * 5
 HOST = "condohub-demo.onrender.com"
+
+
+def cliente_demo(**opciones):
+    """Conserva el host y HTTPS de Render al probar su configuración real."""
+    host = settings.ALLOWED_HOSTS[0]
+    if settings.SECURE_PROXY_SSL_HEADER:
+        opciones.update(HTTP_X_FORWARDED_PROTO="https", HTTP_ORIGIN=f"https://{host}")
+    return Client(HTTP_HOST=host, **opciones)
 
 
 def configuracion_render(**variables):
@@ -86,13 +96,17 @@ class ConfiguracionRenderTest(TestCase):
                                      "whitenoise.middleware.WhiteNoiseMiddleware"])
         self.assertEqual(orden[-1], MIDDLEWARE_DEMO)
         # Todos los middleware habituales (CSRF, sesión, condominio activo) siguen, en su orden.
-        self.assertEqual([m for m in orden if m in settings.MIDDLEWARE], settings.MIDDLEWARE)
-        self.assertNotIn(MIDDLEWARE_DEMO, settings.MIDDLEWARE)
+        self.assertEqual([m for m in orden if m in MIDDLEWARE_NORMAL], MIDDLEWARE_NORMAL)
+        self.assertNotIn(MIDDLEWARE_DEMO, MIDDLEWARE_NORMAL)
 
     def test_secreto_ausente_o_de_desarrollo_detiene_el_arranque(self):
         for clave in ["", "corta", "x" * 60, "django-insecure-condohub-solo-para-desarrollo" + "y" * 10]:
             with self.subTest(largo=len(clave)), self.assertRaisesMessage(ImproperlyConfigured, "DJANGO_SECRET_KEY"):
                 configuracion_render(DJANGO_SECRET_KEY=clave)
+
+    def test_acepta_el_formato_corto_del_generador_de_render(self):
+        clave_generada = token_urlsafe(32)
+        self.assertEqual(configuracion_render(DJANGO_SECRET_KEY=clave_generada)["SECRET_KEY"], clave_generada)
 
     def test_host_invalido_detiene_el_arranque(self):
         for host in ["", "localhost", "*.onrender.com", ".onrender.com", "demo.onrender.com:8000",
@@ -133,9 +147,10 @@ class ConfiguracionRenderTest(TestCase):
             self.assertTrue((Path(temporal) / ".demo_cliente/demo.sqlite3").is_file())
 
 
-@override_settings(MIDDLEWARE=[*settings.MIDDLEWARE, MIDDLEWARE_DEMO])
+@override_settings(MIDDLEWARE=[m for m in settings.MIDDLEWARE if m != MIDDLEWARE_DEMO] + [MIDDLEWARE_DEMO])
 class SoloLecturaDemoTest(TestCase):
     def setUp(self):
+        self.client = cliente_demo()
         self.e = crear_escenario()
         self.comunicado = Comunicado.objects.create(
             condominio=self.e.condominio, autor=self.e.administrador, titulo="Aviso", contenido="Texto")
@@ -169,7 +184,7 @@ class SoloLecturaDemoTest(TestCase):
         self.assertEqual(self.client.head(reverse("cuentas:iniciar_sesion")).status_code, 200)
 
     def test_iniciar_y_cerrar_sesion_con_csrf(self):
-        cliente = Client(enforce_csrf_checks=True)
+        cliente = cliente_demo(enforce_csrf_checks=True)
         url = reverse("cuentas:iniciar_sesion")
         datos = {"username": self.e.residente.email, "password": CLAVE}
         # Sin token CSRF el POST permitido igual se rechaza (CSRF corre antes que la demo).
@@ -256,10 +271,12 @@ class SoloLecturaDemoTest(TestCase):
             self.assertEqual(foto_negocio(), antes, usuario.email)
 
 
+@override_settings(MIDDLEWARE=MIDDLEWARE_NORMAL)
 class EntornoHabitualSinBloqueoTest(TestCase):
     """Sin settings_render_demo no hay aviso ni bloqueo: el proyecto se comporta como siempre."""
 
     def setUp(self):
+        self.client = cliente_demo()
         self.e = crear_escenario()
 
     def test_escrituras_y_abrir_notificacion_funcionan(self):

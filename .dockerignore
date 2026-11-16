@@ -5,6 +5,8 @@
 # Claves locales (el modelo .env.example tampoco hace falta en la imagen)
 .env
 .env.*
+**/.env
+**/.env.*
 *.pem
 *.key
 # Entornos virtuales y compilados
@@ -14,6 +16,8 @@ __pycache__/
 *.pyc
 # Bases y estáticos locales: la demo crea los suyos al arrancar
 *.sqlite3
+*.sqlite3-*
+.demo_cliente
 .demo_cliente/
 staticfiles/
 *.log
@@ -21,6 +25,14 @@ staticfiles/
 .agents/
 .claude/
 .codex/
+.Codex/
+.locks/
+.prowl/
+.prowl-setup.lock
+.serena/
+.gemini/
+CLAUDE.local.md
+ia.md
 .vscode/
 .idea/
 openspec/

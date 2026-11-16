@@ -17,13 +17,22 @@ from .settings_demo import BASE_DIR, MIDDLEWARE
 
 DEBUG = False
 
-# La clave firma sesiones y CSRF: nunca la de desarrollo ni una corta (check --deploy W009).
+# Declarar una base propia evita compartir el diccionario de la demo local. Django
+# cambia el nombre de la base en memoria al ejecutar su suite de pruebas.
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / ".demo_cliente" / "demo.sqlite3",
+    }
+}
+
+# Render puede generar 32 bytes aleatorios en Base64 (44 caracteres). Django advierte
+# con W009 bajo 50 caracteres, aunque ese formato tenga suficiente entropía.
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
-if (len(SECRET_KEY) < 50 or len(set(SECRET_KEY)) < 5
+if (len(SECRET_KEY) < 32 or len(set(SECRET_KEY)) < 5 or any(c.isspace() for c in SECRET_KEY)
         or SECRET_KEY.startswith("django-insecure")):
     raise ImproperlyConfigured(
-        "Define DJANGO_SECRET_KEY en el panel de Render: al menos 50 caracteres variados "
-        "y distinta de la clave de desarrollo."
+        "Genera DJANGO_SECRET_KEY en el panel de Render con al menos 32 caracteres variados."
     )
 
 # Render publica el dominio en RENDER_EXTERNAL_HOSTNAME. Se exige un nombre DNS simple, en
