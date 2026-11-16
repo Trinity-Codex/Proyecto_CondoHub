@@ -10,8 +10,8 @@
 
 ## 3. Datos demo
 
-- [ ] 3.1 Cambiar la huella de la notificación en `apps/core/tests.py` (`HUELLA["notificaciones"]`) de 22 a 21 (main sumó dos avisos con #58 y #54). Pendiente del OK de Walther: el demo ahora produce un aviso menos, por el residente recién llegado de `apps/condominios/demo.py`.
+- [x] 3.1 Cambiar la huella de la notificación en `apps/core/tests.py` (`HUELLA["notificaciones"]`) de 22 a 21 (main sumó dos avisos con #58 y #54). Aprobado por Walther: el demo ahora produce un aviso menos, por el residente recién llegado de `apps/condominios/demo.py`.
 
 ## 4. Cierre
 
-- [ ] 4.1 Archivar este cambio en el mismo Pull Request, antes de unirlo a main.
+- [x] 4.1 Archivar este cambio en el mismo Pull Request, antes de unirlo a main.
