@@ -172,8 +172,8 @@ Vamos a trabajar el Issue #27. Antes de escribir nada, lee:
 Reglas:
 1. Solo modificas mis carpetas: apps/pagos, apps/proveedores, apps/incidentes, apps/auditoria,
    apps/rendicion y el service worker en static/. Si necesitas cambiar otro archivo, detente y dime cuál y
-   por qué. Excepciones ya acordadas: en #53, una línea en anotar_pagado de apps/gastos/reportes.py para usar
-   Pago.objects.vigentes(); en #26, una línea en templates/base.html para registrar el service worker.
+   por qué. Excepciones ya acordadas: en #53, una línea en anotar_pagado de apps/gastos/reportes.py para que el Sum
+   filtre pagos__anulado=False; en #26, una línea en templates/base.html para registrar el service worker.
 2. No cambies config/settings.py, config/urls.py ni requirements.txt.
 3. Respeta las firmas de los contratos del plan (C0 a C5). Los míos son
    apps.auditoria.servicios.registrar(usuario, condominio, accion, objeto, antes=None, despues=None) y
