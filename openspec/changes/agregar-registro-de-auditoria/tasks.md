@@ -33,7 +33,7 @@ Este cambio cubre el Issue #27 en tres PR: el núcleo (secciones 1 a 4, ya unido
 - [x] 5.2 Filtros por fecha (desde y hasta, inclusive) y por usuario, en un formulario GET. Los filtros se aplican sobre el queryset ya limitado al condominio. Verificación: pruebas de cada filtro, y prueba de que filtrar por un usuario o una fecha de otro condominio no devuelve sus registros.
 - [x] 5.3 Vista de solo lectura: solo acepta GET. Sin enlaces de edición ni de borrado. Verificación: prueba de que un POST responde 405 y no crea ni cambia registros.
 - [x] 5.4 Residente y conserje reciben 403. Sin sesión, redirige al login. Verificación: se actualizan las pruebas de `PaginaProvisionalTest`, porque ahora el comité entra con 200.
-- [ ] 5.5 Ejecutar `python manage.py test apps.auditoria` y `openspec validate agregar-registro-de-auditoria --strict`. Verificación: ambos pasan.
+- [x] 5.5 Ejecutar `python manage.py test apps.auditoria` y `openspec validate agregar-registro-de-auditoria --strict`. Verificación: ambos pasan.
 
 ## 6. Eventos de pagos e incidentes (PR 3, `Closes #27`)
 
