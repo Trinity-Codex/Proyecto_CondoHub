@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load condohub %}
 {% block titulo %}{{ espacio.nombre }}{% endblock %}
 
 {% block contenido %}
@@ -16,7 +17,7 @@
         <ul class="list-unstyled small">
           <li><i class="bi bi-people"></i> Hasta {{ espacio.capacidad }} personas</li>
           <li><i class="bi bi-clock"></i> Horario: {{ espacio.hora_apertura|time:"H:i" }} a {{ espacio.hora_cierre|time:"H:i" }}</li>
-          <li><i class="bi bi-cash"></i> {% if espacio.tarifa %}${{ espacio.tarifa }} por reserva{% else %}Sin costo{% endif %}</li>
+          <li><i class="bi bi-cash"></i> {% if espacio.tarifa %}{{ espacio.tarifa|pesos }} por reserva{% else %}Sin costo{% endif %}</li>
         </ul>
       </div>
     </div>
