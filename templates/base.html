@@ -95,13 +95,11 @@
             <li><a class="dropdown-item {% if seccion == 'pagos' and vista != 'estado_cuenta' and vista != 'cobro_detalle' %}active{% endif %}" href="{% url 'pagos:cobranza' %}"><i class="bi bi-cash-stack"></i> Cobranza</a></li>
             <li><a class="dropdown-item {% if vista == 'reporte' %}active{% endif %}" href="{% url 'gastos:reporte' %}"><i class="bi bi-graph-up"></i> Reporte de morosidad</a></li>
             <li><a class="dropdown-item {% if seccion == 'proveedores' %}active{% endif %}" href="{% url 'proveedores:lista' %}"><i class="bi bi-truck"></i> Proveedores</a></li>
-            {# Apps del PMV 27-nov (#62): rendición para administrador y comité; auditoría solo para el administrador. La cartera (#54) es un enlace propio. #}
+            {# Rendición y auditoría se muestran a administrador y comité, igual que sus vistas. #}
             <li><a class="dropdown-item {% if seccion == 'rendicion' %}active{% endif %}" href="{% url 'rendicion:inicio' %}"><i class="bi bi-clipboard-data"></i> Rendición mensual <span class="d-block small">En preparación</span></a></li>
-            {% if es_admin %}
             <li><hr class="dropdown-divider"></li>
             <li><h6 class="dropdown-header">Control</h6></li>
-            <li><a class="dropdown-item {% if seccion == 'auditoria' %}active{% endif %}" href="{% url 'auditoria:inicio' %}"><i class="bi bi-journal-check"></i> Auditoría <span class="d-block small">En preparación</span></a></li>
-            {% endif %}
+            <li><a class="dropdown-item {% if seccion == 'auditoria' %}active{% endif %}" href="{% url 'auditoria:inicio' %}"><i class="bi bi-journal-check"></i> Auditoría</a></li>
           </ul>
         </li>
         {% endif %}

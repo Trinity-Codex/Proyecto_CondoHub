@@ -1,6 +1,6 @@
 # Tasks
 
-Este cambio es el PR núcleo del Issue #27 (`Refs #27`). La vista y los eventos de pagos e incidentes van en el PR siguiente.
+Este cambio cubre el Issue #27 en tres PR: el núcleo (secciones 1 a 4, ya unido), la vista (sección 5, `Refs #27`) y los eventos de pagos e incidentes (sección 6, `Closes #27`). La anulación de pagos ya registra su evento desde #53.
 
 ## 1. Modelo e inmutabilidad
 
@@ -26,6 +26,19 @@ Este cambio es el PR núcleo del Issue #27 (`Refs #27`). La vista y los eventos 
 - [x] 4.1 Ejecutar `python manage.py test apps` completo. Verificación: todas las pruebas pasan.
 - [x] 4.2 Ejecutar `openspec validate agregar-registro-de-auditoria --strict` y `openspec validate --all --strict`. Verificación: ambos comandos pasan.
 - [x] 4.3 Revisar que `apps/auditoria/servicios.py` y `models.py` tengan comentarios en español que expliquen el porqué de la inmutabilidad y de los campos sin clave foránea. Verificación: lectura del archivo por un compañero que no lo escribió.
+
+## 5. Vista de auditoría (PR 2, `Refs #27`)
+
+- [x] 5.1 Reemplazar la página provisional de `AuditoriaInicioView` por una lista de `RegistroAuditoria` para el administrador y el comité. Filtra con `condominio_id=request.condominio.pk` porque el campo no es FK y `CondominioQuerysetMixin` no sirve. Verificación: prueba en la que el administrador y el comité ven los registros de su condominio y no los del condominio «Ajeno».
+- [x] 5.2 Filtros por fecha (desde y hasta, inclusive) y por usuario, en un formulario GET. Los filtros se aplican sobre el queryset ya limitado al condominio. Verificación: pruebas de cada filtro, y prueba de que filtrar por un usuario o una fecha de otro condominio no devuelve sus registros.
+- [x] 5.3 Vista de solo lectura: solo acepta GET. Sin enlaces de edición ni de borrado. Verificación: prueba de que un POST responde 405 y no crea ni cambia registros.
+- [x] 5.4 Residente y conserje reciben 403. Sin sesión, redirige al login. Verificación: se actualizan las pruebas de `PaginaProvisionalTest`, porque ahora el comité entra con 200.
+- [x] 5.5 Ejecutar `python manage.py test apps.auditoria` y `openspec validate agregar-registro-de-auditoria --strict`. Verificación: ambos pasan.
+
+## 6. Eventos de pagos e incidentes (PR 3, `Closes #27`)
+
+- [ ] 6.1 Registrar el evento al registrar un pago (`Pago.registrar`). Verificación: prueba del registro con `antes` vacío.
+- [ ] 6.2 Registrar los cambios de estado de un incidente con el estado anterior y el nuevo. Verificación: prueba con `antes` y `despues`.
 
 ## Workflow follow-up
 

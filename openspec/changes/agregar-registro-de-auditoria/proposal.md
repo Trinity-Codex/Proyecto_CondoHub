@@ -1,5 +1,5 @@
-Issue: #27 (`Refs #27` en este PR, `Closes #27` en el de la vista). MoSCoW: Must.
-Fuera de alcance: la vista, los eventos de pagos e incidentes y la protección a nivel de base de datos.
+Issue: #27. Tres PR: núcleo y vista con `Refs #27`, eventos con `Closes #27`. MoSCoW: Must.
+Fuera de alcance: la protección a nivel de base de datos.
 
 ## Why
 

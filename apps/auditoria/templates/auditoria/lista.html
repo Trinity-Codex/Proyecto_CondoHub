@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% comment %}Lista de auditoría (Issue #27). Solo lectura: sin botones de editar ni de borrar, el registro es inmutable.{% endcomment %}
+{% block titulo %}Auditoría{% endblock %}
+
+{% block contenido %}
+<h1 class="h3 mb-3"><i class="bi bi-journal-check"></i> Auditoría</h1>
+<p class="text-muted">Quién hizo qué y cuándo sobre dinero, roles y datos personales. Solo se puede consultar.</p>
+
+{# ---- Filtros (GET: la URL guarda los filtros y se puede compartir) ---- #}
+<form method="get" class="card card-body mb-4">
+  {% if filtro.non_field_errors %}
+  <div class="alert alert-danger" role="alert">{{ filtro.non_field_errors|join:" " }}</div>
+  {% endif %}
+  <div class="row g-3 align-items-end">
+    <div class="col-sm-6 col-lg-3">{% include "_campo.html" with campo=filtro.desde %}</div>
+    <div class="col-sm-6 col-lg-3">{% include "_campo.html" with campo=filtro.hasta %}</div>
+    <div class="col-sm-6 col-lg-4">{% include "_campo.html" with campo=filtro.usuario %}</div>
+    <div class="col-sm-6 col-lg-2 d-grid">
+      <button class="btn btn-primary"><i class="bi bi-funnel"></i> Filtrar</button>
+    </div>
+  </div>
+</form>
+
+{% if registros %}
+<div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <caption class="visually-hidden">Registros de auditoría</caption>
+    <thead>
+      <tr>
+        <th scope="col">Fecha y hora</th>
+        <th scope="col">Usuario</th>
+        <th scope="col">Acción</th>
+        <th scope="col">Objeto</th>
+        <th scope="col">Cambios</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in registros %}
+      <tr>
+        <td class="text-nowrap">{{ r.creado|date:"d/m/Y H:i" }}</td>
+        <td>{{ r.usuario_nombre }}</td>
+        <td>{{ r.accion_texto }}</td>
+        <td>{{ r.objeto_tipo }} #{{ r.objeto_id }}</td>
+        <td>
+          {% for campo, antes, despues in r.cambios %}
+          <div><span class="fw-semibold">{{ campo }}</span>: {{ antes|default_if_none:"—" }} → {{ despues|default_if_none:"—" }}</div>
+          {% empty %}<span class="text-muted">—</span>{% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if is_paginated %}
+<nav aria-label="Páginas de la auditoría">
+  <ul class="pagination">
+    {% if page_obj.has_previous %}
+    <li class="page-item"><a class="page-link" href="?{% if consulta %}{{ consulta }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a></li>
+    {% endif %}
+    <li class="page-item disabled"><span class="page-link">Página {{ page_obj.number }} de {{ paginator.num_pages }}</span></li>
+    {% if page_obj.has_next %}
+    <li class="page-item"><a class="page-link" href="?{% if consulta %}{{ consulta }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% else %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle"></i> No hay registros de auditoría{% if consulta %} con esos filtros{% endif %}.
+</div>
+{% endif %}
+{% endblock %}
