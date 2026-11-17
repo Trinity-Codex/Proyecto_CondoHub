@@ -117,12 +117,11 @@ class MenuAdministracionTest(TestCase):
         self.assertContains(respuesta, "Administración")
         self.assertNotContains(respuesta, reverse("cuentas:usuarios"))
 
-    def test_el_comite_ve_rendicion_pero_no_auditoria_ni_cartera(self):
-        # Roles provisionales del PMV (#62): auditoría es solo del administrador. La cartera ya no es
-        # suya: es del administrador general (#54), así que no aparece en el menú de ningún rol del condominio.
+    def test_el_comite_ve_rendicion_y_auditoria_pero_no_cartera(self):
+        # La cartera pertenece al administrador general (#54), fuera del menú del condominio.
         respuesta = self.menu(self.e.comite)
         self.assertContains(respuesta, reverse("rendicion:inicio"))
-        self.assertNotContains(respuesta, reverse("auditoria:inicio"))
+        self.assertContains(respuesta, reverse("auditoria:inicio"))
         self.assertNotContains(respuesta, reverse("cartera:inicio"))
 
     def test_las_apps_nuevas_marcan_administracion(self):
