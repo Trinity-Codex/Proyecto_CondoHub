@@ -1,5 +1,6 @@
 """Pruebas del estado de cuenta del residente (Issue #3, RF03)."""
 import datetime
+from unittest import mock
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -169,6 +170,37 @@ class RegistrarPagosTest(TestCase):
         self.pagar(42000)
         self.cobro.refresh_from_db()
         self.assertEqual(self.cobro.estado, Estado.PAGADO)
+
+    def test_registrar_pago_deja_auditoria_con_el_minimo_de_datos(self):
+        """#27 (6.1): crear el pago audita CREAR con actor, condominio y solo monto y medio."""
+        self.pagar(10000, observacion="dato privado")
+        pago = self.cobro.pagos.get()
+        registro = RegistroAuditoria.objects.get()
+        self.assertEqual(registro.accion, "crear")
+        self.assertEqual(registro.objeto_tipo, "pago")
+        self.assertEqual(registro.objeto_id, str(pago.pk))
+        self.assertEqual(registro.usuario_id, self.e.administrador.pk)
+        self.assertEqual(registro.condominio_id, self.e.condominio.pk)
+        self.assertIsNone(registro.antes)
+        self.assertEqual(registro.despues, {"monto": 10000, "medio": "TRANSFERENCIA"})
+
+    def test_si_falla_la_auditoria_se_revierten_el_pago_y_el_estado_del_cobro(self):
+        with mock.patch("apps.pagos.models.registrar", side_effect=RuntimeError("falla controlada")):
+            with self.assertRaises(RuntimeError):
+                Pago.registrar(self.cobro, 42000, registrado_por=self.e.administrador)
+        self.cobro.refresh_from_db()
+        self.assertEqual(self.cobro.estado, Estado.PENDIENTE)
+        self.assertEqual(Pago.objects.count(), 0)
+        self.assertEqual(RegistroAuditoria.objects.count(), 0)
+
+    def test_si_falla_una_etapa_posterior_se_revierte_tambien_la_auditoria(self):
+        with mock.patch.object(Pago, "notificar", side_effect=RuntimeError("falla controlada")):
+            with self.assertRaises(RuntimeError):
+                Pago.registrar(self.cobro, 42000, registrado_por=self.e.administrador)
+        self.cobro.refresh_from_db()
+        self.assertEqual(self.cobro.estado, Estado.PENDIENTE)
+        self.assertEqual(Pago.objects.count(), 0)
+        self.assertEqual(RegistroAuditoria.objects.count(), 0)
 
     def test_monto_con_puntos_y_signo(self):
         """Issue #76: «$ 10.000» registra 10000 y el saldo sigue mandando."""

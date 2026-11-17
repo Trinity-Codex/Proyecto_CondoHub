@@ -11,6 +11,7 @@ from django.conf import settings
 from django.db import models, transaction
 from django.urls import reverse
 
+from apps.auditoria.servicios import Accion, registrar
 from apps.condominios.models import Membresia
 from apps.notificaciones.observador import Evento, Sujeto
 
@@ -75,12 +76,24 @@ class Incidente(Sujeto, models.Model):
         )
 
     @transaction.atomic
-    def cambiar_estado(self, nuevo_estado, respuesta=""):
-        """RF08: cambia el estado y avisa a quien reportó el incidente (RF10)."""
+    def cambiar_estado(self, nuevo_estado, respuesta="", *, usuario=None):
+        """
+        RF08: cambia el estado y avisa a quien reportó el incidente (RF10).
+
+        Auditoría (#27): se registra el cambio real en la misma transacción.
+        Si no hay un usuario, el registro identifica al sistema.
+        """
+        # Se bloquea la fila para auditar el estado anterior real, incluso con cambios simultáneos.
+        anterior = Incidente.objects.select_for_update().values_list("estado", flat=True).get(pk=self.pk)
         self.estado = nuevo_estado
         if respuesta:
             self.respuesta = respuesta
         self.save(update_fields=["estado", "respuesta", "actualizado"])
+        if anterior != nuevo_estado:
+            registrar(
+                usuario, self.condominio, Accion.MODIFICAR, self,
+                antes={"estado": anterior}, despues={"estado": nuevo_estado},
+            )
         self.notificar(
             Evento(
                 condominio=self.condominio,

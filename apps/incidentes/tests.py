@@ -1,5 +1,6 @@
 """Pruebas de incidentes (RF07, RF08) y sus notificaciones (RF10)."""
 from datetime import timedelta
+from unittest import mock
 
 from django.db import connection
 from django.test import TestCase
@@ -7,6 +8,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.auditoria.models import RegistroAuditoria
 from apps.core.pruebas import crear_escenario
 from apps.notificaciones.models import Notificacion
 
@@ -164,3 +166,78 @@ class FiltroYOrdenTest(TestCase):
         self.assertContains(respuesta, '<span class="insignia insignia-recibido">Recibido</span>', html=True)
         self.assertContains(respuesta, '<span class="insignia insignia-resuelto">Resuelto</span>', html=True)
         self.assertNotContains(respuesta, "badge text-bg")
+
+
+class AuditoriaCambioDeEstadoTest(TestCase):
+    """#27 (6.2): el cambio de estado desde la vista queda en la auditoría, en la misma transacción."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.incidente = Incidente.objects.create(
+            condominio=self.e.condominio, reportado_por=self.e.residente,
+            categoria=Incidente.Categoria.ASEO, titulo="Basura", descripcion="Piso 2",
+        )
+
+    def cambiar(self, usuario, estado, respuesta=""):
+        self.client.force_login(usuario)
+        return self.client.post(self.incidente.get_absolute_url(), {"estado": estado, "respuesta": respuesta})
+
+    def test_administrador_y_conserje_dejan_modificar_con_estados_reales(self):
+        self.cambiar(self.e.administrador, Incidente.Estado.EN_PROCESO)
+        self.cambiar(self.e.conserje, Incidente.Estado.RESUELTO)
+        primero, segundo = RegistroAuditoria.objects.order_by("pk")
+        for registro, actor in ((primero, self.e.administrador), (segundo, self.e.conserje)):
+            self.assertEqual(registro.accion, "modificar")
+            self.assertEqual(registro.objeto_tipo, "incidente")
+            self.assertEqual(registro.objeto_id, str(self.incidente.pk))
+            self.assertEqual(registro.condominio_id, self.e.condominio.pk)
+            self.assertEqual(registro.usuario_id, actor.pk)
+        self.assertEqual((primero.antes, primero.despues), ({"estado": "RECIBIDO"}, {"estado": "EN_PROCESO"}))
+        self.assertEqual((segundo.antes, segundo.despues), ({"estado": "EN_PROCESO"}, {"estado": "RESUELTO"}))
+
+    def test_estado_igual_no_audita_pero_conserva_respuesta_y_aviso(self):
+        respuesta = self.cambiar(self.e.administrador, Incidente.Estado.RECIBIDO, "Lo revisamos")
+        self.assertRedirects(respuesta, self.incidente.get_absolute_url())
+        self.incidente.refresh_from_db()
+        self.assertEqual(self.incidente.respuesta, "Lo revisamos")
+        self.assertEqual(RegistroAuditoria.objects.count(), 0)
+        self.assertEqual(Notificacion.objects.filter(usuario=self.e.residente).count(), 1)
+
+    def test_residente_no_audita(self):
+        self.cambiar(self.e.residente, Incidente.Estado.RESUELTO)
+        self.assertEqual(RegistroAuditoria.objects.count(), 0)
+
+    def test_usa_el_estado_persistido_y_no_el_de_una_instancia_desactualizada(self):
+        obsoleta = Incidente.objects.get(pk=self.incidente.pk)
+        Incidente.objects.filter(pk=obsoleta.pk).update(estado=Incidente.Estado.EN_PROCESO)
+        obsoleta.cambiar_estado(Incidente.Estado.RESUELTO, usuario=self.e.administrador)
+        registro = RegistroAuditoria.objects.get()
+        self.assertEqual((registro.antes, registro.despues), ({"estado": "EN_PROCESO"}, {"estado": "RESUELTO"}))
+        # Con el mismo estado que ya tiene la base, aunque la instancia diga otra cosa, no hay evento.
+        obsoleta.estado = Incidente.Estado.RECIBIDO
+        obsoleta.cambiar_estado(Incidente.Estado.RESUELTO, usuario=self.e.administrador)
+        self.assertEqual(RegistroAuditoria.objects.count(), 1)
+
+    def test_sin_usuario_audita_como_sistema(self):
+        self.incidente.cambiar_estado(Incidente.Estado.EN_PROCESO)
+        registro = RegistroAuditoria.objects.get()
+        self.assertIsNone(registro.usuario_id)
+        self.assertEqual(registro.usuario_nombre, "Sistema")
+        self.assertEqual((registro.antes, registro.despues), ({"estado": "RECIBIDO"}, {"estado": "EN_PROCESO"}))
+
+    def test_si_falla_la_auditoria_se_revierte_el_cambio_y_el_aviso(self):
+        with mock.patch("apps.incidentes.models.registrar", side_effect=RuntimeError("falla controlada")):
+            with self.assertRaises(RuntimeError):
+                self.cambiar(self.e.administrador, Incidente.Estado.RESUELTO, "Listo")
+        self.incidente.refresh_from_db()
+        self.assertEqual(self.incidente.estado, Incidente.Estado.RECIBIDO)
+        self.assertEqual(self.incidente.respuesta, "")
+        self.assertEqual(Notificacion.objects.count(), 0)
+
+    def test_si_falla_el_aviso_se_revierte_tambien_la_auditoria(self):
+        with mock.patch.object(Incidente, "notificar", side_effect=RuntimeError("falla controlada")):
+            with self.assertRaises(RuntimeError):
+                self.cambiar(self.e.administrador, Incidente.Estado.RESUELTO)
+        self.incidente.refresh_from_db()
+        self.assertEqual(self.incidente.estado, Incidente.Estado.RECIBIDO)
+        self.assertEqual(RegistroAuditoria.objects.count(), 0)

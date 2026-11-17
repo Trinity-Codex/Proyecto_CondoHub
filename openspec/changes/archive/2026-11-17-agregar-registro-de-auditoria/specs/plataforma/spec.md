@@ -13,8 +13,16 @@ Solo el administrador y el comité SHALL ver el registro de su condominio; los d
 - **THEN** el sistema guarda un registro con su usuario, el condominio, la acción, la unidad, la alícuota anterior, la nueva y la fecha y hora
 
 #### Scenario: Evento sin valores anteriores
-- **WHEN** el sistema registra la creación de un pago sin valores anteriores
-- **THEN** el registro se guarda con los valores anteriores vacíos y el resto de los datos completos
+- **WHEN** se registra un pago
+- **THEN** la auditoría guarda quién lo registró, el condominio, el pago, el monto y el medio, con los valores anteriores vacíos
+
+#### Scenario: Cambio de estado de un incidente
+- **WHEN** un administrador o conserje cambia el estado de un incidente de su condominio
+- **THEN** la auditoría guarda quién lo cambió y el estado anterior y el nuevo
+
+#### Scenario: Operación revertida
+- **WHEN** se revierte la transacción que registra un pago o cambia el estado de un incidente
+- **THEN** tampoco queda guardado su registro de auditoría
 
 #### Scenario: Intento de editar o borrar un registro
 - **WHEN** una persona intenta modificar o borrar un registro de auditoría desde el sitio o el panel de administración
