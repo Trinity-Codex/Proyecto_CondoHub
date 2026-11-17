@@ -16,10 +16,6 @@ from apps.condominios.models import Membresia
 from apps.notificaciones.observador import Evento, Sujeto
 
 
-# Marca de "este llamador no pide auditoría": distinta de None, que significa "lo hizo el sistema".
-_SIN_AUDITORIA = object()
-
-
 class Incidente(Sujeto, models.Model):
     class Categoria(models.TextChoices):
         MANTENCION = "MANTENCION", "Mantención / reparación"
@@ -80,22 +76,20 @@ class Incidente(Sujeto, models.Model):
         )
 
     @transaction.atomic
-    def cambiar_estado(self, nuevo_estado, respuesta="", *, usuario=_SIN_AUDITORIA):
+    def cambiar_estado(self, nuevo_estado, respuesta="", *, usuario=None):
         """
         RF08: cambia el estado y avisa a quien reportó el incidente (RF10).
 
-        Auditoría (#27): solo si se pasa `usuario` (por nombre; `None` = el sistema). Los demás
-        llamadores (demo, pruebas) siguen sin auditar. Se audita en la misma transacción y solo
-        si el estado realmente cambió.
+        Auditoría (#27): se registra el cambio real en la misma transacción.
+        Si no hay un usuario, el registro identifica al sistema.
         """
-        if usuario is not _SIN_AUDITORIA:
-            # La instancia puede estar desactualizada: se lee el estado guardado y se bloquea la fila.
-            anterior = Incidente.objects.select_for_update().values_list("estado", flat=True).get(pk=self.pk)
+        # Se bloquea la fila para auditar el estado anterior real, incluso con cambios simultáneos.
+        anterior = Incidente.objects.select_for_update().values_list("estado", flat=True).get(pk=self.pk)
         self.estado = nuevo_estado
         if respuesta:
             self.respuesta = respuesta
         self.save(update_fields=["estado", "respuesta", "actualizado"])
-        if usuario is not _SIN_AUDITORIA and anterior != nuevo_estado:
+        if anterior != nuevo_estado:
             registrar(
                 usuario, self.condominio, Accion.MODIFICAR, self,
                 antes={"estado": anterior}, despues={"estado": nuevo_estado},

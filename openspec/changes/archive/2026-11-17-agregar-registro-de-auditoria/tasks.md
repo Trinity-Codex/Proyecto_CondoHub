@@ -37,10 +37,10 @@ Este cambio cubre el Issue #27 en tres PR: el núcleo (secciones 1 a 4, ya unido
 
 ## 6. Eventos de pagos e incidentes (PR 3, `Closes #27`)
 
-- [ ] 6.1 Registrar el evento al registrar un pago (`Pago.registrar`). Verificación: prueba del registro con `antes` vacío.
-- [ ] 6.2 Registrar los cambios de estado de un incidente con el estado anterior y el nuevo. Verificación: prueba con `antes` y `despues`.
+- [x] 6.1 Registrar el evento al registrar un pago (`Pago.registrar`). Verificación: prueba del registro con `antes` vacío y de la reversión conjunta del pago, cobro y auditoría.
+- [x] 6.2 Registrar los cambios de estado de un incidente con el actor, el estado anterior y el nuevo. Verificación: pruebas desde la vista, cambios del sistema, estado sin cambio y reversión conjunta.
 
 ## Workflow follow-up
 
 - Abrir el PR como borrador con `Refs #27`, avisar en el grupo que `registrar()` está listo para revisar, y esperar comentario de Walther o Maximiliano sobre la firma.
-- Al terminar la vista (PR siguiente): `/opsx:archive` del cambio y `Closes #27`.
+- Vista integrada en #113. Archivar el cambio con los eventos de la sección 6 y usar `Closes #27` en el último PR.

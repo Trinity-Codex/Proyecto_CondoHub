@@ -218,11 +218,12 @@ class AuditoriaCambioDeEstadoTest(TestCase):
         obsoleta.cambiar_estado(Incidente.Estado.RESUELTO, usuario=self.e.administrador)
         self.assertEqual(RegistroAuditoria.objects.count(), 1)
 
-    def test_none_es_sistema_y_sin_parametro_no_audita(self):
+    def test_sin_usuario_audita_como_sistema(self):
         self.incidente.cambiar_estado(Incidente.Estado.EN_PROCESO)
-        self.assertEqual(RegistroAuditoria.objects.count(), 0)
-        self.incidente.cambiar_estado(Incidente.Estado.RESUELTO, usuario=None)
-        self.assertEqual(RegistroAuditoria.objects.get().usuario_nombre, "Sistema")
+        registro = RegistroAuditoria.objects.get()
+        self.assertIsNone(registro.usuario_id)
+        self.assertEqual(registro.usuario_nombre, "Sistema")
+        self.assertEqual((registro.antes, registro.despues), ({"estado": "RECIBIDO"}, {"estado": "EN_PROCESO"}))
 
     def test_si_falla_la_auditoria_se_revierte_el_cambio_y_el_aviso(self):
         with mock.patch("apps.incidentes.models.registrar", side_effect=RuntimeError("falla controlada")):
