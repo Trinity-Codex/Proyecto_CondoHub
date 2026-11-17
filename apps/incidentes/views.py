@@ -138,6 +138,6 @@ class IncidenteDetailView(RolRequeridoMixin, IncidentesVisiblesMixin, DetailView
         form = CambiarEstadoForm(request.POST, instance=Incidente.objects.get(pk=self.object.pk))
         if not form.is_valid():
             return self.render_to_response(self.get_context_data(form_estado=form))
-        self.object.cambiar_estado(form.cleaned_data["estado"], form.cleaned_data["respuesta"])
+        self.object.cambiar_estado(form.cleaned_data["estado"], form.cleaned_data["respuesta"], usuario=request.user)
         messages.success(request, "Estado actualizado y notificado al residente.")
         return redirect(self.object)

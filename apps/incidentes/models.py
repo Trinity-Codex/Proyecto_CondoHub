@@ -11,8 +11,13 @@ from django.conf import settings
 from django.db import models, transaction
 from django.urls import reverse
 
+from apps.auditoria.servicios import Accion, registrar
 from apps.condominios.models import Membresia
 from apps.notificaciones.observador import Evento, Sujeto
+
+
+# Marca de "este llamador no pide auditoría": distinta de None, que significa "lo hizo el sistema".
+_SIN_AUDITORIA = object()
 
 
 class Incidente(Sujeto, models.Model):
@@ -75,12 +80,26 @@ class Incidente(Sujeto, models.Model):
         )
 
     @transaction.atomic
-    def cambiar_estado(self, nuevo_estado, respuesta=""):
-        """RF08: cambia el estado y avisa a quien reportó el incidente (RF10)."""
+    def cambiar_estado(self, nuevo_estado, respuesta="", *, usuario=_SIN_AUDITORIA):
+        """
+        RF08: cambia el estado y avisa a quien reportó el incidente (RF10).
+
+        Auditoría (#27): solo si se pasa `usuario` (por nombre; `None` = el sistema). Los demás
+        llamadores (demo, pruebas) siguen sin auditar. Se audita en la misma transacción y solo
+        si el estado realmente cambió.
+        """
+        if usuario is not _SIN_AUDITORIA:
+            # La instancia puede estar desactualizada: se lee el estado guardado y se bloquea la fila.
+            anterior = Incidente.objects.select_for_update().values_list("estado", flat=True).get(pk=self.pk)
         self.estado = nuevo_estado
         if respuesta:
             self.respuesta = respuesta
         self.save(update_fields=["estado", "respuesta", "actualizado"])
+        if usuario is not _SIN_AUDITORIA and anterior != nuevo_estado:
+            registrar(
+                usuario, self.condominio, Accion.MODIFICAR, self,
+                antes={"estado": anterior}, despues={"estado": nuevo_estado},
+            )
         self.notificar(
             Evento(
                 condominio=self.condominio,
