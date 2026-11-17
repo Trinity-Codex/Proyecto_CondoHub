@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load condohub %}
 {% block titulo %}Espacios comunes{% endblock %}
 
 {% block contenido %}
@@ -28,7 +29,7 @@
         <ul class="list-unstyled small mb-0">
           <li><i class="bi bi-people"></i> Hasta {{ e.capacidad }} personas</li>
           <li><i class="bi bi-clock"></i> {{ e.hora_apertura|time:"H:i" }} a {{ e.hora_cierre|time:"H:i" }}</li>
-          <li><i class="bi bi-cash"></i> {% if e.tarifa %}${{ e.tarifa }}{% else %}Sin costo{% endif %}</li>
+          <li><i class="bi bi-cash"></i> {% if e.tarifa %}{{ e.tarifa|pesos }} por reserva{% else %}Sin costo{% endif %}</li>
         </ul>
       </div>
       <div class="card-footer d-flex gap-2">
