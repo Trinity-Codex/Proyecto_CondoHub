@@ -34,6 +34,15 @@
         {% endif %}
       </div>
     </div>
+
+    {# Galería de respaldo (Issue #122): la ve quien ve el incidente; separada en antes y después. #}
+    <section class="card mt-4" aria-labelledby="titulo-fotos">
+      <div class="card-body p-4">
+        <h2 class="h5 mb-0" id="titulo-fotos">Fotos de respaldo</h2>
+        {% include "incidentes/_fotos.html" with titulo="Antes" fotos=fotos_antes puede_gestionar=form_estado %}
+        {% include "incidentes/_fotos.html" with titulo="Después" fotos=fotos_despues puede_gestionar=form_estado %}
+      </div>
+    </section>
   </div>
 
   {# Cambio de estado (RF08): solo administrador y conserje #}
@@ -48,6 +57,18 @@
           <button class="btn btn-primary" type="submit">Actualizar estado</button>
         </form>
         <p class="text-muted small mt-2 mb-0"><i class="bi bi-bell" aria-hidden="true"></i> Se notificará a {{ incidente.reportado_por }}.</p>
+      </div>
+    </div>
+
+    {# Fotos «después» (Issue #122): se suben aparte del cambio de estado, con su propio formulario. #}
+    <div class="card mt-4">
+      <div class="card-header">Subir fotos «después»</div>
+      <div class="card-body">
+        <form method="post" action="{% url 'incidentes:foto_subir' incidente.pk %}" enctype="multipart/form-data" novalidate>
+          {% csrf_token %}
+          {% include "_formulario.html" with form=form_fotos %}
+          <button class="btn btn-primary" type="submit">Subir fotos</button>
+        </form>
       </div>
     </div>
   </div>

@@ -1,0 +1,29 @@
+{% comment %}
+  Una etapa de la galería de fotos de respaldo (Issue #122). Parámetros: titulo ("Antes" o "Después"),
+  fotos (las de esa etapa) y puede_gestionar (muestra el botón de borrar).
+  Las imágenes salen de la vista protegida incidentes:foto, nunca de una URL pública de archivos.
+{% endcomment %}
+<h3 class="h6 mt-3">{{ titulo }} <span class="text-muted fw-normal">({{ fotos|length }})</span></h3>
+{% if fotos %}
+<div class="row row-cols-1 row-cols-sm-2 g-3">
+  {% for foto in fotos %}
+  <figure class="col mb-0">
+    <a class="ratio ratio-4x3 d-block" href="{% url 'incidentes:foto' foto.pk %}" target="_blank" rel="noopener noreferrer">
+      <img class="object-fit-cover rounded border" src="{% url 'incidentes:foto' foto.pk %}" loading="lazy"
+           alt="Respaldo «{{ titulo|lower }}» del incidente #{{ incidente.pk }}, subido el {{ foto.fecha_subida|date:'d-m-Y' }}">
+    </a>
+    <figcaption class="small text-muted mt-1 d-flex justify-content-between align-items-start gap-2">
+      <span>{{ foto.fecha_subida|date:"d-m-Y H:i" }} · {{ foto.subido_por|default:"Usuario eliminado" }}</span>
+      {% if puede_gestionar %}
+      <form method="post" action="{% url 'incidentes:foto_borrar' foto.pk %}" onsubmit="return confirm('¿Eliminar esta foto? No se puede deshacer.');">
+        {% csrf_token %}
+        <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Eliminar la foto subida el {{ foto.fecha_subida|date:'d-m-Y H:i' }}"><i class="bi bi-trash" aria-hidden="true"></i></button>
+      </form>
+      {% endif %}
+    </figcaption>
+  </figure>
+  {% endfor %}
+</div>
+{% else %}
+<p class="text-muted small mb-0">Sin fotos.</p>
+{% endif %}

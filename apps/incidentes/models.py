@@ -7,6 +7,9 @@ RF08: el administrador (o el conserje) cambia su estado:
 Cada cambio avisa por patrón Observer (RF10): al reportar se avisa a la
 administración, y al cambiar de estado se avisa a quien lo reportó.
 """
+import uuid
+from pathlib import Path
+
 from django.conf import settings
 from django.db import models, transaction
 from django.urls import reverse
@@ -103,3 +106,71 @@ class Incidente(Sujeto, models.Model):
                 url=self.get_absolute_url(),
             )
         )
+
+
+def ruta_foto(instancia, nombre_original):
+    """
+    Dónde se guarda cada foto: incidentes/<condominio_id>/<uuid>.<ext>.
+    El nombre lo genera el servidor y no el usuario: así nadie adivina la ruta ni
+    cuela «../» o un nombre con datos personales (la foto además solo se sirve por la vista protegida).
+    """
+    extension = Path(nombre_original).suffix.lower()
+    return f"incidentes/{instancia.incidente.condominio_id}/{uuid.uuid4().hex}{extension}"
+
+
+class FotoIncidente(models.Model):
+    """
+    Foto de respaldo de un incidente (Issue #122): «antes» la sube quien lo reporta y
+    «después» la sube la administración o el conserje al gestionarlo o resolverlo.
+    No tiene campo `condominio` propio: llega a él por el incidente (`incidente__condominio`).
+    """
+
+    class Etapa(models.TextChoices):
+        ANTES = "ANTES", "Antes"
+        DESPUES = "DESPUES", "Después"
+
+    incidente = models.ForeignKey(Incidente, on_delete=models.CASCADE, related_name="fotos")
+    imagen = models.ImageField(upload_to=ruta_foto)
+    etapa = models.CharField(max_length=10, choices=Etapa.choices)
+    fecha_subida = models.DateTimeField("fecha de subida", auto_now_add=True)
+    # SET_NULL: si se borra al usuario, la evidencia del incidente se conserva.
+    subido_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="fotos_incidentes"
+    )
+
+    class Meta:
+        ordering = ["fecha_subida", "pk"]
+
+    def __str__(self):
+        return f"Foto {self.get_etapa_display().lower()} del incidente #{self.incidente_id}"
+
+    @classmethod
+    @transaction.atomic
+    def subir(cls, incidente, archivos, etapa, usuario):
+        """Guarda las fotos y registra cada subida en auditoría, todo en una transacción."""
+        # @spec:incidentes-fotos-de-respaldo
+        fotos = []
+        for archivo in archivos:
+            foto = cls.objects.create(incidente=incidente, imagen=archivo, etapa=etapa, subido_por=usuario)
+            registrar(
+                usuario, incidente.condominio, Accion.CREAR, foto,
+                despues={"incidente": incidente.pk, "etapa": etapa},
+            )
+            fotos.append(foto)
+        return fotos
+
+    @transaction.atomic
+    def eliminar(self, usuario):
+        # @spec:incidentes-fotos-de-respaldo
+        """
+        Borra la foto y deja la baja en auditoría. Se audita ANTES de borrar (después el pk queda en None).
+        Django no borra el archivo con la fila: se quita del disco solo si la transacción se confirma,
+        para no perder la imagen de una baja que luego se deshace.
+        """
+        registrar(
+            usuario, self.incidente.condominio, Accion.ELIMINAR, self,
+            antes={"incidente": self.incidente_id, "etapa": self.etapa},
+        )
+        archivo = self.imagen
+        self.delete()
+        transaction.on_commit(lambda: archivo.storage.delete(archivo.name))
