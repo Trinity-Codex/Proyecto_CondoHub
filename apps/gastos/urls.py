@@ -19,6 +19,10 @@ urlpatterns = [
     path("periodos/<int:periodo_pk>/egresos/nuevo/", views.EgresoCreateView.as_view(), name="egreso_nuevo"),
     path("egresos/<int:pk>/editar/", views.EgresoUpdateView.as_view(), name="egreso_editar"),
     path("egresos/<int:pk>/eliminar/", views.EgresoDeleteView.as_view(), name="egreso_eliminar"),
+    # Ítems de cobro (RQ-02, #117): cuotas extraordinarias, multas...
+    path("periodos/<int:periodo_pk>/items/nuevo/", views.ItemCobroCreateView.as_view(), name="item_nuevo"),
+    path("items/<int:pk>/editar/", views.ItemCobroUpdateView.as_view(), name="item_editar"),
+    path("items/<int:pk>/eliminar/", views.ItemCobroDeleteView.as_view(), name="item_eliminar"),
     # Reporte de morosidad (Issue #5): los filtros van en la URL (?periodo=..&edificio=..)
     path("reporte/", views.ReporteView.as_view(), name="reporte"),
     path("reporte/csv/", views.ReporteCsvView.as_view(), name="reporte_csv"),
