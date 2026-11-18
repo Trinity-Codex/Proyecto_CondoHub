@@ -1,6 +1,7 @@
 """Pruebas de mantenciones (Issue #123): estados, fechas, permisos por rol, aislamiento y auditoría."""
 from datetime import date, timedelta
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -180,7 +181,7 @@ class CrearYEditarTest(TestCase):
         respuesta = self.client.post(
             reverse("mantenciones:editar", args=[m.pk]),
             self.datos(nombre="Recarga de extintores", frecuencia_meses=6, proxima_fecha=m.proxima_fecha.isoformat(),
-                       proveedor="", dias_anticipacion=15),
+                       proveedor="", dias_anticipacion=15, proxima_fecha_cargada=m.proxima_fecha.isoformat()),
         )
         self.assertRedirects(respuesta, reverse("mantenciones:lista"))
         m.refresh_from_db()
@@ -195,9 +196,82 @@ class CrearYEditarTest(TestCase):
         self.client.post(
             reverse("mantenciones:editar", args=[m.pk]),
             self.datos(nombre=m.nombre, frecuencia_meses=m.frecuencia_meses, proxima_fecha=m.proxima_fecha.isoformat(),
-                       proveedor="", dias_anticipacion=m.dias_anticipacion),
+                       proveedor="", dias_anticipacion=m.dias_anticipacion,
+                       proxima_fecha_cargada=m.proxima_fecha.isoformat()),
         )
         self.assertFalse(RegistroAuditoria.objects.exists())
+
+    def test_formulario_de_edicion_viejo_no_pisa_la_fecha_de_una_ejecucion(self):
+        """Pestaña vieja: se abre la edición, se registra una ejecución en otra y luego se envía la primera."""
+        m = crear_mantencion(self.e.condominio, dias=-10, meses=6)  # vencida
+        url = reverse("mantenciones:editar", args=[m.pk])
+        abierto = self.client.get(url).context["form"]  # lo que ve la pestaña vieja
+        enviado = {**self.datos(proxima_fecha=m.proxima_fecha.isoformat(), proveedor=""),
+                   "proxima_fecha_cargada": abierto["proxima_fecha_cargada"].value().isoformat()}
+        self.client.post(reverse("mantenciones:ejecucion", args=[m.pk]), {"fecha": timezone.localdate().isoformat()})
+        m.refresh_from_db()
+        recalculada = m.proxima_fecha
+        self.assertGreater(recalculada, timezone.localdate())
+        auditoria_antes = RegistroAuditoria.objects.count()
+
+        respuesta = self.client.post(url, enviado)
+
+        self.assertEqual(respuesta.status_code, 200)  # no redirige: vuelve al formulario con el aviso
+        self.assertContains(respuesta, "Recarga la página")
+        m.refresh_from_db()
+        self.assertEqual(m.proxima_fecha, recalculada)
+        self.assertEqual(m.estado, Mantencion.Estado.AL_DIA)
+        self.assertEqual(RegistroAuditoria.objects.count(), auditoria_antes)
+
+    def test_editar_sin_la_fecha_cargada_se_rechaza(self):
+        m = crear_mantencion(self.e.condominio, dias=10)
+        respuesta = self.client.post(
+            reverse("mantenciones:editar", args=[m.pk]),
+            self.datos(proxima_fecha=m.proxima_fecha.isoformat(), nombre="Otro nombre"),
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        m.refresh_from_db()
+        self.assertNotEqual(m.nombre, "Otro nombre")
+
+    def test_editar_la_fecha_a_mano_con_el_formulario_al_dia_funciona(self):
+        m = crear_mantencion(self.e.condominio, dias=10)
+        respuesta = self.client.post(
+            reverse("mantenciones:editar", args=[m.pk]),
+            self.datos(proxima_fecha="2030-01-15", proveedor="", proxima_fecha_cargada=m.proxima_fecha.isoformat()),
+        )
+        self.assertRedirects(respuesta, reverse("mantenciones:lista"))
+        m.refresh_from_db()
+        self.assertEqual(m.proxima_fecha, date(2030, 1, 15))
+
+
+class AdminSoloLecturaTest(TestCase):
+    """El admin de Django no debe escribir mantenciones: se saltaría la validación y la auditoría de las vistas."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.superusuario = get_user_model().objects.create_superuser("root@example.com", "changeme")
+        self.client.force_login(self.superusuario)
+        self.m = crear_mantencion(self.e.condominio)
+
+    def test_ni_agregar_ni_editar_ni_borrar(self):
+        ejecucion = EjecucionMantencion.objects.create(mantencion=self.m, fecha=timezone.localdate())
+        for modelo, objeto in (("mantencion", self.m), ("ejecucionmantencion", ejecucion)):
+            lista = reverse(f"admin:mantenciones_{modelo}_changelist")
+            self.assertEqual(self.client.get(lista).status_code, 200, modelo)  # se puede mirar
+            self.assertEqual(self.client.get(reverse(f"admin:mantenciones_{modelo}_add")).status_code, 403, modelo)
+            self.assertEqual(self.client.post(reverse(f"admin:mantenciones_{modelo}_add"), {}).status_code, 403, modelo)
+            cambiar = reverse(f"admin:mantenciones_{modelo}_change", args=[objeto.pk])
+            self.assertEqual(self.client.post(cambiar, {}).status_code, 403, modelo)  # solo ver: sin guardar
+            borrar = reverse(f"admin:mantenciones_{modelo}_delete", args=[objeto.pk])
+            self.assertEqual(self.client.post(borrar, {"post": "yes"}).status_code, 403, modelo)
+        self.assertEqual(EjecucionMantencion.objects.count(), 1)
+        self.assertTrue(Mantencion.objects.filter(pk=self.m.pk).exists())
+
+    def test_el_superusuario_no_puede_registrar_una_ejecucion_futura(self):
+        manana = timezone.localdate() + timedelta(days=1)
+        self.client.post(reverse("admin:mantenciones_ejecucionmantencion_add"),
+                         {"mantencion": self.m.pk, "fecha": manana.isoformat()})
+        self.assertFalse(EjecucionMantencion.objects.exists())
 
 
 class ListaTest(TestCase):

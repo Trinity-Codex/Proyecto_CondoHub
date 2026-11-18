@@ -33,6 +33,14 @@ El sistema SHALL llevar por condominio un calendario de mantenciones periódicas
 - **WHEN** el administrador crea, edita o registra una ejecución de una mantención de su condominio
 - **THEN** el cambio se guarda y queda un registro de auditoría con su usuario y los valores que cambiaron
 
+#### Scenario: Formulario de edición desactualizado
+- **WHEN** el administrador abre la edición de una mantención, registra una ejecución en otra pestaña y luego envía el primer formulario
+- **THEN** el sistema rechaza el envío con un aviso que pide recargar la página, y la próxima fecha recalculada por la ejecución no cambia
+
+#### Scenario: Panel de administración de Django en solo lectura
+- **WHEN** un superusuario abre las mantenciones o sus ejecuciones en `/admin/`
+- **THEN** puede verlas pero no agregarlas, editarlas ni borrarlas, de modo que toda escritura pasa por las vistas del calendario, que validan y auditan
+
 #### Scenario: Comité o conserje intentan escribir
 - **WHEN** un miembro del comité o un conserje abre el calendario
 - **THEN** lo ve sin botones para crear, editar ni registrar ejecuciones, y si intenta esas rutas recibe 403

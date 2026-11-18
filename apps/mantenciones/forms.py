@@ -35,6 +35,30 @@ class MantencionForm(ModeloFormularioBootstrap):
             Q(activo=True) | Q(pk=self.instance.proveedor_id)
         )
         self.fields["proveedor"].empty_label = "Sin proveedor"
+        if self.instance.pk:
+            # Al editar, el formulario lleva oculta la próxima fecha que tenía la mantención al abrirse. Ver clean().
+            self.fields["proxima_fecha_cargada"] = forms.DateField(widget=forms.HiddenInput, required=False)
+            self.initial["proxima_fecha_cargada"] = self.instance.proxima_fecha
+
+    # @spec:mantenciones-calendario-de-mantenciones
+    def clean(self):
+        """
+        Rechaza el envío de un formulario viejo. Si el administrador abre la edición, registra una ejecución en otra
+        pestaña (que recalcula la próxima fecha) y luego envía este formulario, este reenviaría la fecha antigua y
+        volvería a dejar vencida una mantención ya hecha. Aquí `self.instance` aún tiene el valor guardado en la base
+        (el formulario lo pisa recién después de clean), así que basta compararlo con el que se vio al abrir.
+        Es lo más simple que cubre también el caso de abrir el formulario antes de la primera ejecución.
+
+        # ponytail: la comparación y el guardado no son atómicos; la ventana es de milisegundos. Si hiciera falta
+        # cerrarla, bloquear la fila con select_for_update dentro de la transacción de la vista.
+        """
+        datos = super().clean()
+        if self.instance.pk and datos.get("proxima_fecha_cargada") != self.instance.proxima_fecha:
+            raise forms.ValidationError(
+                "La mantención cambió desde que abriste el formulario (por ejemplo, se registró una ejecución). "
+                "Recarga la página para ver los datos actuales y vuelve a editar."
+            )
+        return datos
 
 
 class EjecucionForm(ModeloFormularioBootstrap):
