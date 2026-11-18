@@ -354,7 +354,7 @@ class FotosIncidenteTest(TestCase):
     def test_rechaza_mas_de_5_mb(self):
         pesada = SimpleUploadedFile("grande.jpg", b"x" * (MAX_BYTES_FOTO + 1))
         respuesta = self.reportar(pesada)
-        self.assertIn("«grande.jpg»: pesa 5.0 MB y el máximo es 5 MB.", respuesta.context["form"].errors["fotos"])
+        self.assertIn("«grande.jpg»: supera el máximo de 5 MB (pesa unos 5.1 MB).", respuesta.context["form"].errors["fotos"])
         self.assertEqual(FotoIncidente.objects.count(), 0)
 
     def test_rechaza_la_foto_numero_11(self):

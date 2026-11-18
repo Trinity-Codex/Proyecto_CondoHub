@@ -1,4 +1,5 @@
 """Formularios de incidentes."""
+import math
 from pathlib import Path
 
 from django import forms
@@ -52,8 +53,11 @@ class CampoFotos(forms.ImageField):
             raise ValidationError("solo se aceptan imágenes JPG o PNG.")
         # El tamaño se mira primero: no tiene sentido abrir con Pillow un archivo que ya se pasó del límite.
         if archivo.size > MAX_BYTES_FOTO:
+            # Se redondea hacia ARRIBA: con un decimal normal, un archivo apenas sobre el límite
+            # se mostraría como «5.0 MB» y el mensaje parecería contradecirse.
+            mb = math.ceil(archivo.size / (1024 * 1024) * 10) / 10
             raise ValidationError(
-                f"pesa {archivo.size / (1024 * 1024):.1f} MB y el máximo es {MAX_BYTES_FOTO // (1024 * 1024)} MB."
+                f"supera el máximo de {MAX_BYTES_FOTO // (1024 * 1024)} MB (pesa unos {mb:.1f} MB)."
             )
         try:
             archivo = super().clean(archivo)  # Pillow abre el contenido y fija archivo.content_type
