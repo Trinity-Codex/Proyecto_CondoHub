@@ -41,6 +41,22 @@ El sistema SHALL permitir adjuntar fotos de respaldo a un incidente en dos etapa
 - **WHEN** el residente que lo reportó o la administración abre un incidente resuelto
 - **THEN** ve sus fotos de «antes» y de «después», cada una con su fecha y su autor
 
+#### Scenario: Servidor sin almacenamiento de archivos
+- **WHEN** el servidor no tiene `MEDIA_ROOT` configurado y alguien adjunta una foto
+- **THEN** el formulario la rechaza con «La subida de fotos aún no está habilitada en este servidor», el servicio de subida se niega y no se escribe ningún archivo
+
+#### Scenario: Subidas simultáneas
+- **WHEN** dos subidas simultáneas intentan pasar de 10 fotos en el mismo incidente
+- **THEN** el servicio cuenta el cupo con el incidente bloqueado, por lo que solo cabe una de ellas y el incidente nunca supera las 10 fotos
+
+#### Scenario: Subida que se revierte
+- **WHEN** falla la auditoría u otro paso después de haber guardado un archivo
+- **THEN** la transacción se revierte y el archivo ya escrito se borra del disco
+
+#### Scenario: Tipo de archivo igual a su contenido
+- **WHEN** se sube un PNG llamado `foto.jpg`
+- **THEN** se guarda con extensión `.png` y se entrega como `image/png`
+
 ## MODIFIED Requirements
 
 ### Requirement: Visibilidad de incidentes

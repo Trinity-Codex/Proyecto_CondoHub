@@ -118,6 +118,24 @@ def ruta_foto(instancia, nombre_original):
     return f"incidentes/{instancia.incidente.condominio_id}/{uuid.uuid4().hex}{extension}"
 
 
+# Límite de fotos por incidente (Issue #122; el cliente debe confirmarlo). Vive aquí, y no en forms.py,
+# porque la regla la aplica el servicio FotoIncidente.subir() y el formulario solo avisa antes.
+MAX_FOTOS_POR_INCIDENTE = 10
+MENSAJE_SIN_MEDIA = "La subida de fotos aún no está habilitada en este servidor."
+
+
+def mensaje_cupo(existentes, nuevas):
+    """Mismo texto para el aviso del formulario y para el rechazo del servicio."""
+    return (
+        f"Cada incidente admite hasta {MAX_FOTOS_POR_INCIDENTE} fotos: este ya tiene {existentes} "
+        f"y quieres agregar {nuevas}."
+    )
+
+
+class SubidaNoPermitida(Exception):
+    """El servicio se niega a guardar fotos (sin MEDIA_ROOT o sobre el cupo); el mensaje es apto para mostrarlo."""
+
+
 class FotoIncidente(models.Model):
     """
     Foto de respaldo de un incidente (Issue #122): «antes» la sube quien lo reporta y
@@ -145,18 +163,43 @@ class FotoIncidente(models.Model):
         return f"Foto {self.get_etapa_display().lower()} del incidente #{self.incidente_id}"
 
     @classmethod
-    @transaction.atomic
     def subir(cls, incidente, archivos, etapa, usuario):
-        """Guarda las fotos y registra cada subida en auditoría, todo en una transacción."""
+        """
+        Guarda las fotos y registra cada subida en auditoría, todo en una transacción.
+        Las reglas viven aquí y no en el formulario, para que ningún llamador pueda saltárselas:
+        sin MEDIA_ROOT o sobre el cupo se lanza SubidaNoPermitida antes de escribir nada.
+        """
         # @spec:incidentes-fotos-de-respaldo
-        fotos = []
-        for archivo in archivos:
-            foto = cls.objects.create(incidente=incidente, imagen=archivo, etapa=etapa, subido_por=usuario)
-            registrar(
-                usuario, incidente.condominio, Accion.CREAR, foto,
-                despues={"incidente": incidente.pk, "etapa": etapa},
-            )
-            fotos.append(foto)
+        if not archivos:
+            return []  # reportar sin fotos no debe depender de MEDIA_ROOT
+        if not settings.MEDIA_ROOT:
+            # Sin MEDIA_ROOT Django escribiría en la carpeta de trabajo del proceso.
+            raise SubidaNoPermitida(MENSAJE_SIN_MEDIA)
+        escritos = []  # (almacenamiento, nombre) de lo ya escrito en disco
+        try:
+            with transaction.atomic():
+                # Se bloquea el incidente: dos subidas simultáneas cuentan el cupo una después de la otra.
+                Incidente.objects.select_for_update().get(pk=incidente.pk)
+                existentes = cls.objects.filter(incidente=incidente).count()
+                if existentes + len(archivos) > MAX_FOTOS_POR_INCIDENTE:
+                    raise SubidaNoPermitida(mensaje_cupo(existentes, len(archivos)))
+                fotos = []
+                for archivo in archivos:
+                    foto = cls(incidente=incidente, etapa=etapa, subido_por=usuario)
+                    # El archivo se escribe aquí (no al insertar) para anotar su nombre aunque falle la fila.
+                    foto.imagen.save(archivo.name, archivo, save=False)
+                    escritos.append((foto.imagen.storage, foto.imagen.name))
+                    foto.save()
+                    registrar(
+                        usuario, incidente.condominio, Accion.CREAR, foto,
+                        despues={"incidente": incidente.pk, "etapa": etapa},
+                    )
+                    fotos.append(foto)
+        except Exception:
+            # La transacción se revirtió pero el disco no: se borran los archivos ya escritos.
+            for almacenamiento, nombre in escritos:
+                almacenamiento.delete(nombre)
+            raise
         return fotos
 
     @transaction.atomic

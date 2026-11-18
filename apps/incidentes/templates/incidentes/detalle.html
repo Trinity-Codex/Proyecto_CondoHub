@@ -39,8 +39,8 @@
     <section class="card mt-4" aria-labelledby="titulo-fotos">
       <div class="card-body p-4">
         <h2 class="h5 mb-0" id="titulo-fotos">Fotos de respaldo</h2>
-        {% include "incidentes/_fotos.html" with titulo="Antes" fotos=fotos_antes puede_gestionar=form_estado %}
-        {% include "incidentes/_fotos.html" with titulo="Después" fotos=fotos_despues puede_gestionar=form_estado %}
+        {% include "incidentes/_fotos.html" with titulo="Antes" fotos=fotos_antes puede_gestionar=puede_gestionar %}
+        {% include "incidentes/_fotos.html" with titulo="Después" fotos=fotos_despues puede_gestionar=puede_gestionar %}
       </div>
     </section>
   </div>

@@ -3,18 +3,20 @@ import math
 from pathlib import Path
 
 from django import forms
+from django.conf import settings
 from django.core.exceptions import ValidationError
 
 from apps.condominios.models import Unidad
 from apps.core.formularios import FormularioBootstrap, ModeloFormularioBootstrap
 
-from .models import Incidente
+from .models import MAX_FOTOS_POR_INCIDENTE, MENSAJE_SIN_MEDIA, Incidente, mensaje_cupo
 
-# Límites de las fotos de respaldo (Issue #122; el cliente debe confirmarlos).
-MAX_FOTOS_POR_INCIDENTE = 10
+# Límites de las fotos de respaldo (Issue #122; el cliente debe confirmarlos). El cupo por incidente vive en models.py.
 MAX_BYTES_FOTO = 5 * 1024 * 1024
 EXTENSIONES_FOTO = {".jpg", ".jpeg", ".png"}
-TIPOS_FOTO = {"image/jpeg", "image/png"}
+# Extensión con la que se guarda cada formato que Pillow reconoció: así el Content-Type que se sirve
+# (se deduce de la extensión) coincide con los bytes y no con el nombre que puso quien subió el archivo.
+EXTENSION_POR_FORMATO = {"JPEG": ".jpg", "PNG": ".png"}
 AYUDA_FOTOS = f"JPG o PNG, hasta {MAX_BYTES_FOTO // (1024 * 1024)} MB cada una y {MAX_FOTOS_POR_INCIDENTE} por incidente."
 
 
@@ -31,11 +33,18 @@ class CampoFotos(forms.ImageField):
     """
 
     widget = FotosInput(attrs={"accept": "image/jpeg,image/png"})
+    existentes = 0  # fotos que el incidente ya tiene; FotosFormMixin lo fija en la copia de campo de cada formulario
 
     def clean(self, data, initial=None):
+        # @spec:incidentes-fotos-de-respaldo
         archivos = [a for a in (data if isinstance(data, (list, tuple)) else [data]) if a]
         if not archivos and self.required:
             raise ValidationError(self.error_messages["required"], code="required")
+        # Primero lo barato: sin MEDIA_ROOT o sobre el cupo se rechaza sin abrir ningún archivo con Pillow.
+        if archivos and not settings.MEDIA_ROOT:
+            raise ValidationError(MENSAJE_SIN_MEDIA)
+        if self.existentes + len(archivos) > MAX_FOTOS_POR_INCIDENTE:
+            raise ValidationError(mensaje_cupo(self.existentes, len(archivos)))
         errores = []
         validos = []
         for archivo in archivos:
@@ -60,30 +69,25 @@ class CampoFotos(forms.ImageField):
                 f"supera el máximo de {MAX_BYTES_FOTO // (1024 * 1024)} MB (pesa unos {mb:.1f} MB)."
             )
         try:
-            archivo = super().clean(archivo)  # Pillow abre el contenido y fija archivo.content_type
+            archivo = super().clean(archivo)  # Pillow abre el contenido y fija archivo.image
         except ValidationError:
             raise ValidationError("no es una imagen JPG o PNG válida.") from None
-        if archivo.content_type not in TIPOS_FOTO:
+        extension = EXTENSION_POR_FORMATO.get(archivo.image.format)
+        if extension is None:
             raise ValidationError("solo se aceptan imágenes JPG o PNG.")
+        # La extensión sale del formato real, no del nombre: un PNG llamado foto.jpg se guarda como .png.
+        archivo.name = Path(archivo.name).stem + extension
         # TODO(#116): validar con apps.core.imagenes cuando esté unido (quita EXIF)
         return archivo
 
 
 class FotosFormMixin:
-    """Añade el límite de fotos por incidente: `existentes` son las que el incidente ya tiene."""
+    """Avisa del límite de fotos por incidente antes de guardar: `existentes` son las que ya tiene (el servicio lo vuelve a exigir)."""
 
     def __init__(self, *args, existentes=0, **kwargs):
         super().__init__(*args, **kwargs)
-        self.existentes = existentes
-
-    def clean_fotos(self):
-        fotos = self.cleaned_data["fotos"]
-        if self.existentes + len(fotos) > MAX_FOTOS_POR_INCIDENTE:
-            raise ValidationError(
-                f"Cada incidente admite hasta {MAX_FOTOS_POR_INCIDENTE} fotos: este ya tiene {self.existentes} "
-                f"y quieres agregar {len(fotos)}."
-            )
-        return fotos
+        # Cada formulario tiene su copia del campo, así que fijarlo aquí no afecta a otros formularios.
+        self.fields["fotos"].existentes = existentes
 
 
 class FotosDespuesForm(FotosFormMixin, FormularioBootstrap):

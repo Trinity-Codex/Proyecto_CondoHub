@@ -2,6 +2,7 @@
 import os
 import tempfile
 from datetime import timedelta
+from pathlib import Path
 from io import BytesIO
 from unittest import mock
 
@@ -18,8 +19,8 @@ from apps.condominios.models import Membresia
 from apps.core.pruebas import crear_escenario, crear_usuario
 from apps.notificaciones.models import Notificacion
 
-from .forms import MAX_BYTES_FOTO, MAX_FOTOS_POR_INCIDENTE
-from .models import FotoIncidente, Incidente
+from .forms import MAX_BYTES_FOTO, MAX_FOTOS_POR_INCIDENTE, CampoFotos, FotosDespuesForm
+from .models import FotoIncidente, Incidente, SubidaNoPermitida
 
 
 class IncidenteTest(TestCase):
@@ -467,6 +468,95 @@ class FotosIncidenteTest(TestCase):
         self.foto()
         self.client.force_login(self.e.residente_b)
         self.assertEqual(self.client.get(self.incidente.get_absolute_url()).status_code, 404)
+
+    def archivos_en_disco(self):
+        return [p for p in Path(self.media).rglob("*") if p.is_file()]
+
+    # --- sin MEDIA_ROOT (lo trae #116): no se escribe nada en la carpeta de trabajo ---
+
+    def test_sin_media_root_el_formulario_rechaza_las_fotos(self):
+        with override_settings(MEDIA_ROOT=""):
+            respuesta = self.reportar(imagen())
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(
+            respuesta.context["form"].errors["fotos"], ["La subida de fotos aún no está habilitada en este servidor."]
+        )
+        self.assertFalse(Incidente.objects.filter(titulo="Fuga").exists())
+
+    def test_sin_media_root_subir_se_niega_y_no_escribe(self):
+        with override_settings(MEDIA_ROOT=""):
+            with self.assertRaisesMessage(SubidaNoPermitida, "aún no está habilitada"):
+                FotoIncidente.subir(self.incidente, [imagen()], FotoIncidente.Etapa.ANTES, self.e.residente)
+        self.assertEqual(FotoIncidente.objects.count(), 0)
+        self.assertEqual(RegistroAuditoria.objects.count(), 0)
+
+    def test_sin_media_root_reportar_sin_fotos_sigue_funcionando(self):
+        with override_settings(MEDIA_ROOT=""):
+            respuesta = self.reportar()
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertTrue(Incidente.objects.filter(titulo="Fuga").exists())
+
+    # --- cupo: lo exige el servicio, y el formulario cuenta antes de abrir nada con Pillow ---
+
+    def test_el_servicio_rechaza_pasar_de_10_aunque_no_pase_por_el_formulario(self):
+        for _ in range(MAX_FOTOS_POR_INCIDENTE):
+            self.foto()
+        antes = len(self.archivos_en_disco())
+        with self.assertRaisesMessage(SubidaNoPermitida, "ya tiene 10 y quieres agregar 1"):
+            FotoIncidente.subir(self.incidente, [imagen()], FotoIncidente.Etapa.DESPUES, self.e.administrador)
+        self.assertEqual(self.incidente.fotos.count(), MAX_FOTOS_POR_INCIDENTE)
+        self.assertEqual(len(self.archivos_en_disco()), antes)
+
+    def test_la_vista_avisa_si_otra_subida_llenó_el_cupo_despues_del_aviso_del_formulario(self):
+        for _ in range(MAX_FOTOS_POR_INCIDENTE):
+            self.foto()
+        # Simula la carrera: el formulario contó 0 fotos, pero al subir el cupo ya estaba lleno.
+        with mock.patch("apps.incidentes.views.FotosDespuesForm", lambda *a, **k: FotosDespuesForm(*a, existentes=0)):
+            respuesta = self.subir_despues(self.e.administrador, imagen())
+        self.assertIn("Cada incidente admite hasta 10 fotos", self.mensajes(respuesta)[0])
+        self.assertEqual(self.incidente.fotos.count(), MAX_FOTOS_POR_INCIDENTE)
+
+    def test_el_formulario_cuenta_antes_de_abrir_los_archivos_con_pillow(self):
+        with mock.patch.object(CampoFotos, "validar_foto") as validar:
+            respuesta = self.reportar(*[imagen() for _ in range(MAX_FOTOS_POR_INCIDENTE + 1)])
+        self.assertIn("quieres agregar 11", respuesta.context["form"].errors["fotos"][0])
+        validar.assert_not_called()
+
+    # --- archivos huérfanos: si la transacción se revierte, el archivo escrito se borra ---
+
+    def test_si_falla_la_auditoria_no_quedan_archivos_ni_filas(self):
+        with mock.patch("apps.incidentes.models.registrar", side_effect=[None, RuntimeError("falla controlada")]):
+            with self.assertRaises(RuntimeError):
+                FotoIncidente.subir(self.incidente, [imagen("a.jpg"), imagen("b.jpg")], FotoIncidente.Etapa.ANTES, self.e.residente)
+        self.assertEqual(FotoIncidente.objects.count(), 0)
+        self.assertEqual(self.archivos_en_disco(), [])  # ni la foto que sí alcanzó a guardarse
+
+    def test_si_falla_la_subida_al_reportar_no_queda_incidente_ni_archivo(self):
+        with mock.patch("apps.incidentes.models.registrar", side_effect=RuntimeError("falla controlada")):
+            with self.assertRaises(RuntimeError):
+                self.reportar(imagen())
+        self.assertFalse(Incidente.objects.filter(titulo="Fuga").exists())
+        self.assertEqual(self.archivos_en_disco(), [])
+
+    # --- el tipo servido coincide con los bytes ---
+
+    def test_un_png_llamado_jpg_se_guarda_como_png_y_se_sirve_como_image_png(self):
+        self.reportar(imagen("foto.jpg", "PNG"))
+        foto = FotoIncidente.objects.get()
+        self.assertTrue(foto.imagen.name.endswith(".png"), foto.imagen.name)
+        respuesta = self.client.get(reverse("incidentes:foto", args=[foto.pk]))
+        self.assertEqual(respuesta["Content-Type"], "image/png")
+        respuesta.close()
+
+    def test_un_jpeg_llamado_jpeg_se_guarda_como_jpg(self):
+        self.reportar(imagen("foto.jpeg", "JPEG"))
+        self.assertTrue(FotoIncidente.objects.get().imagen.name.endswith(".jpg"))
+
+    def test_el_detalle_pasa_un_booleano_explicito_de_permiso(self):
+        for usuario, esperado in ((self.e.administrador, True), (self.e.residente, False)):
+            self.client.force_login(usuario)
+            respuesta = self.client.get(reverse("incidentes:detalle", args=[self.incidente.pk]))
+            self.assertIs(respuesta.context["puede_gestionar"], esperado, usuario.email)
 
     # --- auditoría ---
 

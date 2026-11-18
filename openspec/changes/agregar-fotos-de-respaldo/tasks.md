@@ -20,6 +20,14 @@
 - [x] 4.2 Pruebas en `apps/incidentes/tests.py`: subida válida, rechazo de no-imagen, de más de 5 MB y de la foto 11, permisos por rol, aislamiento entre condominios y por URL directa, y auditoría.
 - [x] 4.3 Correr `python manage.py test apps` completo y `openspec validate --all --strict`.
 
+## 4b. Correcciones de la revisión de código
+
+- [x] 4b.1 Sin `MEDIA_ROOT`: el formulario rechaza las fotos y `subir()` se niega con `SubidaNoPermitida`.
+- [x] 4b.2 El cupo de 10 se cuenta en `subir()` dentro de la transacción con el incidente bloqueado (`select_for_update`); el formulario cuenta antes de abrir archivos con Pillow.
+- [x] 4b.3 `subir()` borra los archivos escritos si la transacción falla (pruebas con fallo de auditoría).
+- [x] 4b.4 Helper `solo_lo_visible` compartido por `IncidentesVisiblesMixin` y `FotoArchivoView`; `detalle.html` recibe `puede_gestionar` como booleano.
+- [x] 4b.5 El archivo se guarda con la extensión del formato real (JPEG→.jpg, PNG→.png), así `FotoArchivoView` sirve el `Content-Type` correcto.
+
 ## 5. Pendiente (otros PR)
 
 - [ ] 5.1 Cuando se una #116: reemplazar `CampoFotos.validar_foto` por `apps.core.imagenes` (formato real y sin EXIF) y usar su configuración `MEDIA`.

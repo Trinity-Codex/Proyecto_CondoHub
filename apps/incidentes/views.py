@@ -33,7 +33,18 @@ from apps.core.permisos import (
 )
 
 from .forms import CambiarEstadoForm, FotosDespuesForm, IncidenteForm
-from .models import FotoIncidente, Incidente
+from .models import FotoIncidente, Incidente, SubidaNoPermitida
+
+
+def solo_lo_visible(request, qs, campo_reportante="reportado_por"):
+    """
+    Regla única de visibilidad: el equipo del condominio ve todo; un residente, solo lo que reportó.
+    `campo_reportante` es la ruta hasta quien reportó (las fotos llegan por su incidente). Los incidentes y sus
+    fotos la comparten para que nunca se desalineen. @spec:incidentes-visibilidad-de-incidentes
+    """
+    if tiene_rol(request, ADMINISTRADOR, COMITE, CONSERJE):
+        return qs
+    return qs.filter(**{campo_reportante: request.user})
 
 
 class IncidentesVisiblesMixin(CondominioQuerysetMixin):
@@ -41,9 +52,7 @@ class IncidentesVisiblesMixin(CondominioQuerysetMixin):
 
     def get_queryset(self):
         qs = super().get_queryset().select_related("reportado_por", "unidad__edificio")
-        if tiene_rol(self.request, ADMINISTRADOR, COMITE, CONSERJE):
-            return qs
-        return qs.filter(reportado_por=self.request.user)
+        return solo_lo_visible(self.request, qs)
 
 
 def por_urgencia():
@@ -138,6 +147,8 @@ class IncidenteDetailView(RolRequeridoMixin, IncidentesVisiblesMixin, DetailView
         if self.puede_gestionar():
             contexto["form_estado"] = kwargs.get("form_estado") or CambiarEstadoForm(instance=self.object)
             contexto["form_fotos"] = FotosDespuesForm()
+        # Booleano explícito: la plantilla no debe deducir el permiso de que exista un formulario.
+        contexto["puede_gestionar"] = self.puede_gestionar()
         # @spec:incidentes-fotos-de-respaldo: si puede ver el incidente, ve todas sus fotos (mismas reglas de visibilidad).
         fotos = list(self.object.fotos.select_related("subido_por"))
         contexto["fotos_antes"] = [f for f in fotos if f.etapa == FotoIncidente.Etapa.ANTES]
@@ -172,8 +183,13 @@ class FotoSubirView(RolRequeridoMixin, CondominioQuerysetMixin, SingleObjectMixi
         incidente = self.get_object()  # 404 si el incidente es de otro condominio
         form = FotosDespuesForm(request.POST, request.FILES, existentes=incidente.fotos.count())
         if form.is_valid():
-            fotos = FotoIncidente.subir(incidente, form.cleaned_data["fotos"], FotoIncidente.Etapa.DESPUES, request.user)
-            messages.success(request, f"Se subieron {len(fotos)} foto(s) al incidente #{incidente.pk}.")
+            try:
+                fotos = FotoIncidente.subir(incidente, form.cleaned_data["fotos"], FotoIncidente.Etapa.DESPUES, request.user)
+            except SubidaNoPermitida as error:
+                # El servicio cuenta el cupo con el incidente bloqueado: otra subida pudo llenarlo después del aviso del formulario.
+                messages.error(request, str(error))
+            else:
+                messages.success(request, f"Se subieron {len(fotos)} foto(s) al incidente #{incidente.pk}.")
         else:
             for error in form.errors["fotos"]:
                 messages.error(request, error)
@@ -208,10 +224,7 @@ class FotoArchivoView(RolRequeridoMixin, CondominioQuerysetMixin, SingleObjectMi
     campo_condominio = "incidente__condominio"
 
     def get_queryset(self):
-        qs = super().get_queryset()
-        if tiene_rol(self.request, ADMINISTRADOR, COMITE, CONSERJE):
-            return qs
-        return qs.filter(incidente__reportado_por=self.request.user)
+        return solo_lo_visible(self.request, super().get_queryset(), "incidente__reportado_por")
 
     def get(self, request, *args, **kwargs):
         # @spec:incidentes-fotos-de-respaldo y @spec:incidentes-visibilidad-de-incidentes: mismas reglas de visibilidad que el incidente
@@ -220,6 +233,7 @@ class FotoArchivoView(RolRequeridoMixin, CondominioQuerysetMixin, SingleObjectMi
             archivo = foto.imagen.open("rb")
         except FileNotFoundError:
             raise Http404("El archivo de la foto ya no existe.") from None
+        # La extensión guardada sale del formato que validó Pillow (ver CampoFotos), así el tipo coincide con los bytes.
         tipo = mimetypes.guess_type(foto.imagen.name)[0] or "application/octet-stream"
         respuesta = FileResponse(archivo, content_type=tipo)
         respuesta["X-Content-Type-Options"] = "nosniff"
