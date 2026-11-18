@@ -49,10 +49,11 @@
     <div class="card h-100">
       <div class="card-header">Egresos del condominio en {{ cobro.periodo }}</div>
       <ul class="list-group list-group-flush">
+        {# Una línea por categoría (egresos_para_residente): sin descripción libre, proveedor ni fecha (#115). #}
         {% for e in egresos %}
-        <li class="list-group-item d-flex justify-content-between">
-          <span>{{ e.descripcion }} <span class="small text-muted">· {{ e.get_categoria_display }}</span></span>
-          <span class="text-nowrap">{{ e.monto|pesos }}</span>
+        <li class="list-group-item d-flex justify-content-between gap-3">
+          <span>{{ e.categoria }}</span>
+          <span class="text-nowrap">{{ e.subtotal|pesos }}</span>
         </li>
         {% empty %}
         <li class="list-group-item text-muted">Sin egresos registrados.</li>

@@ -1,6 +1,8 @@
 """Consultas del estado de cuenta (Issues #3 y #4). Las vistas las comparten para dar los mismos números."""
+from django.db.models import Sum
+
 from apps.condominios.residencias import cobros_visibles
-from apps.gastos.models import DetalleGastoComun, PeriodoGasto
+from apps.gastos.models import DetalleGastoComun, Egreso, PeriodoGasto
 from apps.gastos.reportes import generar_reporte
 
 
@@ -71,3 +73,30 @@ def reporte_del_ultimo_periodo(condominio):
     """
     ultimo = PeriodoGasto.objects.filter(condominio=condominio, estado=PeriodoGasto.Estado.EMITIDO).first()
     return generar_reporte(ultimo) if ultimo else None
+
+
+# Las remuneraciones se muestran con un nombre propio y nunca por persona ni por cargo (Issue #115).
+_ETIQUETA_REMUNERACIONES = "Remuneraciones del personal"
+
+
+# @spec:pagos-estado-de-cuenta-del-residente
+def egresos_para_residente(periodo):
+    """
+    Egresos del período tal como puede verlos un RESIDENTE (Issue #115, RQ-09): agrupados por
+    categoría, con su subtotal. Devuelve una lista de dicts {"categoria": texto legible,
+    "subtotal": pesos}, de mayor a menor subtotal (y por nombre si empatan, para un orden estable).
+
+    Por qué existe: la descripción libre de un egreso puede nombrar a un trabajador o a un tercero
+    y los sueldos individuales son datos personales. Aquí no sale descripción, proveedor ni fecha
+    de boleta; las remuneraciones salen como UNA sola línea («Remuneraciones del personal»).
+    La suma de los subtotales es exactamente periodo.total_egresos().
+
+    Es la ÚNICA fuente de egresos para el residente. El aviso de cobro (#6) y la rendición de
+    cuentas (#55) deben reutilizarla en vez de recorrer periodo.egresos. El detalle línea a línea
+    sigue solo para administrador y comité en gastos:periodo_detalle.
+    """
+    nombres = dict(Egreso.Categoria.choices)
+    nombres[Egreso.Categoria.REMUNERACIONES] = _ETIQUETA_REMUNERACIONES
+    resumen = periodo.egresos.order_by().values("categoria").annotate(subtotal=Sum("monto"))
+    lineas = [{"categoria": nombres[fila["categoria"]], "subtotal": fila["subtotal"]} for fila in resumen]
+    return sorted(lineas, key=lambda linea: (-linea["subtotal"], linea["categoria"]))

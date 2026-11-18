@@ -15,6 +15,7 @@ from apps.gastos.reportes import anotar_pagado, generar_reporte
 from apps.gastos.servicios import emitir_periodo
 from apps.notificaciones.models import Notificacion
 
+from .consultas import egresos_para_residente
 from .models import Pago
 
 Estado = DetalleGastoComun.Estado
@@ -122,6 +123,99 @@ class EstadoCuentaTest(TestCase):
         self.assertContains(self.client.get(reverse("core:inicio")), "Mi cuenta")
         self.client.force_login(self.e.administrador)
         self.assertNotContains(self.client.get(reverse("core:inicio")), "Mi cuenta")
+
+class EgresosParaResidenteTest(TestCase):
+    """Issue #115 (RQ-09): el residente ve los egresos agrupados por categoría, sin sueldos ni descripciones libres."""
+
+    SUELDO = "Sueldo conserje (jornada completa)"
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.periodo = PeriodoGasto.objects.create(
+            condominio=self.e.condominio, anio=2026, mes=10, estado=PeriodoGasto.Estado.EMITIDO
+        )
+        # Dos remuneraciones, dos egresos de aseo y uno de consumos: los sueldos deben sumarse en una línea.
+        for categoria, descripcion, monto in (
+            ("REMUNERACIONES", self.SUELDO, 650000),
+            ("REMUNERACIONES", "Sueldo personal de aseo", 520000),
+            ("ASEO", "Insumos de limpieza Casa Pérez", 80000),
+            ("ASEO", "Aseo de áreas comunes", 20000),
+            ("CONSUMOS", "Cuenta de luz octubre", 300000),
+        ):
+            Egreso.objects.create(
+                periodo=self.periodo, categoria=categoria, descripcion=descripcion, monto=monto,
+                creado_por=self.e.administrador,
+            )
+        self.cobro = DetalleGastoComun.objects.create(
+            periodo=self.periodo, unidad=self.e.a101, monto=40000, monto_fondo_reserva=2000
+        )
+        self.url = reverse("pagos:cobro_detalle", args=[self.cobro.pk])
+
+    def test_el_residente_no_ve_sueldos_ni_descripciones_libres(self):
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(self.url)
+        self.assertEqual(respuesta.status_code, 200)
+        for texto in (self.SUELDO, "Sueldo personal de aseo", "Casa Pérez", "Cuenta de luz octubre", "650.000", "520.000"):
+            self.assertNotContains(respuesta, texto)
+
+    def test_el_residente_ve_las_remuneraciones_en_una_sola_linea(self):
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(self.url)
+        self.assertContains(respuesta, "Remuneraciones del personal", count=1)
+        self.assertContains(respuesta, "1.170.000")  # 650.000 + 520.000
+        self.assertContains(respuesta, "Aseo")
+        self.assertContains(respuesta, "100.000")  # 80.000 + 20.000
+
+    def test_los_subtotales_cuadran_con_el_total_del_periodo(self):
+        lineas = egresos_para_residente(self.periodo)
+        self.assertEqual(sum(linea["subtotal"] for linea in lineas), self.periodo.total_egresos())
+        self.assertEqual(
+            [(linea["categoria"], linea["subtotal"]) for linea in lineas],
+            [
+                ("Remuneraciones del personal", 1170000),
+                ("Consumos básicos (luz, agua, gas)", 300000),
+                ("Aseo", 100000),
+            ],
+        )
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(self.url)
+        self.assertEqual(respuesta.context["egresos"], lineas)
+        self.assertEqual(respuesta.context["total_egresos"], self.periodo.total_egresos())
+
+    def test_periodo_sin_egresos_da_lista_vacia(self):
+        vacio = PeriodoGasto.objects.create(condominio=self.e.condominio, anio=2026, mes=9)
+        self.assertEqual(egresos_para_residente(vacio), [])
+
+    def test_residente_de_otro_condominio_no_ve_el_cobro(self):
+        self.client.force_login(self.e.residente_ajeno)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_residente_de_otra_unidad_no_ve_el_cobro(self):
+        self.client.force_login(self.e.residente_b)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_respeta_el_filtro_de_residencia(self):
+        """#46: quien llegó después del período no ve el cobro ni sus egresos, aunque viva en la unidad."""
+        recien_llegado = crear_usuario("nuevo@prueba.cl")
+        Residente.objects.create(usuario=recien_llegado, unidad=self.e.a101, desde=datetime.date(2026, 11, 1))
+        self.client.force_login(recien_llegado)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_el_residente_no_entra_al_detalle_completo_de_gastos(self):
+        url = reverse("gastos:periodo_detalle", args=[self.periodo.pk])
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(url)
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertNotContains(respuesta, self.SUELDO, status_code=403)
+
+    def test_administrador_y_comite_conservan_el_detalle_completo(self):
+        url = reverse("gastos:periodo_detalle", args=[self.periodo.pk])
+        for usuario in (self.e.administrador, self.e.comite):
+            self.client.force_login(usuario)
+            respuesta = self.client.get(url)
+            self.assertEqual(respuesta.status_code, 200)
+            self.assertContains(respuesta, self.SUELDO)
+
 
 class RegistrarPagosTest(TestCase):
     """Issue #4 (RF04): el administrador registra pagos, totales o parciales, sin pagar de más."""
