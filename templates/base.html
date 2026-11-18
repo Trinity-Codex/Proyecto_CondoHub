@@ -103,6 +103,10 @@
           </ul>
         </li>
         {% endif %}
+        {# Mantenciones (#123): administrador, comité y conserje. Va fuera de «Administración» porque el conserje no ve ese menú. #}
+        {% if es_admin or es_comite or es_conserje %}
+        <li class="nav-item"><a class="nav-link {% if seccion == 'mantenciones' %}active{% endif %}" href="{% url 'mantenciones:lista' %}"><i class="bi bi-calendar2-check"></i> Mantenciones</a></li>
+        {% endif %}
         {# Cartera (#54): solo para el administrador general y el superusuario; no es parte de «Administración». #}
         {% if tiene_cartera %}
         <li class="nav-item"><a class="nav-link {% if seccion == 'cartera' %}active{% endif %}" href="{% url 'cartera:inicio' %}"><i class="bi bi-wallet"></i> Cartera</a></li>

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block titulo %}Registrar ejecución{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <h1 class="h3 mb-1">Registrar ejecución</h1>
+    <p class="text-muted">{{ object.nombre }} · se repite cada {{ object.frecuencia_meses }} mes{{ object.frecuencia_meses|pluralize:"es" }}. Hoy toca el {{ object.proxima_fecha|date:"d-m-Y" }}.</p>
+    <div class="card"><div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% include "_formulario_cabecera.html" with form=form %}
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">{% include "_campo.html" with campo=form.fecha %}</div>
+          <div class="col-12">{% include "_campo.html" with campo=form.observacion %}</div>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Registrar</button>
+          <a class="btn btn-outline-secondary" href="{% url 'mantenciones:lista' %}">Cancelar</a>
+        </div>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

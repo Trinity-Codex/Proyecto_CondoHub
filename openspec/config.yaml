@@ -7,7 +7,7 @@ context: |
 
   Proyecto: CondoHub, plataforma web de gestión de condominios para Chile (equipo Trinity Codex).
   Stack: Python 3.12, Django 5.2 LTS, MySQL 8, plantillas de Django con Bootstrap 5, PWA. Monolito modular.
-  Apps: core, cuentas, condominios, gastos, pagos, proveedores, comunicados, reservas, incidentes, notificaciones, auditoria, privacidad, cartera, rendicion.
+  Apps: core, cuentas, condominios, gastos, pagos, proveedores, comunicados, reservas, incidentes, notificaciones, auditoria, privacidad, cartera, rendicion, mantenciones.
   Multi-condominio: todo registro pertenece a un condominio (directo o a través de una relación).
   Roles por condominio (Membresia): ADMINISTRADOR, COMITE, CONSERJE, RESIDENTE.
   Patrones: Observer para notificaciones (apps/notificaciones/observador.py) y Strategy para el prorrateo (apps/gastos/prorrateo.py).
@@ -18,7 +18,7 @@ context: |
   pagos (módulo: pagos), reportes (módulo: reportes), proveedores (módulo: proveedores),
   comunicacion (módulo: comunicación), reservas (módulo: reservas), incidentes (módulo: incidentes),
   plataforma (módulo: plataforma), privacidad (módulo: privacidad), conserjeria (módulo: conserjería),
-  asambleas (módulo: asambleas), remuneraciones (módulo: remuneraciones).
+  asambleas (módulo: asambleas), remuneraciones (módulo: remuneraciones), mantenciones (módulo: mantenciones).
 
   Priorización: MoSCoW por entrega (etiquetas moscow: must, should, could, won't en cada Issue).
   Entrega actual: hito "PMV 27-nov" (Must y Should). Cada cambio corresponde a un Issue de GitHub.
