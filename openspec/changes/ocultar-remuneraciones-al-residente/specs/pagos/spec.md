@@ -37,3 +37,11 @@ El sistema SHALL mostrar en "Mi cuenta" los cobros de las unidades donde la pers
 #### Scenario: Detalle completo solo para la administración
 - **WHEN** un residente pide por URL directa el detalle de un período en gastos
 - **THEN** el sistema responde 403, y el administrador y el comité reciben 200 con el detalle línea a línea
+
+#### Scenario: Categoría fuera de las opciones del modelo
+- **WHEN** un residente abre el detalle de un cobro cuyo período tiene un egreso con una categoría que no está entre las opciones del modelo
+- **THEN** el sistema responde 200 y muestra esa categoría con su valor crudo y su subtotal, sin la descripción del egreso
+
+#### Scenario: Período con un solo egreso de remuneraciones
+- **WHEN** un residente abre el detalle de un cobro cuyo período solo tiene un egreso de remuneraciones
+- **THEN** ve la línea «Remuneraciones del personal» con ese subtotal (riesgo aceptado, ver design.md) y no ve la descripción libre del egreso

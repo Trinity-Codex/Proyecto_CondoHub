@@ -124,10 +124,16 @@ class EstadoCuentaTest(TestCase):
         self.client.force_login(self.e.administrador)
         self.assertNotContains(self.client.get(reverse("core:inicio")), "Mi cuenta")
 
+
 class EgresosParaResidenteTest(TestCase):
     """Issue #115 (RQ-09): el residente ve los egresos agrupados por categoría, sin sueldos ni descripciones libres."""
 
     SUELDO = "Sueldo conserje (jornada completa)"
+    CLASE_FILA = 'class="list-group-item d-flex justify-content-between gap-3"'
+
+    def fila(self, nombre, subtotal):
+        """HTML de una fila de egresos tal como la pinta pagos/detalle.html."""
+        return f'<li {self.CLASE_FILA}><span>{nombre}</span><span class="text-nowrap">{subtotal}</span></li>'
 
     def setUp(self):
         self.e = crear_escenario()
@@ -155,16 +161,56 @@ class EgresosParaResidenteTest(TestCase):
         self.client.force_login(self.e.residente)
         respuesta = self.client.get(self.url)
         self.assertEqual(respuesta.status_code, 200)
-        for texto in (self.SUELDO, "Sueldo personal de aseo", "Casa Pérez", "Cuenta de luz octubre", "650.000", "520.000"):
+        prohibidos = (self.SUELDO, "Sueldo personal de aseo", "Casa Pérez", "Cuenta de luz octubre", "650.000")
+        for texto in prohibidos:
             self.assertNotContains(respuesta, texto)
 
     def test_el_residente_ve_las_remuneraciones_en_una_sola_linea(self):
         self.client.force_login(self.e.residente)
         respuesta = self.client.get(self.url)
+        # Se afirma la fila completa (nombre + subtotal juntos), no textos sueltos que podrían estar en otra parte.
+        html = respuesta.content.decode()
+        self.assertInHTML(self.fila("Remuneraciones del personal", "$1.170.000"), html)  # 650.000 + 520.000
+        self.assertInHTML(self.fila("Aseo", "$100.000"), html)  # 80.000 + 20.000
         self.assertContains(respuesta, "Remuneraciones del personal", count=1)
-        self.assertContains(respuesta, "1.170.000")  # 650.000 + 520.000
-        self.assertContains(respuesta, "Aseo")
-        self.assertContains(respuesta, "100.000")  # 80.000 + 20.000
+        # Una fila por categoría (remuneraciones, consumos, aseo): ningún egreso suelto.
+        self.assertEqual(len(respuesta.context["egresos"]), 3)
+
+    def test_una_categoria_fuera_de_las_opciones_no_da_500(self):
+        """Un dato antiguo o cargado sin validar se muestra con su valor crudo en vez de romper la página."""
+        Egreso.objects.filter(periodo=self.periodo, categoria="OTROS").delete()
+        egreso = Egreso.objects.create(
+            periodo=self.periodo, categoria="OTROS", descripcion="Dato antiguo", monto=7000,
+            creado_por=self.e.administrador,
+        )
+        # update() salta la validación de choices, como un dato cargado por fuera del formulario.
+        Egreso.objects.filter(pk=egreso.pk).update(categoria="LEGADO")
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(self.url)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertInHTML(self.fila("LEGADO", "$7.000"), respuesta.content.decode())
+        self.assertNotContains(respuesta, "Dato antiguo")
+
+    def test_un_periodo_con_solo_remuneraciones_muestra_la_linea_agrupada(self):
+        """
+        Riesgo aceptado por el equipo (design.md «Riesgo conocido»): con un único egreso de remuneraciones,
+        la línea agrupada deja ver ese monto. Lo que nunca sale es la descripción libre del egreso.
+        """
+        solo = PeriodoGasto.objects.create(
+            condominio=self.e.condominio, anio=2026, mes=11, estado=PeriodoGasto.Estado.EMITIDO
+        )
+        Egreso.objects.create(
+            periodo=solo, categoria="REMUNERACIONES", descripcion="Sueldo de Juan Soto", monto=480000,
+            creado_por=self.e.administrador,
+        )
+        cobro = DetalleGastoComun.objects.create(periodo=solo, unidad=self.e.a101, monto=10000, monto_fondo_reserva=0)
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(reverse("pagos:cobro_detalle", args=[cobro.pk]))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertInHTML(self.fila("Remuneraciones del personal", "$480.000"), respuesta.content.decode())
+        self.assertEqual(len(respuesta.context["egresos"]), 1)
+        self.assertNotContains(respuesta, "Sueldo de Juan Soto")
+        self.assertEqual(respuesta.context["total_egresos"], 480000)
 
     def test_los_subtotales_cuadran_con_el_total_del_periodo(self):
         lineas = egresos_para_residente(self.periodo)

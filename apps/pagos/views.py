@@ -43,7 +43,7 @@ class EstadoCuentaView(RolRequeridoMixin, TemplateView):
 
 
 class CobroDetailView(RolRequeridoMixin, DetailView):
-    """Detalle de un período: egresos del condominio (agrupados por categoría), cómo se calculó el monto y los pagos hechos."""
+    """Detalle de un período: egresos por categoría, cómo se calculó el monto y los pagos hechos."""
 
     roles_permitidos = [RESIDENTE]
     template_name = "pagos/detalle.html"
@@ -57,8 +57,10 @@ class CobroDetailView(RolRequeridoMixin, DetailView):
         contexto = super().get_context_data(**kwargs)
         periodo = self.object.periodo
         # Solo categorías y subtotales: sin sueldos individuales ni descripciones libres (Issue #115).
-        contexto["egresos"] = egresos_para_residente(periodo)
-        contexto["total_egresos"] = periodo.total_egresos()
+        egresos = egresos_para_residente(periodo)
+        contexto["egresos"] = egresos
+        # Suma de los subtotales mostrados: cuadra por construcción con las líneas y evita una consulta más.
+        contexto["total_egresos"] = sum(linea["subtotal"] for linea in egresos)
         contexto["pagos"] = self.object.pagos.all()
         (cobro,) = con_saldos([self.object])
         contexto["pagado"], contexto["saldo"] = cobro.pagado, cobro.saldo

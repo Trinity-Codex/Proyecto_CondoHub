@@ -96,7 +96,13 @@ def egresos_para_residente(periodo):
     sigue solo para administrador y comité en gastos:periodo_detalle.
     """
     nombres = dict(Egreso.Categoria.choices)
-    nombres[Egreso.Categoria.REMUNERACIONES] = _ETIQUETA_REMUNERACIONES
+    # Con .value la clave es el texto guardado en la base, sin depender de que nombre y valor del enum coincidan.
+    nombres[Egreso.Categoria.REMUNERACIONES.value] = _ETIQUETA_REMUNERACIONES
     resumen = periodo.egresos.order_by().values("categoria").annotate(subtotal=Sum("monto"))
-    lineas = [{"categoria": nombres[fila["categoria"]], "subtotal": fila["subtotal"]} for fila in resumen]
+    # .get con el valor crudo de respaldo: una categoría fuera de las opciones del modelo (dato antiguo o cargado
+    # sin validar) se muestra tal cual, como antes de #115, en vez de romper la página con un KeyError.
+    lineas = [
+        {"categoria": nombres.get(fila["categoria"], fila["categoria"]), "subtotal": fila["subtotal"]}
+        for fila in resumen
+    ]
     return sorted(lineas, key=lambda linea: (-linea["subtotal"], linea["categoria"]))
