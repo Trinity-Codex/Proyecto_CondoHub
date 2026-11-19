@@ -31,6 +31,7 @@
         <td>{% include "pagos/_estado_cobro.html" with estado=c.estado %}</td>
         <td class="text-end">
           {# Solo el administrador registra pagos; el comité solo consulta. #}
+          {% if es_admin and c.periodo.estado == "EMITIDO" %}<a class="btn btn-sm btn-outline-primary" href="{% url 'pagos:aviso_cobro' c.pk %}" aria-label="Descargar aviso de {{ c.periodo }} en PDF">Aviso PDF</a>{% endif %}
           {% if es_admin and c.saldo %}
           <a class="btn btn-sm btn-primary text-nowrap" href="{% url 'pagos:registrar_pago' c.pk %}" aria-label="Registrar pago de {{ c.periodo }}"><i class="bi bi-plus-circle"></i><span class="d-none d-md-inline"> Registrar pago</span></a>
           {% endif %}

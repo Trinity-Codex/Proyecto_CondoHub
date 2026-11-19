@@ -11,6 +11,7 @@
 {# Título único de la página (antes no tenía h1): mismo patrón ícono + h3 que el resto de pagos. mb-4 y no mb-3: la fila g-4 de abajo sube 1,5 rem con su margen negativo y pisaría el título. #}
 <h1 class="h3 mb-4"><i class="bi bi-receipt" aria-hidden="true"></i> Cobro {{ cobro.periodo }} · {{ cobro.unidad }}</h1>
 
+<p><a class="btn btn-outline-primary" href="{% url 'pagos:aviso_cobro' cobro.pk %}">Descargar aviso de cobro (PDF)</a></p>
 <div class="row g-4">
   <div class="col-lg-6">
     <div class="card h-100">
