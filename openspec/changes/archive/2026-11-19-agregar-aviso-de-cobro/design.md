@@ -1,0 +1,3 @@
+El detalle emitido aporta los importes de gastos, fondo e ítems. Los abonos vigentes y el saldo de períodos anteriores se consultan al descargar, hasta el período elegido y dentro de las unidades y meses visibles al usuario. La alícuota es la registrada actualmente en la unidad; los montos se leen del cobro emitido.
+
+La caja suma pagos vigentes por fecha de pago y resta egresos por fecha de boleta. El aviso distingue el movimiento del mes del acumulado hasta su cierre. No existe una apertura conciliada de caja, por lo que se identifica como documento de demostración. El fondo de reserva no equivale al saldo de caja.

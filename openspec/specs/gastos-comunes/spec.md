@@ -49,6 +49,10 @@ El sistema SHALL manejar un período por mes y condominio, en estado ABIERTO o E
 - **WHEN** el administrador intenta editar un período que pertenece a otro condominio
 - **THEN** recibe 404
 
+#### Scenario: Vencimiento del aviso
+- **WHEN** se descarga el aviso de una unidad de un período emitido
+- **THEN** muestra el vencimiento del período y la referencia del reglamento si el reparto es en partes iguales
+
 ### Requirement: Egresos del período
 El sistema SHALL registrar los egresos de un período abierto con categoría, descripción, monto, fecha y proveedor opcional; solo el administrador los crea, edita o elimina.
 
@@ -227,3 +231,18 @@ El sistema SHALL calcular el saldo del condominio sumando sus movimientos en pes
 #### Scenario: Conserje sin acceso a aportes
 - **WHEN** un conserje sin otro rol pide la vista del residente o el desglose de una unidad
 - **THEN** recibe 403
+
+### Requirement: Aviso de cobro
+El sistema SHALL entregar al residente y al administrador un aviso PDF por unidad y período emitido, con desglose, pagos vigentes, saldo anterior visible, total a pagar, caja registrada y egresos agrupados sin descripciones personales. Los importes MUST expresarse en pesos chilenos.
+
+#### Scenario: Consulta de la deuda
+- **WHEN** hay pagos parciales y saldos de períodos anteriores visibles
+- **THEN** el aviso suma el saldo del cobro y la deuda anterior de esa unidad hasta el período elegido
+
+#### Scenario: Acceso del residente
+- **WHEN** el residente solicita un aviso ajeno o anterior a su residencia
+- **THEN** el sistema responde 404
+
+#### Scenario: Caja sin saldo inicial conciliado
+- **WHEN** la caja solo contiene movimientos registrados
+- **THEN** el PDF identifica su alcance y muestra «Documento de demostración»

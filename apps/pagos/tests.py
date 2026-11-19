@@ -1,5 +1,8 @@
 """Pruebas del estado de cuenta del residente (Issue #3, RF03)."""
 import datetime
+from io import BytesIO
+
+from pypdf import PdfReader
 from unittest import mock
 
 from django.core.exceptions import ValidationError
@@ -40,6 +43,41 @@ class EstadoCuentaTest(TestCase):
         return DetalleGastoComun.objects.create(
             periodo=periodo, unidad=unidad, monto=monto, monto_fondo_reserva=fondo, estado=estado
         )
+
+    def test_aviso_pdf_cuadra_con_abonos_y_protege_egresos(self):
+        self.cobro(self.sep, self.e.a101, monto=3000, fondo=0)
+        cobro = self.cobro(self.oct, self.e.a101, monto=48000, fondo=2000)
+        Pago.objects.create(detalle=cobro, monto=7010, fecha=datetime.date(2026, 10, 3))
+        Pago.objects.create(detalle=cobro, monto=100, anulado=True)
+        Egreso.objects.create(periodo=self.oct, categoria=Egreso.Categoria.REMUNERACIONES,
+                              descripcion="Nombre confidencial", monto=1000, creado_por=self.e.administrador)
+        url = reverse("pagos:aviso_cobro", args=[cobro.pk])
+        for usuario in (self.e.residente, self.e.administrador):
+            with self.subTest(usuario=usuario):
+                self.client.force_login(usuario)
+                respuesta = self.client.get(url)
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertTrue(respuesta["Content-Disposition"].startswith("attachment;"))
+                lector = PdfReader(BytesIO(respuesta.content))
+                texto = " ".join(" ".join(p.extract_text() for p in lector.pages).split())
+                for fragmento in ("$ 45.990", "$ 42.990", "$ 7.010", "$ 3.000",
+                                  "Remuneraciones del personal", "Documento de demostración"):
+                    self.assertIn(fragmento, texto)
+                self.assertNotIn("Nombre confidencial", texto)
+
+    def test_aviso_respeta_residencia_condominio_estado_y_rol(self):
+        propio = self.cobro(self.oct, self.e.a101)
+        ajeno = self.cobro(self.oct, self.e.b101)
+        antiguo = self.cobro(self.sep, self.e.a101)
+        abierto = self.cobro(self.nov, self.e.a101)
+        Residente.objects.filter(usuario=self.e.residente).update(desde=datetime.date(2026, 10, 1))
+        self.client.force_login(self.e.residente)
+        for cobro in (ajeno, antiguo, abierto):
+            self.assertEqual(self.client.get(reverse("pagos:aviso_cobro", args=[cobro.pk])).status_code, 404)
+        self.client.force_login(self.e.residente_ajeno)
+        self.assertEqual(self.client.get(reverse("pagos:aviso_cobro", args=[propio.pk])).status_code, 404)
+        self.client.force_login(self.e.comite)
+        self.assertEqual(self.client.get(reverse("pagos:aviso_cobro", args=[propio.pk])).status_code, 403)
 
     def test_residente_ve_solo_sus_cobros_emitidos(self):
         propio = self.cobro(self.oct, self.e.a101)
