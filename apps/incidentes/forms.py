@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 
 from apps.condominios.models import Unidad
 from apps.core.formularios import FormularioBootstrap, ModeloFormularioBootstrap
+from apps.core.imagenes import preparar_imagen
 
 from .models import MAX_FOTOS_POR_INCIDENTE, MENSAJE_SIN_MEDIA, Incidente, mensaje_cupo
 
@@ -72,13 +73,11 @@ class CampoFotos(forms.ImageField):
             archivo = super().clean(archivo)  # Pillow abre el contenido y fija archivo.image
         except ValidationError:
             raise ValidationError("no es una imagen JPG o PNG válida.") from None
-        extension = EXTENSION_POR_FORMATO.get(archivo.image.format)
-        if extension is None:
+        if archivo.image.format not in EXTENSION_POR_FORMATO:
             raise ValidationError("solo se aceptan imágenes JPG o PNG.")
-        # La extensión sale del formato real, no del nombre: un PNG llamado foto.jpg se guarda como .png.
-        archivo.name = Path(archivo.name).stem + extension
-        # TODO(#116): validar con apps.core.imagenes cuando esté unido (quita EXIF)
-        return archivo
+        # Se vuelve a codificar desde los píxeles: sin EXIF (ubicación GPS), con nombre al azar y
+        # extensión según el formato real, no según el nombre que mandó el navegador (#116).
+        return preparar_imagen(archivo, tamano_maximo=MAX_BYTES_FOTO)
 
 
 class FotosFormMixin:

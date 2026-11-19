@@ -30,7 +30,7 @@
 
 ## 5. Pendiente (otros PR)
 
-- [ ] 5.1 Cuando se una #116: reemplazar `CampoFotos.validar_foto` por `apps.core.imagenes` (formato real y sin EXIF) y usar su configuración `MEDIA`.
-- [ ] 5.2 Agregar la ruta de subida (`incidentes:foto_subir`, `incidentes:nuevo`) a la lista de rutas permitidas de `apps/core/middleware_demo.py` cuando se una el PR de la demo de Render (#111). No se toca aquí porque está en otro PR sin unir.
+- [x] 5.1 Cuando se una #116: reemplazar `CampoFotos.validar_foto` por `apps.core.imagenes` (formato real y sin EXIF) y usar su configuración `MEDIA`.
+- [x] 5.2 Agregar la ruta de subida (`incidentes:foto_subir`, `incidentes:nuevo`) a la lista de rutas permitidas de `apps/core/middleware_demo.py` cuando se una el PR de la demo de Render (#111). No se toca aquí porque está en otro PR sin unir.
 - [ ] 5.3 Revisar la interfaz a 1440×900 y 375×812 con el navegador (no se pudo medir en esta entrega).
 - [ ] 5.4 Archivar este cambio antes de unir (`/opsx:archive`).
