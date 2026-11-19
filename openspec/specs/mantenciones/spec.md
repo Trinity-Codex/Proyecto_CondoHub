@@ -1,7 +1,7 @@
 # mantenciones Specification
 
 ## Purpose
-TBD - created by archiving change agregar-mantenciones-obligatorias. Update Purpose after archive.
+Llevar el calendario de mantenciones periódicas del condominio (extintores, red húmeda, ascensores...), avisar al administrador antes de que venzan y guardar el certificado de cada ejecución. Cada condominio define qué mantenciones lleva; el sistema no afirma obligaciones legales.
 
 ## Requirements
 
