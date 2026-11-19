@@ -1,0 +1,3 @@
+- [x] Incorporar el PDF a las pantallas de consulta de pagos.
+- [x] Mostrar monto, fecha, medio, número de pago, cobro y saldo actual.
+- [x] Verificar el PDF de pagos vigentes y anulados y los límites de acceso.
