@@ -1,0 +1,35 @@
+{% load condohub l10n %}
+{# Gráfico del saldo de cierre (RQ-05, #119). Mismos valores que la tabla «Saldo mes a mes», que es su equivalente para lector de pantalla. #}
+<figure class="grafico-fondo mb-0">
+  <div class="grafico-fondo-lienzo">
+    {# localize off: las coordenadas del SVG llevan punto decimal, no la coma de es-cl. #}
+    {% localize off %}
+    <svg viewBox="0 0 {{ grafico.ancho }} {{ grafico.alto }}" preserveAspectRatio="xMidYMid meet" role="img"
+         aria-labelledby="grafico-fondo-titulo grafico-fondo-desc" focusable="false"
+         style="min-width: {{ grafico.ancho_barras }}px">
+      <title id="grafico-fondo-titulo">Saldo de cierre del fondo de reserva por mes</title>
+      <desc id="grafico-fondo-desc">{{ grafico.barras|length }} meses, desde {{ grafico.barras.0.fila.nombre }}. Los valores están en la tabla «Saldo mes a mes».</desc>
+      <defs>
+        <pattern id="trama-sin-emision" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="6" height="6" class="grafico-fondo-trama-fondo"></rect>
+          <line x1="0" y1="0" x2="0" y2="6" class="grafico-fondo-trama-linea"></line>
+        </pattern>
+      </defs>
+      <line x1="0" x2="{{ grafico.ancho }}" y1="{{ grafico.cero }}" y2="{{ grafico.cero }}" class="grafico-fondo-cero"></line>
+      {% for barra in grafico.barras %}
+      <g>
+        <title>{{ barra.fila.nombre }}: {{ barra.fila.cierre|pesos }}{% if not barra.fila.emitido %} (sin período emitido){% endif %}</title>
+        <rect x="{{ barra.x }}" y="{{ barra.y }}" width="{{ grafico.ancho_barra }}" height="{{ barra.alto }}" rx="3"
+              {# La trama va como atributo y no en el CSS: url(#id) desde un .css externo no funciona en todos los navegadores. #}
+              {% if barra.fila.emitido %}class="grafico-fondo-barra{% if barra.fila.cierre < 0 %} grafico-fondo-negativa{% endif %}"{% else %}fill="url(#trama-sin-emision)"{% endif %}></rect>
+        {% if barra.etiqueta %}<text x="{{ barra.centro }}" y="{{ grafico.y_etiquetas }}" text-anchor="middle" class="grafico-fondo-etiqueta">{{ barra.etiqueta }}</text>{% endif %}
+      </g>
+      {% endfor %}
+    </svg>
+    {% endlocalize %}
+  </div>
+  <figcaption class="small text-muted mt-2">
+    <span class="grafico-fondo-leyenda"></span> Saldo de cierre del mes
+    <span class="grafico-fondo-leyenda grafico-fondo-leyenda-trama ms-3"></span> Mes sin período emitido (sin aporte)
+  </figcaption>
+</figure>

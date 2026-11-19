@@ -118,7 +118,7 @@ El sistema SHALL filtrar los egresos de un período con `?categoria=<categoría>
 - **THEN** el sistema responde 404
 
 ### Requirement: Fondo de reserva
-El sistema SHALL calcular el saldo del condominio sumando sus movimientos en pesos enteros: saldo inicial, ingresos, egresos y ajustes. Solo el administrador registra movimientos manuales; el comité consulta. Cada egreso MUST guardar descripción, fecha, monto positivo, proveedor opcional del mismo condominio y acuerdo autorizante. El sistema MUST auditar cada movimiento manual y aislar los datos por condominio.
+El sistema SHALL calcular el saldo del condominio sumando sus movimientos en pesos enteros: saldo inicial, ingresos, egresos y ajustes. Solo el administrador registra movimientos manuales; el comité consulta. Cada egreso MUST guardar descripción, fecha, monto positivo, proveedor opcional del mismo condominio y acuerdo autorizante. El sistema MUST auditar cada movimiento manual y aislar los datos por condominio. El sistema SHALL mostrar su evolución mensual por edificio, unidad y residente.
 
 #### Scenario: Administrador configura el saldo inicial
 - **WHEN** el administrador registra el saldo inicial con monto no negativo, fecha y descripción de su origen
@@ -141,7 +141,7 @@ El sistema SHALL calcular el saldo del condominio sumando sus movimientos en pes
 - **THEN** puede consultar saldo y movimientos, y las operaciones manuales responden 403 sin cambios
 
 #### Scenario: Conserje y residente sin acceso al fondo
-- **WHEN** un conserje o un residente intenta consultar el fondo o acceder por GET o POST a sus operaciones manuales
+- **WHEN** un conserje o un residente intenta consultar el libro de movimientos, la evolución mensual o el desglose por edificio, o acceder por GET o POST a las operaciones manuales
 - **THEN** recibe 403 sin acceder a datos ni crear movimientos
 
 #### Scenario: Movimiento de otro condominio
@@ -187,3 +187,43 @@ El sistema SHALL calcular el saldo del condominio sumando sus movimientos en pes
 #### Scenario: Saldo contable negativo
 - **WHEN** un egreso autorizado o ajuste documentado deja el saldo bajo cero
 - **THEN** se conserva el movimiento auditado y el saldo negativo se muestra explícitamente como contable
+
+#### Scenario: Evolución mensual cuadra con el corte mensual
+- **WHEN** el administrador o el comité abre la evolución del fondo con saldo inicial, aportes emitidos, egresos y ajustes en varios meses
+- **THEN** cada mes muestra saldo de apertura, aportes, egresos, ajustes y saldo de cierre, donde apertura más movimientos del mes es igual al cierre, el cierre es igual al saldo de corte de ese mes y el gráfico muestra los mismos cierres que la tabla
+
+#### Scenario: Mes sin período emitido
+- **WHEN** un mes entre la apertura del fondo y el mes actual no tiene período emitido
+- **THEN** la fila y su barra se marcan «sin período emitido», sin aporte inventado, y su cierre solo refleja los movimientos registrados de ese mes
+
+#### Scenario: Evolución sin cobertura
+- **WHEN** se abre la evolución de un condominio con períodos emitidos y sin saldo inicial configurado
+- **THEN** se informa que falta configurar el saldo inicial y no se muestra una serie ni un saldo cero inventados
+
+#### Scenario: Aportes y saldo por edificio
+- **WHEN** el administrador o el comité consulta el desglose por edificio
+- **THEN** ve por mes la suma de los aportes de las unidades de cada edificio, y un saldo por edificio igual a sus aportes más su parte, según la suma de alícuotas de sus unidades, de los movimientos del condominio (saldo inicial, egresos y ajustes), repartida sin perder pesos, de modo que los saldos de los edificios suman el saldo total
+
+#### Scenario: Aporte acumulado por unidad y por residente
+- **WHEN** el administrador o el comité consulta los aportes por unidad
+- **THEN** ve el aporte acumulado de cada unidad de su condominio en los períodos emitidos y, para cada residente vigente, solo los aportes de los meses que se superponen con su período de residencia en esa unidad, sin listar residencias dadas de baja
+
+#### Scenario: Ítems de cobro fuera del fondo
+- **WHEN** un período emitido incluye ítems de cobro
+- **THEN** los aportes de la evolución, del edificio, de la unidad y del residente cuentan solo el aporte al fondo de reserva de cada cobro, sin los ítems
+
+#### Scenario: Residente ve su propio aporte
+- **WHEN** un residente abre su vista del fondo
+- **THEN** ve el saldo total del fondo y el aporte acumulado y mensual de sus unidades solo en los meses de su residencia, sin datos de otras unidades ni del desglose por edificio
+
+#### Scenario: Residente pide el desglose de otra unidad
+- **WHEN** un residente pide por URL el desglose de una unidad de su condominio donde no reside
+- **THEN** recibe 403 sin importes de esa unidad
+
+#### Scenario: Unidad de otro condominio
+- **WHEN** un administrador, miembro del comité o residente pide por URL el desglose de una unidad de otro condominio
+- **THEN** recibe 404 y la evolución, el desglose por edificio y los aportes por unidad tampoco incluyen datos ajenos
+
+#### Scenario: Conserje sin acceso a aportes
+- **WHEN** un conserje sin otro rol pide la vista del residente o el desglose de una unidad
+- **THEN** recibe 403

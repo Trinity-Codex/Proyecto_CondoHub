@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% load condohub %}
+{% block titulo %}Evolución del fondo de reserva{% endblock %}
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'gastos:fondo' %}">Fondo de reserva</a></li>
+  <li class="breadcrumb-item active" aria-current="page">Evolución</li>
+</ol></nav>
+<h1 class="h3 mb-3">Evolución del fondo de reserva</h1>
+
+{% if aviso_apertura %}
+<div class="alert alert-warning" role="status">{{ aviso_apertura }}</div>
+{% elif not serie %}
+<div class="alert alert-info" role="status">El fondo aún no tiene movimientos. La evolución aparece al configurar el saldo inicial o emitir un período.</div>
+{% else %}
+<div class="card tarjeta-indicador mb-3"><div class="card-body">
+  {% with ultimo=serie|last %}<h2 class="h6">Saldo contable al cierre de {{ ultimo.nombre }}</h2>{% endwith %}
+  <p class="h3 fw-semibold mb-1">{{ saldo|pesos }}</p>
+  <p class="text-muted mb-0">Aportes emitidos, aunque estén impagos, menos egresos, más ajustes. No equivale al efectivo recaudado.</p>
+</div></div>
+
+<section class="card mb-4" aria-labelledby="titulo-mensual"><div class="card-body">
+  <h2 class="h5" id="titulo-mensual">Saldo mes a mes</h2>
+  {% include "gastos/_grafico_fondo.html" %}
+</div>
+<div class="table-responsive">
+<table class="table table-sm align-middle mb-0" aria-label="Saldo mes a mes del fondo de reserva: apertura, aportes, egresos, ajustes y cierre">
+  <thead><tr>
+    <th scope="col">Mes</th><th scope="col" class="text-end">Apertura</th><th scope="col" class="text-end">Aportes</th>
+    <th scope="col" class="text-end">Egresos</th><th scope="col" class="text-end">Ajustes</th><th scope="col" class="text-end">Cierre</th>
+  </tr></thead>
+  <tbody>
+  {% for fila in serie %}
+  <tr>
+    <th scope="row" class="fw-normal text-nowrap">{{ fila.nombre }}</th>
+    <td class="text-end text-nowrap">{{ fila.apertura|pesos }}</td>
+    <td class="text-end text-nowrap">{% if fila.emitido %}{{ fila.aportes|pesos }}{% else %}<span class="text-muted">Sin período emitido</span>{% endif %}</td>
+    <td class="text-end text-nowrap">{% if fila.egresos %}-{{ fila.egresos|pesos }}{% else %}{{ 0|pesos }}{% endif %}</td>
+    <td class="text-end text-nowrap">{{ fila.ajustes|pesos }}</td>
+    <td class="text-end text-nowrap fw-semibold">{{ fila.cierre|pesos }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div></section>
+
+<section class="card mb-4" aria-labelledby="titulo-edificios"><div class="card-body">
+  <h2 class="h5" id="titulo-edificios">Por edificio</h2>
+  <p class="text-muted small mb-0">Los egresos y ajustes del fondo son del condominio: el saldo de cada edificio suma los aportes de sus unidades y su parte del saldo inicial, los egresos y los ajustes según la alícuota vigente de sus unidades.</p>
+</div>
+{% if edificios.sin_alicuotas %}<div class="alert alert-warning mx-3" role="status">Las unidades no tienen alícuotas: no se puede repartir el saldo por edificio.</div>{% endif %}
+<div class="table-responsive">
+<table class="table table-sm align-middle mb-0" aria-label="Saldo por edificio">
+  <thead><tr><th scope="col">Edificio</th><th scope="col" class="text-end">Aportes</th><th scope="col" class="text-end">Parte de movimientos del condominio</th><th scope="col" class="text-end">Saldo</th></tr></thead>
+  <tbody>
+  {% for fila in edificios.filas %}
+  <tr>
+    <th scope="row" class="fw-normal">{{ fila.edificio.nombre }}</th>
+    <td class="text-end text-nowrap">{{ fila.aporte|pesos }}</td>
+    <td class="text-end text-nowrap">{% if fila.parte is None %}—{% else %}{{ fila.parte|pesos }}{% endif %}</td>
+    <td class="text-end text-nowrap fw-semibold">{% if fila.saldo is None %}—{% else %}{{ fila.saldo|pesos }}{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if edificios.meses %}
+<div class="card-body pb-0"><h3 class="h6">Aportes por edificio, mes a mes</h3></div>
+<div class="table-responsive">
+<table class="table table-sm align-middle mb-0" aria-label="Aportes de cada edificio por mes emitido">
+  <thead><tr><th scope="col">Mes</th>{% for edificio in edificios.edificios %}<th scope="col" class="text-end">{{ edificio.nombre }}</th>{% endfor %}<th scope="col" class="text-end">Total</th></tr></thead>
+  <tbody>
+  {% for mes, montos, total in edificios.meses %}
+  <tr>
+    <th scope="row" class="fw-normal text-nowrap">{{ mes.nombre }}</th>
+    {% for monto in montos %}<td class="text-end text-nowrap">{{ monto|pesos }}</td>{% endfor %}
+    <td class="text-end text-nowrap fw-semibold">{{ total|pesos }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+</section>
+
+<section class="card mb-4" aria-labelledby="titulo-unidades"><div class="card-body">
+  <h2 class="h5" id="titulo-unidades">Aporte acumulado por unidad</h2>
+  <p class="text-muted small mb-0">Solo el aporte al fondo de reserva de cada cobro emitido; los ítems de cobro (cuotas extraordinarias, multas) no aportan al fondo.</p>
+</div>
+<div class="table-responsive">
+<table class="table table-sm table-hover align-middle mb-0" aria-label="Aporte acumulado de cada unidad">
+  <thead><tr><th scope="col">Unidad</th><th scope="col" class="text-end">Alícuota</th><th scope="col" class="text-end">Aporte acumulado</th></tr></thead>
+  <tbody>
+  {% for fila in unidades.unidades %}
+  <tr>
+    <th scope="row" class="fw-normal"><a href="{% url 'gastos:fondo_unidad' fila.unidad.pk %}">{{ fila.unidad.edificio.nombre }} · {{ fila.unidad.numero }}</a></th>
+    <td class="text-end">{{ fila.unidad.alicuota|floatformat:"-4" }}</td>
+    <td class="text-end text-nowrap">{{ fila.aporte|pesos }}</td>
+  </tr>
+  {% empty %}<tr><td colspan="3" class="text-center text-muted py-3">El condominio no tiene unidades.</td></tr>{% endfor %}
+  </tbody>
+  <tfoot><tr class="fw-semibold"><td colspan="2">Total</td><td class="text-end text-nowrap">{{ unidades.total|pesos }}</td></tr></tfoot>
+</table>
+</div></section>
+
+<section class="card mb-4" aria-labelledby="titulo-residentes"><div class="card-body">
+  <h2 class="h5" id="titulo-residentes">Aporte por residente</h2>
+  <p class="text-muted small mb-0">Residentes vigentes: aportes de su unidad en los meses de su período de residencia.</p>
+</div>
+<div class="table-responsive">
+<table class="table table-sm align-middle mb-0" aria-label="Aporte de cada residente según sus fechas de residencia">
+  <thead><tr><th scope="col">Residente</th><th scope="col">Unidad</th><th scope="col">Residencia</th><th scope="col" class="text-end">Aporte</th></tr></thead>
+  <tbody>
+  {% for fila in unidades.residentes %}
+  <tr>
+    <th scope="row" class="fw-normal">{{ fila.residencia.usuario }}</th>
+    <td class="text-nowrap">{{ fila.residencia.unidad.edificio.nombre }} · {{ fila.residencia.unidad.numero }}</td>
+    <td class="text-nowrap">desde {{ fila.residencia.desde|date:"d-m-Y" }} (vigente)</td>
+    <td class="text-end text-nowrap">{{ fila.aporte|pesos }}</td>
+  </tr>
+  {% empty %}<tr><td colspan="4" class="text-center text-muted py-3">No hay residentes registrados.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div></section>
+{% endif %}
+{% endblock %}

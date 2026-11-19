@@ -17,11 +17,16 @@ extraordinarias, multas... que se suman al cobro de las unidades al emitir.
 
 Reporte de morosidad (Issue #5, administrador y comité): ReporteView lo muestra
 y ReporteCsvView lo descarga para Excel. El cálculo está en reportes.py.
+
+Evolución del fondo de reserva (RQ-05, #119, solo lectura; el cálculo está en evolucion.py):
+  - mes a mes, por edificio, unidad y residente: administrador y comité
+  - desglose de una unidad: administrador y comité (cualquiera); residente, solo la suya (403)
+  - «Mi aporte al fondo»: el residente ve el saldo total y solo el aporte de sus unidades
 """
 from collections import Counter
 
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, Sum
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -30,12 +35,14 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, T
 
 from apps.core.exportar import celda_segura, porcentaje_csv, respuesta_csv  # noqa: F401  (celda_segura se sigue importando desde aquí)
 from apps.core.listados import FiltrosGetMixin, leer_opcion
-from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, RolRequeridoMixin
+from apps.condominios.models import Unidad
+from apps.core.permisos import ADMINISTRADOR, COMITE, RESIDENTE, CondominioQuerysetMixin, RolRequeridoMixin, tiene_rol
 from apps.core.templatetags.condohub import pesos
 
 from .filtros import COLOR_SITUACION, SITUACIONES, ordenar_por_urgencia
 from .forms import EgresoForm, FiltroReporteForm, ItemCobroForm, MovimientoFondoForm, PeriodoForm
 from .models import Egreso, ItemCobro, MovimientoFondo, PeriodoGasto
+from . import evolucion
 from .fondo import registrar_movimiento, saldo_fondo
 from .reportes import generar_reporte
 from .servicios import calcular_emision, eliminar_item, emitir_periodo, guardar_item
@@ -559,3 +566,82 @@ class FondoCreateView(RolRequeridoMixin, CondominioQuerysetMixin, CreateView):
             return self.form_invalid(form)
         messages.success(self.request, "Movimiento del fondo registrado.")
         return redirect(self.object)
+
+
+# --------------------------------------------------------------------------
+# Evolución del fondo de reserva (RQ-05, #119): solo lectura
+# --------------------------------------------------------------------------
+def _saldo_o_aviso(condominio):
+    """(saldo, None) o (None, aviso) si falta el saldo inicial del fondo: nunca un cero inventado."""
+    try:
+        return saldo_fondo(condominio), None
+    except ValidationError as error:
+        return None, " ".join(error.messages)
+
+
+class EvolucionFondoView(RolRequeridoMixin, TemplateView):
+    """Saldo mes a mes con gráfico y tabla, aportes y saldo por edificio, y aportes por unidad y residente."""
+
+    roles_permitidos = [ADMINISTRADOR, COMITE]
+    template_name = "gastos/fondo_evolucion.html"
+
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+        condominio = self.request.condominio  # todo se filtra por el condominio activo
+        try:
+            serie = evolucion.serie_mensual(condominio)
+        except ValidationError as error:
+            contexto["aviso_apertura"] = " ".join(error.messages)
+            return contexto
+        contexto.update(
+            serie=serie, grafico=evolucion.grafico(serie), saldo=serie[-1].cierre if serie else 0,
+            edificios=evolucion.por_edificio(condominio, serie), unidades=evolucion.por_unidad(condominio),
+        )
+        return contexto
+
+
+class AporteUnidadView(RolRequeridoMixin, CondominioQuerysetMixin, DetailView):
+    """
+    Aportes mes a mes de una unidad. Unidad de otro condominio: 404 (CondominioQuerysetMixin).
+    Quien solo es residente necesita vivir en ella (si no, 403) y ve solo los meses de su residencia.
+    """
+
+    roles_permitidos = [ADMINISTRADOR, COMITE, RESIDENTE]
+    model = Unidad
+    campo_condominio = "edificio__condominio"
+    template_name = "gastos/fondo_unidad.html"
+    context_object_name = "unidad"
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("edificio__condominio")
+
+    def get_object(self, queryset=None):
+        unidad = super().get_object(queryset)
+        self.ve_todo = tiene_rol(self.request, ADMINISTRADOR, COMITE)
+        if not self.ve_todo and not unidad.residentes.filter(usuario=self.request.user, activo=True).exists():
+            raise PermissionDenied("Solo puedes ver el aporte de tu propia unidad.")
+        return unidad
+
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+        cobros = evolucion.aportes_de_unidad(self.object, None if self.ve_todo else self.request.user)
+        contexto.update(cobros=cobros, total=sum(c.monto_fondo_reserva for c in cobros), ve_todo=self.ve_todo)
+        return contexto
+
+
+class MiAporteFondoView(RolRequeridoMixin, TemplateView):
+    """Vista del residente (consulta C3, opción por defecto): saldo total y solo el aporte de sus unidades."""
+
+    roles_permitidos = [RESIDENTE]
+    template_name = "gastos/fondo_mi_aporte.html"
+
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+        condominio, usuario = self.request.condominio, self.request.user
+        contexto["saldo"], contexto["aviso_apertura"] = _saldo_o_aviso(condominio)
+        unidades = []
+        for unidad in evolucion.unidades_del_residente(usuario, condominio):
+            cobros = evolucion.aportes_de_unidad(unidad, usuario)
+            unidades.append({"unidad": unidad, "cobros": cobros, "total": sum(c.monto_fondo_reserva for c in cobros)})
+        contexto.update(unidades=unidades, total=sum(u["total"] for u in unidades))
+        return contexto

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block titulo %}Aporte al fondo · {{ unidad.edificio.nombre }} {{ unidad.numero }}{% endblock %}
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  {% if ve_todo %}
+  <li class="breadcrumb-item"><a href="{% url 'gastos:fondo' %}">Fondo de reserva</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'gastos:fondo_evolucion' %}">Evolución</a></li>
+  {% else %}
+  <li class="breadcrumb-item"><a href="{% url 'gastos:fondo_mi_aporte' %}">Mi aporte al fondo</a></li>
+  {% endif %}
+  <li class="breadcrumb-item active" aria-current="page">{{ unidad.edificio.nombre }} · {{ unidad.numero }}</li>
+</ol></nav>
+<h1 class="h3 mb-1">Aporte al fondo de reserva</h1>
+<p class="text-muted mb-3">{{ unidad.edificio.nombre }} · unidad {{ unidad.numero }}{% if not ve_todo %}. Solo los meses de tu período de residencia.{% endif %}</p>
+<div class="card">
+  {% include "gastos/_aportes_unidad.html" with titulo_tabla="Aporte al fondo de reserva de la unidad, mes a mes" %}
+</div>
+<p class="text-muted small mt-2">Los ítems de cobro (cuotas extraordinarias, multas) no aportan al fondo de reserva.</p>
+{% endblock %}
