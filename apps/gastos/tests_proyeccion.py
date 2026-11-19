@@ -21,7 +21,7 @@ from apps.auditoria.models import RegistroAuditoria
 from apps.core.pruebas import crear_escenario
 
 from .models import Egreso, ItemCobro, PeriodoGasto
-from .proyeccion import proyectar, reajustar
+from .proyeccion import porcentaje_texto, proyectar, reajustar
 from .servicios import emitir_periodo, guardar_item
 
 URL = reverse("gastos:proyeccion")
@@ -75,6 +75,12 @@ class CalculoProyeccionTest(EscenarioProyeccionMixin, TestCase):
         # Por alícuota: A101 (0,4) paga 44.000 de los 110.000.
         self.assertEqual(agosto[("10", "0")].por_unidad[0], (44000, 2200))
         self.assertEqual(reajustar(100000, Decimal("-10"), Decimal("0")), 90000)
+
+    def test_porcentajes_en_texto(self):
+        casos = {"4.50": "4,5 %", "10": "10 %", "-2": "−2 %", "-0": "0 %", "0.00": "0 %"}
+        for valor, texto in casos.items():
+            with self.subTest(valor=valor):
+                self.assertEqual(porcentaje_texto(Decimal(valor)), texto)
 
     def test_total_de_cada_mes_cuadra_con_las_unidades(self):
         # IPC y crecimiento con decimales: los montos no se reparten exacto entre las unidades.
@@ -166,7 +172,8 @@ class VistaProyeccionTest(EscenarioProyeccionMixin, TestCase):
 
     def test_csv_igual_a_la_pantalla(self):
         self.client.force_login(self.e.administrador)
-        consulta = {"anio": 2026, "ipc": "3,33", "crecimiento": "1.1"}
+        # Crecimiento negativo: el CSV no debe anteponerle un apóstrofo (celda_segura).
+        consulta = {"anio": 2026, "ipc": "3,33", "crecimiento": "-1.1"}
         p = self.client.get(URL, consulta).context["proyeccion"]
         texto = self.client.get(URL_CSV, consulta).content.decode("utf-8-sig")
         filas = list(csv.reader(io.StringIO(texto), delimiter=";"))[1:]
@@ -178,7 +185,10 @@ class VistaProyeccionTest(EscenarioProyeccionMixin, TestCase):
                          for u, (e, f) in zip(p.unidades, mes.por_unidad)]
             esperado.append([nombre, "Total del mes", "", str(mes.base), "Sí" if mes.estimado else "No",
                              str(mes.egresos), str(mes.fondo), str(mes.total)])
-        esperado.append(["Total 2027", "", "", str(p.total_base), "", str(p.total_egresos), str(p.total_fondo), str(p.total)])
+        esperado += [["Total 2027", f["unidad"].edificio.nombre, f["unidad"].numero, "", "", str(f["egresos"]),
+                      str(f["fondo"]), str(f["total"])] for f in p.filas_unidades]
+        esperado.append(["Total 2027", "Total del año", "", str(p.total_base), "", str(p.total_egresos),
+                         str(p.total_fondo), str(p.total)])
         esperado.append([])
         esperado += [[t, v] for t, v in p.supuestos]
         self.assertEqual(filas, esperado)

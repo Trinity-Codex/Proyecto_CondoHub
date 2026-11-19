@@ -32,5 +32,5 @@ Fuera del alcance:
 ## Impact
 
 - `apps/gastos`: módulo nuevo `proyeccion.py` (solo lectura sobre `PeriodoGasto`, `Egreso` y `Unidad`), formulario de parámetros, dos vistas (pantalla y CSV), plantilla, enlace desde la lista de períodos y pruebas.
-- Reutiliza `prorrateo.ESTRATEGIAS` y `apps/core/exportar.respuesta_csv`.
+- Reutiliza `prorrateo.ESTRATEGIAS` y `apps/core/exportar.respuesta_csv`. El cálculo del fondo de un mes pasa a una función de `servicios.py` (`monto_fondo`) que comparten la emisión y la proyección, sin cambiar su resultado.
 - Sin migraciones, dependencias nuevas ni cambios en la demo (el año demo ya tiene meses emitidos).

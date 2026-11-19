@@ -25,6 +25,7 @@ from apps.condominios.models import Unidad
 
 from .models import MESES, PeriodoGasto
 from .prorrateo import ESTRATEGIAS
+from .servicios import monto_fondo
 
 
 def redondear(valor):
@@ -33,8 +34,14 @@ def redondear(valor):
 
 
 def porcentaje_texto(valor):
-    """Decimal -> texto con coma decimal y sin ceros de más: Decimal("4.50") -> "4,5 %"."""
-    return format(Decimal(valor).normalize(), "f").replace(".", ",") + " %"
+    """
+    Decimal -> texto con coma decimal y sin ceros de más: Decimal("4.50") -> "4,5 %".
+    El negativo usa el signo menos tipográfico («−2 %»): con un guion, el CSV le antepondría un
+    apóstrofo (celda_segura, inyección de fórmulas) y ya no sería igual a la pantalla.
+    """
+    valor = Decimal(valor) + 0  # + 0 convierte "-0" en 0
+    signo = "−" if valor < 0 else ""
+    return signo + format(abs(valor).normalize(), "f").replace(".", ",") + " %"
 
 
 def reajustar(base, ipc, crecimiento):
@@ -164,9 +171,10 @@ def proyectar(condominio, anio_base, ipc, crecimiento):
     )
     proyeccion = Proyeccion(anio_base=anio_base, ipc=Decimal(ipc), crecimiento=Decimal(crecimiento),
                             criterio=criterio, porcentaje_fondo=porcentaje, unidades=unidades)
-    if criterio == PeriodoGasto.Criterio.ALICUOTA and unidades and condominio.suma_alicuotas() != 1:
+    suma = condominio.suma_alicuotas() if criterio == PeriodoGasto.Criterio.ALICUOTA and unidades else 1
+    if suma != 1:
         proyeccion.aviso_alicuotas = (
-            f"Las alícuotas suman {condominio.suma_alicuotas():.6f} y no 1: la proyección reparte en proporción "
+            f"Las alícuotas suman {suma:.6f} y no 1: la proyección reparte en proporción "
             "a ellas, pero la emisión real lo rechazaría hasta corregirlas."
         )
 
@@ -179,7 +187,7 @@ def proyectar(condominio, anio_base, ipc, crecimiento):
     for mes in range(1, 13):
         base = reales.get(mes, promedio)
         egresos = reajustar(base, ipc, crecimiento)
-        fondo = redondear(Decimal(egresos) * porcentaje / 100)
+        fondo = monto_fondo(egresos, porcentaje)
         montos = estrategia.calcular(egresos, unidades)
         fondos = estrategia.calcular(fondo, unidades)
         proyeccion.meses.append(MesProyectado(

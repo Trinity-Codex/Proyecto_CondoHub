@@ -138,6 +138,8 @@
       <thead><tr>
         <th scope="col">Unidad</th>
         {% for mes in proyeccion.meses %}<th scope="col" class="text-end">{{ mes.nombre|slice:":3" }}</th>{% endfor %}
+        <th scope="col" class="text-end">Egresos anual</th>
+        <th scope="col" class="text-end">Fondo anual</th>
         <th scope="col" class="text-end">Total anual</th>
       </tr></thead>
       <tbody>
@@ -145,15 +147,19 @@
         <tr>
           <th scope="row" class="fw-normal">{{ fila.unidad }}</th>
           {% for monto in fila.por_mes %}<td class="text-end">{{ monto|pesos }}</td>{% endfor %}
+          <td class="text-end">{{ fila.egresos|pesos }}</td>
+          <td class="text-end">{{ fila.fondo|pesos }}</td>
           <td class="text-end fw-semibold">{{ fila.total|pesos }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="14" class="text-muted">El condominio no tiene unidades registradas.</td></tr>
+        <tr><td colspan="16" class="text-muted">El condominio no tiene unidades registradas.</td></tr>
         {% endfor %}
       </tbody>
       <tfoot><tr class="fw-semibold">
         <th scope="row">Total</th>
         {% for mes in proyeccion.meses %}<td class="text-end">{{ mes.total|pesos }}</td>{% endfor %}
+        <td class="text-end">{{ proyeccion.total_egresos|pesos }}</td>
+        <td class="text-end">{{ proyeccion.total_fondo|pesos }}</td>
         <td class="text-end">{{ proyeccion.total|pesos }}</td>
       </tr></tfoot>
     </table>

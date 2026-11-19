@@ -686,7 +686,10 @@ class ProyeccionView(ProyeccionMixin, TemplateView):
 
 
 class ProyeccionCsvView(ProyeccionMixin, View):
-    """Mismos números que la pantalla: una fila por mes y unidad, el total de cada mes y los supuestos."""
+    """
+    Todos los números de la pantalla: una fila por mes y unidad, el total de cada mes, el total anual
+    de cada unidad y del año, y los supuestos.
+    """
 
     def get(self, request, *args, **kwargs):
         self.preparar_proyeccion()
@@ -703,7 +706,9 @@ class ProyeccionCsvView(ProyeccionMixin, View):
                 filas.append([nombre, unidad.edificio.nombre, unidad.numero, "", "", egresos, fondo, egresos + fondo])
             filas.append([nombre, "Total del mes", "", mes.base, "Sí" if mes.estimado else "No",
                           mes.egresos, mes.fondo, mes.total])
-        filas.append([f"Total {p.anio}", "", "", p.total_base, "", p.total_egresos, p.total_fondo, p.total])
+        filas += [[f"Total {p.anio}", f["unidad"].edificio.nombre, f["unidad"].numero, "", "", f["egresos"], f["fondo"], f["total"]]
+                  for f in p.filas_unidades]
+        filas.append([f"Total {p.anio}", "Total del año", "", p.total_base, "", p.total_egresos, p.total_fondo, p.total])
         filas.append([])
         filas += [[texto, valor] for texto, valor in p.supuestos]
         return respuesta_csv(f"proyeccion-{p.anio}.csv", encabezados, filas)
