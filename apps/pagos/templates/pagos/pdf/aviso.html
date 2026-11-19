@@ -29,6 +29,7 @@ Vencimiento: {{ periodo.fecha_vencimiento|date:"d-m-Y"|default:"Sin registrar" }
 </table>
 <h2>Egresos del período por categoría</h2>
 <table>{% for linea in egresos %}<tr><td>{{ linea.categoria }}</td><td>$ {{ linea.subtotal|miles }}</td></tr>{% empty %}<tr><td>Sin egresos registrados</td></tr>{% endfor %}</table>
+<p>Saldo del fondo de reserva al cierre: {% if saldo_fondo == None %}histórico no disponible{% else %}$ {{ saldo_fondo|miles }}{% endif %}</p>
 <h2>Caja del condominio</h2>
 <p>Ingresos del mes: $ {{ caja.ingresos|miles }} · Egresos del mes: $ {{ caja.egresos|miles }}<br>
 Saldo de caja según movimientos registrados hasta fin de mes: $ {{ caja.saldo|miles }}</p>

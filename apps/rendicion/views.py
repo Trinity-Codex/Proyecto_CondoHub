@@ -1,16 +1,36 @@
-"""
-Vistas de rendicion: rendición de cuentas mensual a la comunidad (Ley 21.442).
+from django.utils.cache import add_never_cache_headers
+from django.utils.http import content_disposition_header
+from django.views.generic import DetailView, ListView
 
-Por ahora solo una página provisional (contrato C0, #62). Las vistas reales llegan
-con el Issue #55. Administrador y comité: los demás roles reciben 403.
-"""
-from django.views.generic import TemplateView
-
+from apps.core.pdf import renderizar_pdf
 from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, RolRequeridoMixin
+from apps.gastos.models import PeriodoGasto
+
+from .consultas import rendicion_del_periodo
 
 
-class RendicionInicioView(RolRequeridoMixin, CondominioQuerysetMixin, TemplateView):
-    """Página provisional. CondominioQuerysetMixin queda listo para cuando la app tenga modelo."""
-
+class PeriodosEmitidosMixin(RolRequeridoMixin, CondominioQuerysetMixin):
     roles_permitidos = [ADMINISTRADOR, COMITE]
-    template_name = "rendicion/provisional.html"
+    queryset = PeriodoGasto.objects.filter(estado=PeriodoGasto.Estado.EMITIDO).select_related("condominio")
+
+
+class RendicionInicioView(PeriodosEmitidosMixin, ListView):
+    template_name = "rendicion/inicio.html"
+    context_object_name = "periodos"
+
+
+class RendicionDetalleView(PeriodosEmitidosMixin, DetailView):
+    template_name = "rendicion/detalle.html"
+    context_object_name = "periodo"
+
+    def get_context_data(self, **kwargs):
+        return {**super().get_context_data(**kwargs), **rendicion_del_periodo(self.object)}
+
+
+class RendicionPDFView(RendicionDetalleView):
+    def render_to_response(self, context, **kwargs):
+        nombre = f"rendicion-{self.object.anio}-{self.object.mes:02d}.pdf"
+        respuesta = renderizar_pdf("rendicion/pdf.html", context, nombre)
+        respuesta["Content-Disposition"] = content_disposition_header(True, nombre)
+        add_never_cache_headers(respuesta)
+        return respuesta
