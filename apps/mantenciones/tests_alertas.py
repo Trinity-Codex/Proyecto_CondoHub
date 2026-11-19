@@ -168,7 +168,7 @@ class CertificadoTest(TestCase):
             self.assertEqual(respuesta.status_code, 200)
             self.assertIn("attachment", respuesta["Content-Disposition"])
             self.assertEqual(respuesta["X-Content-Type-Options"], "nosniff")
-            respuesta.close()
+            b"".join(respuesta.streaming_content)  # leer la respuesta la cierra sin cerrar la conexión de MySQL
         self.client.force_login(self.e.residente)
         self.assertEqual(self.client.get(url).status_code, 403)
         # Un administrador de otro condominio no ve ni que existe.
