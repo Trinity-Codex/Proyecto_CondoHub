@@ -416,7 +416,7 @@ class FotosIncidenteTest(TestCase):
             self.assertEqual(respuesta["Content-Type"], "image/jpeg")
             self.assertEqual(respuesta["X-Content-Type-Options"], "nosniff")
             self.assertIn("private", respuesta["Cache-Control"])
-            respuesta.close()
+            b"".join(respuesta.streaming_content)  # leer la respuesta la cierra sin cerrar la conexión de MySQL
 
     def test_otro_residente_no_ve_el_archivo_por_url_directa(self):
         foto = self.foto()
@@ -546,7 +546,7 @@ class FotosIncidenteTest(TestCase):
         self.assertTrue(foto.imagen.name.endswith(".png"), foto.imagen.name)
         respuesta = self.client.get(reverse("incidentes:foto", args=[foto.pk]))
         self.assertEqual(respuesta["Content-Type"], "image/png")
-        respuesta.close()
+        b"".join(respuesta.streaming_content)  # idem: close() a mano cierra la conexión y rompe la prueba siguiente
 
     def test_un_jpeg_llamado_jpeg_se_guarda_como_jpg(self):
         self.reportar(imagen("foto.jpeg", "JPEG"))
