@@ -41,8 +41,8 @@ class CampoFotos(forms.ImageField):
         archivos = [a for a in (data if isinstance(data, (list, tuple)) else [data]) if a]
         if not archivos and self.required:
             raise ValidationError(self.error_messages["required"], code="required")
-        # Primero lo barato: sin MEDIA_ROOT o sobre el cupo se rechaza sin abrir ningún archivo con Pillow.
-        if archivos and not settings.MEDIA_ROOT:
+        # Primero lo barato: con la subida apagada o sobre el cupo se rechaza sin abrir ningún archivo con Pillow.
+        if archivos and not settings.FOTOS_INCIDENTES_HABILITADAS:
             raise ValidationError(MENSAJE_SIN_MEDIA)
         if self.existentes + len(archivos) > MAX_FOTOS_POR_INCIDENTE:
             raise ValidationError(mensaje_cupo(self.existentes, len(archivos)))
@@ -59,6 +59,8 @@ class CampoFotos(forms.ImageField):
 
     def validar_foto(self, archivo):
         # @spec:incidentes-fotos-de-respaldo
+        # Las revisiones de extensión y tamaño de abajo no duplican a preparar_imagen: dan mensajes propios de fotos
+        # y evitan abrir con Pillow un archivo que ya se sabe inválido.
         if Path(archivo.name).suffix.lower() not in EXTENSIONES_FOTO:
             raise ValidationError("solo se aceptan imágenes JPG o PNG.")
         # El tamaño se mira primero: no tiene sentido abrir con Pillow un archivo que ya se pasó del límite.

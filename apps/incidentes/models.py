@@ -133,7 +133,7 @@ def mensaje_cupo(existentes, nuevas):
 
 
 class SubidaNoPermitida(Exception):
-    """El servicio se niega a guardar fotos (sin MEDIA_ROOT o sobre el cupo); el mensaje es apto para mostrarlo."""
+    """El servicio se niega a guardar fotos (subida apagada o sobre el cupo); el mensaje es apto para mostrarlo."""
 
 
 class FotoIncidente(models.Model):
@@ -167,13 +167,13 @@ class FotoIncidente(models.Model):
         """
         Guarda las fotos y registra cada subida en auditoría, todo en una transacción.
         Las reglas viven aquí y no en el formulario, para que ningún llamador pueda saltárselas:
-        sin MEDIA_ROOT o sobre el cupo se lanza SubidaNoPermitida antes de escribir nada.
+        con la subida apagada o sobre el cupo se lanza SubidaNoPermitida antes de escribir nada.
         """
         # @spec:incidentes-fotos-de-respaldo
         if not archivos:
-            return []  # reportar sin fotos no debe depender de MEDIA_ROOT
-        if not settings.MEDIA_ROOT:
-            # Sin MEDIA_ROOT Django escribiría en la carpeta de trabajo del proceso.
+            return []  # reportar sin fotos no debe depender de la subida
+        if not settings.FOTOS_INCIDENTES_HABILITADAS:
+            # Sin almacenamiento persistente decidido (#29) las fotos se perderían al reiniciar el servidor.
             raise SubidaNoPermitida(MENSAJE_SIN_MEDIA)
         escritos = []  # (almacenamiento, nombre) de lo ya escrito en disco
         try:

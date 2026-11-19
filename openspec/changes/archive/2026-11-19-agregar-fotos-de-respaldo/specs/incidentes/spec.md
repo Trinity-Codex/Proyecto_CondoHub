@@ -41,8 +41,8 @@ El sistema SHALL permitir adjuntar fotos de respaldo a un incidente en dos etapa
 - **WHEN** el residente que lo reportó o la administración abre un incidente resuelto
 - **THEN** ve sus fotos de «antes» y de «después», cada una con su fecha y su autor
 
-#### Scenario: Servidor sin almacenamiento de archivos
-- **WHEN** el servidor no tiene `MEDIA_ROOT` configurado y alguien adjunta una foto
+#### Scenario: Subida de fotos apagada
+- **WHEN** la subida de fotos está apagada (`FOTOS_INCIDENTES_HABILITADAS` en falso, el valor por defecto) y alguien adjunta una foto
 - **THEN** el formulario la rechaza con «La subida de fotos aún no está habilitada en este servidor», el servicio de subida se niega y no se escribe ningún archivo
 
 #### Scenario: Subidas simultáneas

@@ -24,9 +24,9 @@ def imagen_ficticia(texto, color):
 def cargar_fotos(incidente, u):
     """
     «Antes» a nombre del residente y «después» a nombre del conserje, como en el uso real.
-    Se omite si no hay MEDIA_ROOT: sin él Django escribiría los archivos en la carpeta desde donde se ejecuta el comando.
+    Se omite si la subida de fotos está apagada: sin almacenamiento persistente se perderían al reiniciar.
     """
-    if not settings.MEDIA_ROOT:
+    if not settings.FOTOS_INCIDENTES_HABILITADAS:
         return
     FotoIncidente.subir(incidente, [imagen_ficticia("Antes", "#8a5a44")], FotoIncidente.Etapa.ANTES, u["residente"])
     FotoIncidente.subir(incidente, [imagen_ficticia("Después", "#2f7d5b")], FotoIncidente.Etapa.DESPUES, u["conserje"])

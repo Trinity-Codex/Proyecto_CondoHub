@@ -263,7 +263,7 @@ class FotosIncidenteTest(TestCase):
 
     def setUp(self):
         self.e = crear_escenario()
-        # No hay MEDIA_ROOT en settings (lo trae #116): los archivos de prueba van a una carpeta temporal que se borra sola.
+        # Los archivos de prueba van a una carpeta temporal que se borra sola.
         carpeta = self.enterContext(tempfile.TemporaryDirectory())
         self.enterContext(override_settings(MEDIA_ROOT=carpeta))
         self.media = carpeta
@@ -472,10 +472,10 @@ class FotosIncidenteTest(TestCase):
     def archivos_en_disco(self):
         return [p for p in Path(self.media).rglob("*") if p.is_file()]
 
-    # --- sin MEDIA_ROOT (lo trae #116): no se escribe nada en la carpeta de trabajo ---
+    # --- subida apagada (FOTOS_INCIDENTES_HABILITADAS=False): no se escribe nada en disco ---
 
-    def test_sin_media_root_el_formulario_rechaza_las_fotos(self):
-        with override_settings(MEDIA_ROOT=""):
+    def test_subida_apagada_el_formulario_rechaza_las_fotos(self):
+        with override_settings(FOTOS_INCIDENTES_HABILITADAS=False):
             respuesta = self.reportar(imagen())
         self.assertEqual(respuesta.status_code, 200)
         self.assertEqual(
@@ -483,15 +483,15 @@ class FotosIncidenteTest(TestCase):
         )
         self.assertFalse(Incidente.objects.filter(titulo="Fuga").exists())
 
-    def test_sin_media_root_subir_se_niega_y_no_escribe(self):
-        with override_settings(MEDIA_ROOT=""):
+    def test_subida_apagada_subir_se_niega_y_no_escribe(self):
+        with override_settings(FOTOS_INCIDENTES_HABILITADAS=False):
             with self.assertRaisesMessage(SubidaNoPermitida, "aún no está habilitada"):
                 FotoIncidente.subir(self.incidente, [imagen()], FotoIncidente.Etapa.ANTES, self.e.residente)
         self.assertEqual(FotoIncidente.objects.count(), 0)
         self.assertEqual(RegistroAuditoria.objects.count(), 0)
 
-    def test_sin_media_root_reportar_sin_fotos_sigue_funcionando(self):
-        with override_settings(MEDIA_ROOT=""):
+    def test_subida_apagada_reportar_sin_fotos_sigue_funcionando(self):
+        with override_settings(FOTOS_INCIDENTES_HABILITADAS=False):
             respuesta = self.reportar()
         self.assertEqual(respuesta.status_code, 302)
         self.assertTrue(Incidente.objects.filter(titulo="Fuga").exists())

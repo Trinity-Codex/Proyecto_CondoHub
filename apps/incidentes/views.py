@@ -146,7 +146,7 @@ class IncidenteDetailView(RolRequeridoMixin, IncidentesVisiblesMixin, DetailView
         contexto = super().get_context_data(**kwargs)
         if self.puede_gestionar():
             contexto["form_estado"] = kwargs.get("form_estado") or CambiarEstadoForm(instance=self.object)
-            contexto["form_fotos"] = FotosDespuesForm()
+            contexto["form_fotos"] = FotosDespuesForm(existentes=self.object.fotos.count())
         # Booleano explícito: la plantilla no debe deducir el permiso de que exista un formulario.
         contexto["puede_gestionar"] = self.puede_gestionar()
         # @spec:incidentes-fotos-de-respaldo: si puede ver el incidente, ve todas sus fotos (mismas reglas de visibilidad).

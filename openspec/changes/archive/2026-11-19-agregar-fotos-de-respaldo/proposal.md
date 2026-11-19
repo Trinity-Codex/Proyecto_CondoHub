@@ -12,12 +12,10 @@ Cuando la administración resuelve un incidente no queda evidencia de cómo esta
 - Subida y baja quedan en la auditoría (#27).
 - Datos demo: el incidente resuelto de la demo del cliente trae fotos ficticias (color sólido con un rótulo, sin personas).
 
-Issue: Closes #122 (absorbe #15). MoSCoW: Could, hito PMV 27-nov. Depende de #116 (`apps/core/imagenes.py` y la configuración `MEDIA`), que aún no está unido.
+Issue: Closes #122 (absorbe #15). MoSCoW: Could, hito PMV 27-nov. Depende de #116 (`apps/core/imagenes.py` y la configuración `MEDIA`), que ya está unido.
 
 ## Fuera de alcance
 
-- Quitar los datos EXIF (ubicación) de las imágenes y validar con `apps/core/imagenes.py`: lo hace #116. En el punto exacto del código hay un `TODO(#116)` para enchufarlo; mientras no se una, las fotos se guardan tal como llegan.
-- Configurar `MEDIA_ROOT` y `MEDIA_URL` (`config/settings.py`): también es de #116.
-- Permitir la ruta de subida en el modo de solo lectura de la demo de Render (`apps/core/middleware_demo.py`): ese archivo está en otro PR sin unir; queda pendiente en `tasks.md`.
+- Dónde se guardan las fotos en producción (disco persistente o almacenamiento externo): lo decide #29. Mientras tanto la subida está apagada por defecto (`FOTOS_INCIDENTES_HABILITADAS`).
 - Tareas internas distintas de los incidentes (consulta C8 del cliente): otro Issue.
 - Subir fotos «antes» después de creado el incidente, o «después» el residente.

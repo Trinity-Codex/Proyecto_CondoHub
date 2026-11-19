@@ -5,7 +5,7 @@
 
 ## 2. Subida y validación
 
-- [x] 2.1 `CampoFotos` en `apps/incidentes/forms.py`: JPG/PNG reales, 5 MB por imagen, 10 por incidente, con mensajes claros y el `TODO(#116)` en el punto donde se enchufa el validador.
+- [x] 2.1 `CampoFotos` en `apps/incidentes/forms.py`: JPG/PNG reales, 5 MB por imagen, 10 por incidente, con mensajes claros validando con `preparar_imagen` de #116.
 - [x] 2.2 El residente sube fotos «antes» al reportar (`IncidenteCreateView`, en la misma transacción que el incidente).
 - [x] 2.3 `FotoSubirView`: administrador y conserje suben fotos «después». `FotoBorrarView`: solo administrador y conserje borran.
 
@@ -16,13 +16,13 @@
 
 ## 4. Demo y pruebas
 
-- [x] 4.1 Fotos ficticias en `apps/incidentes/demo.py` para el incidente resuelto de la demo del cliente (solo con `MEDIA_ROOT`); prueba en `tests_demo_datos.py`.
+- [x] 4.1 Fotos ficticias en `apps/incidentes/demo.py` para el incidente resuelto de la demo del cliente (solo con la subida encendida); prueba en `tests_demo_datos.py`.
 - [x] 4.2 Pruebas en `apps/incidentes/tests.py`: subida válida, rechazo de no-imagen, de más de 5 MB y de la foto 11, permisos por rol, aislamiento entre condominios y por URL directa, y auditoría.
 - [x] 4.3 Correr `python manage.py test apps` completo y `openspec validate --all --strict`.
 
 ## 4b. Correcciones de la revisión de código
 
-- [x] 4b.1 Sin `MEDIA_ROOT`: el formulario rechaza las fotos y `subir()` se niega con `SubidaNoPermitida`.
+- [x] 4b.1 Con `FOTOS_INCIDENTES_HABILITADAS` apagado (por defecto): el formulario rechaza las fotos y `subir()` se niega con `SubidaNoPermitida`.
 - [x] 4b.2 El cupo de 10 se cuenta en `subir()` dentro de la transacción con el incidente bloqueado (`select_for_update`); el formulario cuenta antes de abrir archivos con Pillow.
 - [x] 4b.3 `subir()` borra los archivos escritos si la transacción falla (pruebas con fallo de auditoría).
 - [x] 4b.4 Helper `solo_lo_visible` compartido por `IncidentesVisiblesMixin` y `FotoArchivoView`; `detalle.html` recibe `puede_gestionar` como booleano.
@@ -30,7 +30,7 @@
 
 ## 5. Pendiente (otros PR)
 
-- [x] 5.1 Cuando se una #116: reemplazar `CampoFotos.validar_foto` por `apps.core.imagenes` (formato real y sin EXIF) y usar su configuración `MEDIA`.
-- [x] 5.2 Agregar la ruta de subida (`incidentes:foto_subir`, `incidentes:nuevo`) a la lista de rutas permitidas de `apps/core/middleware_demo.py` cuando se una el PR de la demo de Render (#111). No se toca aquí porque está en otro PR sin unir.
+- [x] 5.1 Validar con `apps.core.imagenes.preparar_imagen` (formato real y sin EXIF) de #116.
+- [x] 5.2 Rutas `incidentes:foto_subir` e `incidentes:nuevo` en la lista permitida de `apps/core/middleware_demo.py`.
 - [ ] 5.3 Revisar la interfaz a 1440×900 y 375×812 con el navegador (no se pudo medir en esta entrega).
-- [ ] 5.4 Archivar este cambio antes de unir (`/opsx:archive`).
+- [x] 5.4 Archivar este cambio antes de unir (`/opsx:archive`).

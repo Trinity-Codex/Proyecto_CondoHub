@@ -26,7 +26,7 @@ class IncidentesDemoTest(TestCase):
         self.assertEqual(Incidente.objects.count(), 2)
 
     def test_resuelto_trae_fotos_antes_y_despues_ficticias(self):
-        # Sin MEDIA_ROOT en settings (lo trae #116) se usa una carpeta temporal que se borra sola.
+        # Se usa una carpeta temporal que se borra sola.
         with tempfile.TemporaryDirectory() as carpeta, override_settings(
             DEMO_FECHA_REFERENCIA=date(2026, 11, 16), MEDIA_ROOT=carpeta
         ):
@@ -41,9 +41,9 @@ class IncidentesDemoTest(TestCase):
         # Solo el resuelto lleva fotos: los otros dos incidentes no.
         self.assertEqual(FotoIncidente.objects.exclude(incidente=resuelto).count(), 0)
 
-    @override_settings(DEMO_FECHA_REFERENCIA=date(2026, 11, 16), MEDIA_ROOT="")
-    def test_sin_media_root_no_genera_fotos(self):
-        # Evita que la demo escriba archivos en la carpeta actual cuando el almacenamiento no está configurado.
+    @override_settings(DEMO_FECHA_REFERENCIA=date(2026, 11, 16), FOTOS_INCIDENTES_HABILITADAS=False)
+    def test_subida_apagada_no_genera_fotos(self):
+        # Evita que la demo escriba fotos que se perderían al reiniciar cuando no hay almacenamiento persistente.
         call_command("cargar_demo", stdout=StringIO())
         self.assertEqual(FotoIncidente.objects.count(), 0)
 
