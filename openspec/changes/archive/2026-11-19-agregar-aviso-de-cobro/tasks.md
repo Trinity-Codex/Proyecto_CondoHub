@@ -1,0 +1,3 @@
+- [x] Reutilizar el filtro de accesos, los saldos de pagos y la agrupación de egresos.
+- [x] Agregar la descarga y los enlaces de residente y administrador.
+- [x] Cubrir la salida PDF, los importes y los límites de acceso con pruebas.

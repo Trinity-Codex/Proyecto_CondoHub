@@ -13,9 +13,17 @@ from django.template import engines
 # TRACE...) se trata como escritura.
 METODOS_SEGUROS = {"GET", "HEAD", "OPTIONS"}
 
-# Únicos POST de la demo: entrar, salir y cambiar de condominio. Solo escriben la sesión y
-# last_login; la vista conserva sus validaciones (credenciales, pertenencia al condominio).
-POST_PERMITIDOS = {"cuentas:iniciar_sesion", "cuentas:cerrar_sesion", "core:cambiar_condominio"}
+# Únicos POST de la demo: entrar, salir, cambiar de condominio y confirmar un aviso prioritario.
+# Los tres primeros solo escriben la sesión y last_login; la vista conserva sus validaciones
+# (credenciales, pertenencia al condominio).
+POST_PERMITIDOS = {
+    "cuentas:iniciar_sesion",
+    "cuentas:cerrar_sesion",
+    "core:cambiar_condominio",
+    # Aviso prioritario (#118): sin confirmarlo, el residente de la demo quedaría bloqueado en él.
+    # Solo guarda la lectura del propio residente (LecturaComunicado).
+    "comunicados:confirmar_aviso",
+}
 
 # GET que hoy escriben datos de negocio. Revisión del Issue #111: abrir una notificación
 # guarda leida=True. Los demás GET (listados, detalles, filtros, CSV, PDF) solo leen.

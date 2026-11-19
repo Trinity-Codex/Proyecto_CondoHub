@@ -15,6 +15,9 @@ db.sqlite3
 # Archivos estáticos recolectados para producción (collectstatic)
 staticfiles/
 
+# Imágenes subidas por los usuarios (logo y portada del condominio, #116)
+media/
+
 # Editores y sistema operativo
 .vscode/
 .idea/

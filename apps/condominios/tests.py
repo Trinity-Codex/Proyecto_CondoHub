@@ -1307,3 +1307,182 @@ class AuditoriaCondominiosTest(TestCase):
         resultado = importacion.validar(importacion.leer(PLANILLA), self.e.condominio)
         importacion.aplicar(resultado, self.e.condominio, usuario=self.e.administrador)
         self.assertEqual(len(self.registros()), cantidad)
+
+
+# ---------------------------------------------------------------------------
+# Identidad visual del condominio (#116, RQ-01)
+# ---------------------------------------------------------------------------
+from io import BytesIO as _BytesIO  # noqa: E402
+
+from django.core.files.base import ContentFile as _ContentFile  # noqa: E402
+from PIL import Image as _Image  # noqa: E402
+
+
+def _imagen_subida(formato="PNG", nombre="logo.png", tamano=(120, 80), relleno=b""):
+    salida = _BytesIO()
+    _Image.new("RGB", tamano, (17, 51, 88)).save(salida, format=formato)
+    return SimpleUploadedFile(nombre, salida.getvalue() + relleno, content_type="image/png")
+
+
+class IdentidadVisualTest(TestCase):
+    def setUp(self):
+        self.e = crear_escenario()
+        self.url = reverse("condominios:datos")
+
+    def datos(self, **extra):
+        return {"nombre": "Prueba", "direccion": "Calle 1", "comuna": "Santiago", **extra}
+
+    def guardar(self, **extra):
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(self.url, self.datos(**extra))
+
+    # Permisos -------------------------------------------------------------
+    def test_solo_el_administrador_edita(self):
+        self.client.force_login(self.e.administrador)
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        for persona in (self.e.comite, self.e.conserje, self.e.residente):
+            with self.subTest(persona=persona.email):
+                self.client.force_login(persona)
+                self.assertEqual(self.client.get(self.url).status_code, 403)
+                self.assertEqual(self.client.post(self.url, self.datos(nombre="Hackeado")).status_code, 403)
+        self.client.logout()
+        self.assertEqual(self.client.get(self.url).status_code, 302)
+        self.e.condominio.refresh_from_db()
+        self.assertEqual(self.e.condominio.nombre, "Prueba")
+
+    # Guardar ----------------------------------------------------------------
+    def test_sube_logo_y_portada_limpios_con_nombre_al_azar(self):
+        self.client.force_login(self.e.administrador)
+        respuesta = self.guardar(nombre="Condominio Prueba Norte",
+                                 logo=_imagen_subida(nombre="Mi logo.png", tamano=(1200, 1200)),
+                                 portada=_imagen_subida("JPEG", "portada.jpg", tamano=(2400, 600)))
+        self.assertRedirects(respuesta, self.url)
+        c = Condominio.objects.get(pk=self.e.condominio.pk)
+        self.assertEqual(c.nombre, "Condominio Prueba Norte")
+        self.assertRegex(c.logo.name, r"^condominios/logos/[0-9a-f]{32}\.png$")
+        self.assertRegex(c.portada.name, r"^condominios/portadas/[0-9a-f]{32}\.jpg$")
+        with c.logo.open("rb") as f:
+            self.assertEqual(_Image.open(f).size, (512, 512))  # reducido al lado máximo del logo
+        with c.portada.open("rb") as f:
+            self.assertEqual(_Image.open(f).size, (1920, 480))
+        registro = RegistroAuditoria.objects.filter(objeto_tipo="condominio", objeto_id=str(c.pk)).latest("pk")
+        self.assertEqual(registro.despues["nombre"], "Condominio Prueba Norte")
+        self.assertIn("imagen", registro.despues["logo"])
+
+    def test_rechaza_lo_que_no_es_jpg_o_png_real_y_lo_que_pesa_mas_de_2_mb(self):
+        self.client.force_login(self.e.administrador)
+        svg = SimpleUploadedFile("logo.svg", b'<svg xmlns="http://www.w3.org/2000/svg"><script>x</script></svg>',
+                                 content_type="image/svg+xml")
+        casos = [
+            ({"logo": svg}, "JPG o PNG"),
+            ({"logo": _imagen_subida("GIF", "logo.png")}, "JPG o PNG"),
+            ({"portada": _imagen_subida(relleno=b"\0" * (2 * 1024 * 1024))}, "pesa más de 2 MB"),
+        ]
+        for extra, mensaje in casos:
+            with self.subTest(mensaje=mensaje, campo=list(extra)):
+                respuesta = self.guardar(nombre="No debe guardarse", **extra)
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertContains(respuesta, mensaje)
+        c = Condominio.objects.get(pk=self.e.condominio.pk)
+        self.assertEqual(c.nombre, "Prueba")
+        self.assertFalse(c.logo)
+        self.assertFalse(c.portada)
+
+    def test_reemplazar_o_quitar_borra_el_archivo_anterior(self):
+        self.client.force_login(self.e.administrador)
+        self.guardar(logo=_imagen_subida())
+        c = Condominio.objects.get(pk=self.e.condominio.pk)
+        primero, almacen = c.logo.name, c.logo.storage
+        self.assertTrue(almacen.exists(primero))
+
+        self.guardar(logo=_imagen_subida())
+        c.refresh_from_db()
+        self.assertNotEqual(c.logo.name, primero)
+        self.assertFalse(almacen.exists(primero))
+
+        segundo = c.logo.name
+        self.guardar(quitar_logo="on")
+        c.refresh_from_db()
+        self.assertFalse(c.logo)
+        self.assertFalse(almacen.exists(segundo))
+
+    def test_editar_sin_tocar_las_imagenes_las_conserva(self):
+        self.client.force_login(self.e.administrador)
+        self.guardar(logo=_imagen_subida())
+        nombre = Condominio.objects.get(pk=self.e.condominio.pk).logo.name
+        self.guardar(comuna="Providencia")
+        c = Condominio.objects.get(pk=self.e.condominio.pk)
+        self.assertEqual((c.comuna, c.logo.name), ("Providencia", nombre))
+
+    def test_solo_cambia_el_condominio_activo(self):
+        self.client.force_login(self.e.administrador)
+        self.guardar(nombre="Renombrado")
+        self.e.ajeno.refresh_from_db()
+        self.assertEqual(self.e.ajeno.nombre, "Ajeno")
+
+    # Entrega de imágenes ------------------------------------------------------
+    def _con_logo(self, condominio):
+        salida = _BytesIO()
+        _Image.new("RGB", (10, 10)).save(salida, format="PNG")
+        condominio.logo.save("x.png", _ContentFile(salida.getvalue()))
+        return reverse("condominios:imagen", args=[condominio.pk, "logo"])
+
+    def test_la_imagen_solo_se_entrega_a_miembros_del_condominio(self):
+        url = self._con_logo(self.e.condominio)
+        for persona in (self.e.administrador, self.e.residente, self.e.conserje):
+            with self.subTest(persona=persona.email):
+                self.client.force_login(persona)
+                respuesta = self.client.get(url)
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertEqual(respuesta["Content-Type"], "image/png")
+                self.assertIn("private", respuesta["Cache-Control"])
+                b"".join(respuesta.streaming_content)
+        self.client.force_login(self.e.residente_ajeno)
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.client.logout()
+        self.assertEqual(self.client.get(url).status_code, 302)
+
+    def test_imagen_inexistente_o_tipo_desconocido_da_404(self):
+        self.client.force_login(self.e.administrador)
+        self.assertEqual(self.client.get(reverse("condominios:imagen", args=[self.e.condominio.pk, "logo"])).status_code, 404)
+        self._con_logo(self.e.condominio)
+        self.assertEqual(self.client.get(reverse("condominios:imagen", args=[self.e.condominio.pk, "otro"])).status_code, 404)
+
+    def test_media_no_es_publica(self):
+        self._con_logo(self.e.condominio)
+        nombre = Condominio.objects.get(pk=self.e.condominio.pk).logo.name
+        self.client.force_login(self.e.administrador)
+        self.assertEqual(self.client.get(f"/media/{nombre}").status_code, 404)
+
+    # Encabezado ---------------------------------------------------------------
+    def test_encabezado_con_nombre_en_todas_las_pantallas(self):
+        self.client.force_login(self.e.administrador)
+        for ruta in ("core:inicio", "condominios:unidades", "comunicados:lista", "reservas:espacios", "condominios:datos"):
+            with self.subTest(ruta=ruta):
+                respuesta = self.client.get(reverse(ruta))
+                self.assertContains(respuesta, '<p class="encabezado-nombre">Prueba</p>', html=False)
+                self.assertNotContains(respuesta, 'class="encabezado-logo"')  # sin logo: solo el nombre
+                self.assertContains(respuesta, reverse("condominios:datos"))  # «Editar datos» del administrador
+
+    def test_encabezado_con_logo_y_portada_solo_en_el_panel(self):
+        self._con_logo(self.e.condominio)
+        salida = _BytesIO()
+        _Image.new("RGB", (40, 10)).save(salida, format="PNG")
+        self.e.condominio.portada.save("p.png", _ContentFile(salida.getvalue()))
+        c = Condominio.objects.get(pk=self.e.condominio.pk)
+        self.client.force_login(self.e.residente)
+        inicio = self.client.get(reverse("core:inicio"))
+        self.assertContains(inicio, f'src="{c.url_logo}"'.replace("&", "&amp;"))
+        self.assertContains(inicio, "con-portada")
+        self.assertContains(inicio, c.url_portada)
+        otra = self.client.get(reverse("comunicados:lista"))
+        self.assertContains(otra, 'class="encabezado-logo"')
+        self.assertNotContains(otra, "con-portada")
+        self.assertNotContains(otra, "Editar datos")  # el residente no edita
+
+    def test_la_url_de_la_imagen_cambia_con_cada_imagen_nueva(self):
+        self._con_logo(self.e.condominio)
+        antes = Condominio.objects.get(pk=self.e.condominio.pk).url_logo
+        self._con_logo(self.e.condominio)
+        self.assertNotEqual(Condominio.objects.get(pk=self.e.condominio.pk).url_logo, antes)
+        self.assertEqual(Condominio(pk=1).url_logo, "")

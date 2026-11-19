@@ -73,6 +73,11 @@ class Emision:
         return self.total_egresos + self.total_fondo + self.total_items
 
 
+def monto_fondo(egresos, porcentaje):
+    """Fondo de reserva de un mes: egresos × porcentaje / 100, al peso (0,5 sube). Lo usa también la proyección (#121)."""
+    return int((Decimal(egresos) * Decimal(porcentaje) / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
 def unidades_alcanzadas(item, unidades):
     """Las unidades que paga el ítem: todas, o solo las elegidas (en el orden de `unidades`)."""
     if item.alcance == ItemCobro.Alcance.TODAS:
@@ -140,10 +145,7 @@ def calcular_emision(periodo):
     if emision.errores:
         return emision
 
-    porcentaje = Decimal(periodo.porcentaje_fondo_reserva)
-    emision.total_fondo = int(
-        (Decimal(emision.total_egresos) * porcentaje / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
-    )
+    emision.total_fondo = monto_fondo(emision.total_egresos, periodo.porcentaje_fondo_reserva)
 
     # Patrón Strategy: la emisión no sabe qué criterio es, solo le pide calcular().
     estrategia = ESTRATEGIAS[periodo.criterio_prorrateo]

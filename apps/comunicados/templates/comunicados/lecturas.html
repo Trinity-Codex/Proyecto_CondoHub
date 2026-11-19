@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{# Lectura por residente (#118): solo administrador y comité. Es un dato personal: no se muestra a residentes. #}
+{% block titulo %}Lectura · {{ comunicado.titulo }}{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'comunicados:lista' %}">Comunicados</a></li>
+  <li class="breadcrumb-item"><a href="{{ comunicado.get_absolute_url }}">{{ comunicado.titulo|truncatechars:40 }}</a></li>
+  <li class="breadcrumb-item active" aria-current="page">Lectura</li>
+</ol></nav>
+
+<h1 class="h3 mb-1">Quién leyó el comunicado</h1>
+<p class="text-muted mb-4">
+  {% if comunicado.prioritario %}<span class="insignia insignia-moroso">Aviso prioritario</span> · {% endif %}
+  {{ comunicado.titulo }} · {% if comunicado.edificio %}Para {{ comunicado.edificio.nombre }}{% else %}Para todo el condominio{% endif %}
+</p>
+
+<p class="fs-5 mb-1">Confirmaron <strong>{{ confirmaron|length }} de {{ total }}</strong> residentes{% if porcentaje_residentes is not None %} ({{ porcentaje_residentes }} %){% endif %}.</p>
+{% if porcentaje_unidades is not None %}<p class="text-muted">Por unidad: {{ porcentaje_unidades }} % de las unidades destinatarias tiene al menos un residente que lo leyó.</p>{% endif %}
+{% if total %}
+<div class="progress mb-4" role="progressbar" aria-label="Lectura por residente" aria-valuenow="{{ porcentaje_residentes }}" aria-valuemin="0" aria-valuemax="100" style="height: 0.75rem;">
+  <div class="progress-bar" style="width: {{ porcentaje_residentes }}%; background-color: var(--condohub-teal-texto, #0d7a7f);"></div>
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <section class="col-lg-6" aria-labelledby="titulo-faltan">
+    <h2 class="h5" id="titulo-faltan"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Aún no leen ({{ faltan|length }})</h2>
+    {% if faltan %}
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <caption class="visually-hidden">Residentes que aún no confirman la lectura</caption>
+        <thead><tr><th scope="col">Residente</th><th scope="col">Unidad</th></tr></thead>
+        <tbody>
+          {% for usuario, unidades, leido in faltan %}
+          <tr><td>{{ usuario.get_full_name|default:usuario.email }}</td><td>{{ unidades|join:", " }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted">Todos los residentes confirmaron.</p>
+    {% endif %}
+  </section>
+
+  <section class="col-lg-6" aria-labelledby="titulo-confirmaron">
+    <h2 class="h5" id="titulo-confirmaron"><i class="bi bi-check2-all" aria-hidden="true"></i> Confirmaron ({{ confirmaron|length }})</h2>
+    {% if confirmaron %}
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <caption class="visually-hidden">Residentes que confirmaron la lectura, con fecha y hora</caption>
+        <thead><tr><th scope="col">Residente</th><th scope="col">Unidad</th><th scope="col">Fecha y hora</th></tr></thead>
+        <tbody>
+          {% for usuario, unidades, leido in confirmaron %}
+          <tr>
+            <td>{{ usuario.get_full_name|default:usuario.email }}</td>
+            <td>{{ unidades|join:", " }}</td>
+            <td class="text-nowrap">{{ leido|date:"d-m-Y H:i" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted">Nadie ha confirmado todavía.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

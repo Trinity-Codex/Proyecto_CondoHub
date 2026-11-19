@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% load condohub %}
+{% block titulo %}Proyección anual{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'gastos:periodos' %}">Gastos comunes</a></li>
+  <li class="breadcrumb-item active" aria-current="page">Proyección anual</li>
+</ol></nav>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h3 mb-0"><i class="bi bi-calendar-range"></i> Proyección anual de gastos comunes</h1>
+  {% if proyeccion.meses %}
+  <a class="btn btn-outline-primary" href="{% url 'gastos:proyeccion_csv' %}?{{ consulta }}"><i class="bi bi-filetype-csv"></i> Descargar CSV (Excel)</a>
+  {% endif %}
+</div>
+
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle"></i> <strong>Estimación con supuestos provisorios.</strong>
+  La fórmula y la fuente del IPC están por confirmar con el cliente y la Ley 21.442. El IPC lo ingresas tú.
+</div>
+
+{# ---- Parámetros (GET: la URL guarda los supuestos y la proyección se puede repetir) ---- #}
+<form method="get" class="card card-body mb-4">
+  <div class="row g-3 align-items-end">
+    <div class="col-sm-4 col-lg-3">{% include "_campo.html" with campo=form.anio %}</div>
+    <div class="col-sm-4 col-lg-3">{% include "_campo.html" with campo=form.ipc %}</div>
+    <div class="col-sm-4 col-lg-3">{% include "_campo.html" with campo=form.crecimiento %}</div>
+    <div class="col-lg-3 d-grid">
+      <button class="btn btn-primary"><i class="bi bi-calculator"></i> Proyectar</button>
+    </div>
+  </div>
+</form>
+
+{% if proyeccion and not proyeccion.meses %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle"></i> {{ proyeccion.anio_base }} no tiene períodos emitidos: no hay egresos reales para proyectar {{ proyeccion.anio }}. Elige otro año base.
+</div>
+{% elif proyeccion %}
+
+{% if proyeccion.aviso_alicuotas %}
+<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> {{ proyeccion.aviso_alicuotas }}</div>
+{% endif %}
+
+{# ---- Resumen ---- #}
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="small text-muted">Total proyectado {{ proyeccion.anio }}</div>
+      <div class="fs-4 fw-semibold">{{ proyeccion.total|pesos }}</div>
+      <div class="small text-muted">egresos + fondo de reserva</div>
+    </div></div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="small text-muted">Egresos proyectados</div>
+      <div class="fs-4 fw-semibold">{{ proyeccion.total_egresos|pesos }}</div>
+      <div class="small text-muted">base {{ proyeccion.anio_base }}: {{ proyeccion.total_base|pesos }}</div>
+    </div></div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="small text-muted">Fondo de reserva proyectado</div>
+      <div class="fs-4 fw-semibold">{{ proyeccion.total_fondo|pesos }}</div>
+    </div></div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="small text-muted">Meses con datos reales</div>
+      <div class="fs-4 fw-semibold">{{ proyeccion.meses_reales }} de 12</div>
+      <div class="small text-muted">el resto, con el promedio</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  {# ---- Supuestos ---- #}
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-list-check"></i> Supuestos usados</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <tbody>
+            {% for texto, valor in proyeccion.supuestos %}
+            <tr><th scope="row" class="fw-normal text-muted">{{ texto }}</th><td>{{ valor }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ---- Por mes ---- #}
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-calendar3"></i> Por mes · {{ proyeccion.anio }}</div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead><tr>
+            <th scope="col">Mes</th>
+            <th scope="col" class="text-end d-none d-md-table-cell">Base {{ proyeccion.anio_base }}</th>
+            <th scope="col" class="text-end">Egresos</th>
+            <th scope="col" class="text-end d-none d-md-table-cell">Fondo</th>
+            <th scope="col" class="text-end">Total</th>
+          </tr></thead>
+          <tbody>
+            {% for mes in proyeccion.meses %}
+            <tr>
+              <td>{{ mes.nombre }}{% if mes.estimado %} <span class="badge text-bg-secondary">estimado</span>{% endif %}</td>
+              <td class="text-end d-none d-md-table-cell">{{ mes.base|pesos }}</td>
+              <td class="text-end">{{ mes.egresos|pesos }}</td>
+              <td class="text-end d-none d-md-table-cell">{{ mes.fondo|pesos }}</td>
+              <td class="text-end fw-semibold">{{ mes.total|pesos }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot><tr class="fw-semibold">
+            <th scope="row">Total</th>
+            <td class="text-end d-none d-md-table-cell">{{ proyeccion.total_base|pesos }}</td>
+            <td class="text-end">{{ proyeccion.total_egresos|pesos }}</td>
+            <td class="text-end d-none d-md-table-cell">{{ proyeccion.total_fondo|pesos }}</td>
+            <td class="text-end">{{ proyeccion.total|pesos }}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ---- Por unidad: total de cada mes (egresos + fondo). La tabla se desliza sola, no la página. ---- #}
+<div class="card">
+  <div class="card-header d-flex flex-wrap justify-content-between gap-2">
+    <span><i class="bi bi-house-door"></i> Por unidad · {{ proyeccion.anio }}</span>
+    <span class="small text-muted">{{ proyeccion.criterio_nombre }}; egresos + fondo de reserva</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0 text-nowrap">
+      <thead><tr>
+        <th scope="col">Unidad</th>
+        {% for mes in proyeccion.meses %}<th scope="col" class="text-end">{{ mes.nombre|slice:":3" }}</th>{% endfor %}
+        <th scope="col" class="text-end">Egresos anual</th>
+        <th scope="col" class="text-end">Fondo anual</th>
+        <th scope="col" class="text-end">Total anual</th>
+      </tr></thead>
+      <tbody>
+        {% for fila in proyeccion.filas_unidades %}
+        <tr>
+          <th scope="row" class="fw-normal">{{ fila.unidad }}</th>
+          {% for monto in fila.por_mes %}<td class="text-end">{{ monto|pesos }}</td>{% endfor %}
+          <td class="text-end">{{ fila.egresos|pesos }}</td>
+          <td class="text-end">{{ fila.fondo|pesos }}</td>
+          <td class="text-end fw-semibold">{{ fila.total|pesos }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="16" class="text-muted">El condominio no tiene unidades registradas.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr class="fw-semibold">
+        <th scope="row">Total</th>
+        {% for mes in proyeccion.meses %}<td class="text-end">{{ mes.total|pesos }}</td>{% endfor %}
+        <td class="text-end">{{ proyeccion.total_egresos|pesos }}</td>
+        <td class="text-end">{{ proyeccion.total_fondo|pesos }}</td>
+        <td class="text-end">{{ proyeccion.total|pesos }}</td>
+      </tr></tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

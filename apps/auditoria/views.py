@@ -4,6 +4,9 @@ Vistas de auditoria: registro de quién hizo qué y cuándo (Ley 21.719, Issue #
 Solo lectura: el registro es inmutable, así que la vista no acepta nada más que GET.
 Pueden verla el administrador y el comité; conserje y residente reciben 403.
 """
+from datetime import datetime, time, timedelta
+
+from django.utils import timezone
 from django.views.generic import ListView
 
 from apps.core.permisos import ADMINISTRADOR, COMITE, RolRequeridoMixin
@@ -11,6 +14,11 @@ from apps.core.permisos import ADMINISTRADOR, COMITE, RolRequeridoMixin
 from .forms import FiltroAuditoriaForm
 from .models import RegistroAuditoria
 from .servicios import Accion
+
+
+def _inicio_del_dia(dia):
+    """Las 00:00 de `dia` en la zona horaria del proyecto, como fecha y hora con zona."""
+    return timezone.make_aware(datetime.combine(dia, time.min))
 
 
 class AuditoriaInicioView(RolRequeridoMixin, ListView):
@@ -36,10 +44,12 @@ class AuditoriaInicioView(RolRequeridoMixin, ListView):
         if not filtro.is_bound or not filtro.is_valid():
             return qs
         datos = filtro.cleaned_data
+        # Rango de instantes en hora local, sin `creado__date`: en MySQL ese lookup usa CONVERT_TZ, que
+        # devuelve NULL si el servidor no tiene cargadas las tablas de zonas horarias (lo común en Windows).
         if datos["desde"]:
-            qs = qs.filter(creado__date__gte=datos["desde"])
+            qs = qs.filter(creado__gte=_inicio_del_dia(datos["desde"]))
         if datos["hasta"]:
-            qs = qs.filter(creado__date__lte=datos["hasta"])
+            qs = qs.filter(creado__lt=_inicio_del_dia(datos["hasta"] + timedelta(days=1)))
         if datos["usuario"]:
             qs = qs.filter(usuario_id=int(datos["usuario"]))
         return qs

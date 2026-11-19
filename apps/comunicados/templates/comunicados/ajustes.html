@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{# Ajustes de comunicados del condominio (#120): solo el administrador. #}
+{% block titulo %}Recordatorios de comunicados{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'comunicados:lista' %}">Comunicados</a></li>
+  <li class="breadcrumb-item active" aria-current="page">Recordatorios</li>
+</ol></nav>
+
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <h1 class="h3 mb-3">Recordatorios de comunicados</h1>
+    <div class="card"><div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% include "_formulario.html" with form=form %}
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Guardar</button>
+          <a class="btn btn-outline-secondary" href="{% url 'comunicados:lista' %}">Cancelar</a>
+        </div>
+      </form>
+    </div></div>
+    <p class="text-muted small mt-2">
+      <i class="bi bi-info-circle" aria-hidden="true"></i> Los recordatorios los envía una tarea diaria del servidor.
+      No llegan al comité ni a quien ya leyó el comunicado.
+    </p>
+  </div>
+</div>
+{% endblock %}

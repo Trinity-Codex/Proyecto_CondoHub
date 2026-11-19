@@ -21,7 +21,10 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.urls import reverse
 from django.utils import timezone
+
+from apps.core.imagenes import RutaAleatoria
 
 
 class Condominio(models.Model):
@@ -32,12 +35,35 @@ class Condominio(models.Model):
     comuna = models.CharField(max_length=80)
     activo = models.BooleanField(default=True)
     creado = models.DateTimeField(auto_now_add=True)
+    # Identidad visual (#116, RQ-01). Opcionales: sin ellos el encabezado muestra solo el nombre.
+    # Se suben ya limpios (apps/core/imagenes.py) y se entregan por la vista condominios:imagen,
+    # nunca como archivos públicos.
+    # default: valor en Python. db_default: también en la columna, para las filas que se insertan sin ella
+    # (por ejemplo, desde migraciones anteriores en las pruebas de migración de gastos).
+    logo = models.ImageField(upload_to=RutaAleatoria("condominios/logos"), blank=True, default="", db_default="")
+    portada = models.ImageField(upload_to=RutaAleatoria("condominios/portadas"), blank=True, default="", db_default="")
 
     class Meta:
         ordering = ["nombre"]
 
     def __str__(self):
         return self.nombre
+
+    def _url_imagen(self, tipo):
+        archivo = getattr(self, tipo)
+        if not archivo:
+            return ""
+        # ?v=<nombre al azar>: al cambiar la imagen cambia la URL, así el navegador no muestra la vieja.
+        version = archivo.name.rsplit("/", 1)[-1].split(".")[0][:12]
+        return f"{reverse('condominios:imagen', args=[self.pk, tipo])}?v={version}"
+
+    @property
+    def url_logo(self):
+        return self._url_imagen("logo")
+
+    @property
+    def url_portada(self):
+        return self._url_imagen("portada")
 
     def suma_alicuotas(self):
         """

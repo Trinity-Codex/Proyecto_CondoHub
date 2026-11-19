@@ -13,6 +13,7 @@
     <div class="text-muted small mb-3">
       Publicado el {{ comunicado.fecha_publicacion|date:"d-m-Y \a \l\a\s H:i" }} por {{ comunicado.autor }} ·
       {% if comunicado.edificio %}Para {{ comunicado.edificio.nombre }}{% else %}Para todo el condominio{% endif %}
+      {% if comunicado.prioritario %}· <span class="insignia insignia-moroso"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i> Aviso prioritario</span>{% endif %}
       {% if comunicado.vigente_hasta %}
       · {% if vencido %}<span class="insignia">Vencido</span> el {{ comunicado.vigente_hasta|date:"d-m-Y" }}{% else %}Visible hasta el {{ comunicado.vigente_hasta|date:"d-m-Y" }}{% endif %}
       {% endif %}
@@ -43,6 +44,15 @@
   {% endif %}
 </article>
 
+{# Lectura por residente, con fecha y hora: administrador y comité (#118) #}
+{% if es_admin or es_comite %}
+<p class="mb-3">
+  <a class="btn btn-outline-primary btn-sm" href="{% url 'comunicados:lecturas' comunicado.pk %}">
+    <i class="bi bi-person-check" aria-hidden="true"></i> Ver quién leyó, por residente
+  </a>
+</p>
+{% endif %}
+
 {# Confirmaciones por unidad, solo para el administrador (Issue #58) #}
 {% if es_admin %}
 <section class="card" aria-labelledby="titulo-confirmaciones">
@@ -51,6 +61,9 @@
   </div>
   <div class="card-body">
     <p class="mb-2">Unidades que confirmaron la lectura: <strong class="text-nowrap">{{ confirmadas }} de {{ destinatarias }}</strong></p>
+    {% if porcentaje_residentes is not None %}
+    <p class="mb-2">Lectura: <strong>{{ porcentaje_unidades }} %</strong> de las unidades y <strong>{{ porcentaje_residentes }} %</strong> de los residentes.</p>
+    {% endif %}
     {% if faltan %}
     <p class="small text-muted mb-1">Faltan:</p>
     <ul class="list-inline mb-0">

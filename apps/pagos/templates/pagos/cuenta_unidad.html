@@ -31,6 +31,7 @@
         <td>{% include "pagos/_estado_cobro.html" with estado=c.estado %}</td>
         <td class="text-end">
           {# Solo el administrador registra pagos; el comité solo consulta. #}
+          {% if es_admin and c.periodo.estado == "EMITIDO" %}<a class="btn btn-sm btn-outline-primary" href="{% url 'pagos:aviso_cobro' c.pk %}" aria-label="Descargar aviso de {{ c.periodo }} en PDF">Aviso PDF</a>{% endif %}
           {% if es_admin and c.saldo %}
           <a class="btn btn-sm btn-primary text-nowrap" href="{% url 'pagos:registrar_pago' c.pk %}" aria-label="Registrar pago de {{ c.periodo }}"><i class="bi bi-plus-circle"></i><span class="d-none d-md-inline"> Registrar pago</span></a>
           {% endif %}
@@ -40,7 +41,7 @@
       <tr class="table-light small">
         <td class="ps-4 text-muted" colspan="6">
           <div class="d-flex justify-content-between gap-3">
-            <span><i class="bi bi-arrow-return-right"></i> {{ p.fecha|date:"d-m-Y" }} · {{ p.get_medio_display }}{% if p.observacion %} · {{ p.observacion }}{% endif %}
+            <span><i class="bi bi-arrow-return-right"></i> {{ p.fecha|date:"d-m-Y" }} · {{ p.get_medio_display }}{% if es_admin %} · <a href="{% url 'pagos:comprobante_pago' p.pk %}" aria-label="Descargar comprobante del pago {{ p.pk }}">Comprobante PDF</a>{% endif %}{% if p.observacion %} · {{ p.observacion }}{% endif %}
               {# Un pago anulado sigue a la vista con su motivo (#53), pero ya no cuenta en Pagado ni en Saldo. #}
               {% if p.anulado %}<br><span class="insignia insignia-con-deuda">Anulado</span> el {{ p.anulado_en|date:"d-m-Y" }}: {{ p.motivo_anulacion }}{% endif %}</span>
             <span class="d-flex align-items-center gap-2">

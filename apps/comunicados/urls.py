@@ -12,4 +12,10 @@ urlpatterns = [
     path("<int:pk>/leido/", views.MarcarLeidoView.as_view(), name="marcar_leido"),
     path("<int:pk>/editar/", views.ComunicadoUpdateView.as_view(), name="editar"),
     path("<int:pk>/eliminar/", views.ComunicadoDeleteView.as_view(), name="eliminar"),
+    # Aviso prioritario (#118)
+    path("aviso/", views.AvisoPrioritarioView.as_view(), name="aviso_prioritario"),
+    path("<int:pk>/confirmar-aviso/", views.ConfirmarAvisoView.as_view(), name="confirmar_aviso"),
+    path("<int:pk>/lecturas/", views.LecturasComunicadoView.as_view(), name="lecturas"),
+    # Seguimiento de lectura (#120)
+    path("ajustes/", views.AjustesComunicadosView.as_view(), name="ajustes"),
 ]

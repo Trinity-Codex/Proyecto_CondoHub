@@ -19,7 +19,13 @@ from apps.condominios.models import Unidad
 from apps.core.permisos import ADMINISTRADOR, COMITE, RESIDENTE, CondominioQuerysetMixin, RolRequeridoMixin
 from apps.gastos.models import DetalleGastoComun
 
-from .consultas import cobros_del_residente, con_saldos, reporte_del_ultimo_periodo, total_adeudado
+from .consultas import (
+    cobros_del_residente,
+    con_saldos,
+    egresos_para_residente,
+    reporte_del_ultimo_periodo,
+    total_adeudado,
+)
 from .forms import AnularPagoForm, PagoForm
 from .models import Pago
 
@@ -37,7 +43,7 @@ class EstadoCuentaView(RolRequeridoMixin, TemplateView):
 
 
 class CobroDetailView(RolRequeridoMixin, DetailView):
-    """Detalle de un período: egresos del condominio, cómo se calculó el monto y los pagos hechos."""
+    """Detalle de un período: egresos por categoría, cómo se calculó el monto y los pagos hechos."""
 
     roles_permitidos = [RESIDENTE]
     template_name = "pagos/detalle.html"
@@ -50,8 +56,11 @@ class CobroDetailView(RolRequeridoMixin, DetailView):
     def get_context_data(self, **kwargs):
         contexto = super().get_context_data(**kwargs)
         periodo = self.object.periodo
-        contexto["egresos"] = periodo.egresos.all()
-        contexto["total_egresos"] = periodo.total_egresos()
+        # Solo categorías y subtotales: sin sueldos individuales ni descripciones libres (Issue #115).
+        egresos = egresos_para_residente(periodo)
+        contexto["egresos"] = egresos
+        # Suma de los subtotales mostrados: cuadra por construcción con las líneas y evita una consulta más.
+        contexto["total_egresos"] = sum(linea["subtotal"] for linea in egresos)
         contexto["pagos"] = self.object.pagos.all()
         (cobro,) = con_saldos([self.object])
         contexto["pagado"], contexto["saldo"] = cobro.pagado, cobro.saldo

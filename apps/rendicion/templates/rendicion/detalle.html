@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block titulo %}Rendición de {{ periodo }}{% endblock %}
+{% block contenido %}
+<a href="{% url 'rendicion:inicio' %}">Volver a los períodos</a>
+<h1 class="h3 mt-3">Rendición de {{ periodo }}</h1>
+<p><a class="btn btn-outline-primary" href="{% url 'rendicion:pdf' periodo.pk %}">Descargar rendición (PDF)</a></p>
+{% include "rendicion/_informe.html" %}
+{% endblock %}

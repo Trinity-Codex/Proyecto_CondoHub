@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% comment %}
+  «Datos del condominio» (#116, RQ-01). Solo el administrador entra (la vista da 403 al resto).
+  Las vistas previas usan condominio.url_logo / url_portada: la imagen pasa por la vista
+  condominios:imagen, que revisa la sesión y el condominio.
+{% endcomment %}
+{% block titulo %}Datos del condominio{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <h1 class="h3 mb-1">Datos del condominio</h1>
+    <p class="text-secondary mb-4">El nombre y el logo se muestran en el encabezado de todas las pantallas.</p>
+
+    <form method="post" enctype="multipart/form-data" novalidate>
+      {% csrf_token %}
+      {% include "_formulario_cabecera.html" with form=form %}
+
+      <section class="card mb-3 seccion-formulario" aria-labelledby="seccion-1">
+        <div class="card-body">
+          <h2 class="seccion-titulo" id="seccion-1"><span class="seccion-numero" aria-hidden="true">1</span>Identificación</h2>
+          <p class="seccion-intro">Cómo se llama el condominio y dónde está.</p>
+          <div class="row g-3">
+            <div class="col-12">{% include "_campo.html" with campo=form.nombre %}</div>
+            <div class="col-md-8">{% include "_campo.html" with campo=form.direccion %}</div>
+            <div class="col-md-4">{% include "_campo.html" with campo=form.comuna %}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card mb-3 seccion-formulario" aria-labelledby="seccion-2">
+        <div class="card-body">
+          <h2 class="seccion-titulo" id="seccion-2"><span class="seccion-numero" aria-hidden="true">2</span>Imagen</h2>
+          <p class="seccion-intro">Opcional. Solo JPG o PNG; al guardar se quitan los datos de ubicación y de la cámara.</p>
+
+          <div class="row g-4">
+            <div class="col-md-5">
+              {% include "_campo.html" with campo=form.logo %}
+              {% if object.logo %}
+              <div class="d-flex align-items-center gap-3 mt-3">
+                <img src="{{ object.url_logo }}" alt="Logo actual" class="vista-previa-logo">
+                {% include "_campo.html" with campo=form.quitar_logo %}
+              </div>
+              {% endif %}
+            </div>
+            <div class="col-md-7">
+              {% include "_campo.html" with campo=form.portada %}
+              {% if object.portada %}
+              <img src="{{ object.url_portada }}" alt="Portada actual" class="vista-previa-portada mt-3">
+              <div class="mt-2">{% include "_campo.html" with campo=form.quitar_portada %}</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary" type="submit">Guardar</button>
+        <a class="btn btn-outline-secondary" href="{% url 'core:inicio' %}">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

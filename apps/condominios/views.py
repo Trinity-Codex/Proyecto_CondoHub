@@ -2,6 +2,8 @@
 Vistas de edificios, unidades y residentes (RF01, Issue #10).
 
 Permisos:
+  - Datos del condominio (nombre, logo, portada, #116): administrador
+  - Ver el logo y la portada:                          cualquier miembro del condominio
   - Ver edificios, unidades y residentes:              administrador y comité
   - Crear/editar/eliminar edificios y unidades,
     asignar residentes y darlos de baja:               administrador
@@ -9,10 +11,13 @@ Permisos:
 
 Todo se trabaja desde la página Unidades: las acciones vuelven a ella.
 """
+import mimetypes
+
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Exists, OuterRef, Prefetch
-from django.http import HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.cache import add_never_cache_headers
@@ -22,14 +27,20 @@ from django.views.generic import CreateView, DeleteView, FormView, ListView, Upd
 from apps.auditoria.servicios import Accion, registrar
 from apps.core.formato import formatear_rut
 from apps.core.listados import FiltrosGetMixin, normalizar_busqueda
-from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, RolRequeridoMixin
+from apps.core.permisos import (
+    ADMINISTRADOR,
+    COMITE,
+    CondominioQuerysetMixin,
+    RolRequeridoMixin,
+    condominios_del_usuario,
+)
 from apps.cuentas.views import enviar_invitacion
 
 from . import importacion
 from .auditoria import AuditarCambiosMixin, datos_de, registrar_cambio, registrar_roles, roles_de
 from .busqueda import filtrar_unidades, ver_rut
-from .forms import EdificioForm, ImportarForm, ResidenteForm, UnidadForm
-from .models import Edificio, Membresia, Residente, Unidad
+from .forms import CondominioDatosForm, EdificioForm, ImportarForm, ResidenteForm, UnidadForm
+from .models import Condominio, Edificio, Membresia, Residente, Unidad
 
 
 def url_unidades(edificio=None):
@@ -451,4 +462,67 @@ class PlantillaImportacionView(RolRequeridoMixin, View):
     def get(self, request):
         respuesta = HttpResponse(importacion.plantilla(), content_type="text/csv; charset=utf-8")
         respuesta["Content-Disposition"] = 'attachment; filename="plantilla-unidades-condohub.csv"'
+        return respuesta
+
+
+# ---------------------------------------------------------------------------
+# Identidad visual del condominio (#116, RQ-01)
+# ---------------------------------------------------------------------------
+IMAGENES = ("logo", "portada")
+
+
+class CondominioDatosView(RolRequeridoMixin, AuditarCambiosMixin, UpdateView):
+    """«Datos del condominio»: el administrador edita nombre, dirección, comuna, logo y portada."""
+
+    roles_permitidos = [ADMINISTRADOR]
+    form_class = CondominioDatosForm
+    template_name = "condominios/datos.html"
+
+    def get_object(self, queryset=None):
+        # Siempre el condominio activo: no hay pk en la URL, así no se puede apuntar a otro.
+        return Condominio.objects.get(pk=self.request.condominio.pk)
+
+    def form_valid(self, form):
+        # Nombres guardados antes del cambio (desde la base: el formulario ya modificó self.object).
+        anteriores = dict(zip(IMAGENES, Condominio.objects.filter(pk=self.object.pk).values_list(*IMAGENES).get()))
+        respuesta = super().form_valid(form)
+        almacenamiento = Condominio._meta.get_field("logo").storage
+        for campo, nombre in anteriores.items():
+            actual = getattr(self.object, campo).name
+            if nombre and nombre != actual:
+                # La imagen vieja se borra recién cuando el cambio quedó guardado.
+                transaction.on_commit(lambda n=nombre: almacenamiento.delete(n))
+        messages.success(self.request, "Datos del condominio guardados.")
+        return respuesta
+
+    def get_success_url(self):
+        return reverse("condominios:datos")
+
+
+class ImagenCondominioView(LoginRequiredMixin, View):
+    """
+    Entrega el logo o la portada de un condominio solo a quien es miembro de él (o al
+    superusuario). Las imágenes no son archivos públicos: sin sesión se va al inicio de
+    sesión, y desde otro condominio la respuesta es 404 (no se confirma que exista).
+    """
+
+    def get(self, request, pk, tipo):
+        if tipo not in IMAGENES:
+            raise Http404
+        condominio = get_object_or_404(condominios_del_usuario(request.user), pk=pk)
+        archivo = getattr(condominio, tipo)
+        if not archivo:
+            raise Http404
+        try:
+            contenido = archivo.open("rb")
+        except FileNotFoundError:
+            raise Http404 from None
+        tipo_mime = mimetypes.guess_type(archivo.name)[0]
+        if tipo_mime not in ("image/jpeg", "image/png"):
+            raise Http404  # solo se guardan JPG y PNG; cualquier otra cosa no se entrega
+        respuesta = FileResponse(contenido, content_type=tipo_mime)
+        # La URL cambia con cada imagen nueva (?v=...): se puede guardar un día, pero solo en
+        # el navegador de la persona (private), nunca en un proxy compartido.
+        respuesta["Cache-Control"] = "private, max-age=86400"
+        respuesta["Content-Disposition"] = "inline"
         return respuesta

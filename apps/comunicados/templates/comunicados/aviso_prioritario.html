@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% comment %}
+  Aviso prioritario a pantalla completa (#118, RQ-03). Llega aquí AvisoPrioritarioMiddleware
+  desde cualquier página mientras el residente tenga un aviso vigente sin confirmar.
+  - Una capa fija cubre todo el sitio (también el menú): no hay botón de cerrar, ni cierre con
+    Escape ni con clic fuera. Solo «He leído este aviso» o «Cerrar sesión».
+  - role="alertdialog" + aria-modal: los lectores de pantalla anuncian el aviso; el foco va al
+    título al cargar.
+  - Los estilos van aquí y no en condohub.css: son solo de esta pantalla.
+{% endcomment %}
+{% block titulo %}Aviso importante{% endblock %}
+
+{% block contenido %}
+<style>
+  .aviso-prioritario {
+    position: fixed; inset: 0; z-index: 2000; overflow-y: auto;
+    background: var(--condohub-azul-oscuro, #0b2440);  /* opaco: el sitio de atrás no se ve ni distrae */
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 2rem 1rem;
+  }
+  @media (min-height: 600px) { .aviso-prioritario { align-items: center; } }
+  .aviso-prioritario-tarjeta {
+    width: 100%; max-width: 40rem; background: #fff; border-radius: 0.75rem;
+    border-top: 0.5rem solid var(--estado-moroso, #b42318);
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.35);
+  }
+  .aviso-prioritario-etiqueta { color: var(--estado-moroso-texto, #8f1d14); font-weight: 700; letter-spacing: .02em; }
+  .aviso-prioritario-titulo:focus { outline: 3px solid var(--condohub-teal, #13989e); outline-offset: 4px; border-radius: 4px; }
+  body:has(.aviso-prioritario) { overflow: hidden; }  /* el sitio de atrás no se desplaza */
+</style>
+
+<div class="aviso-prioritario" role="alertdialog" aria-modal="true"
+     aria-labelledby="aviso-titulo" aria-describedby="aviso-contenido">
+  <div class="aviso-prioritario-tarjeta">
+    <div class="p-4 p-md-5">
+      <p class="aviso-prioritario-etiqueta mb-2">
+        <i class="bi bi-exclamation-octagon-fill" aria-hidden="true"></i> Aviso importante
+        {% if pendientes > 1 %}<span class="fw-normal text-body"> · 1 de {{ pendientes }}</span>{% endif %}
+      </p>
+      <h1 class="h3 aviso-prioritario-titulo" id="aviso-titulo" tabindex="-1">{{ aviso.titulo }}</h1>
+      <p class="text-muted small mb-3">
+        {{ condominio_activo.nombre }} · Publicado el {{ aviso.fecha_publicacion|date:"d-m-Y \a \l\a\s H:i" }}
+        {% if aviso.edificio %}· Para {{ aviso.edificio.nombre }}{% endif %}
+      </p>
+      <div class="texto-largo mb-4" id="aviso-contenido">{{ aviso.contenido }}</div>
+
+      <form method="post" action="{% url 'comunicados:confirmar_aviso' aviso.pk %}" data-demo-permitido>
+        {% csrf_token %}
+        <button class="btn btn-primary btn-lg w-100" type="submit">
+          <i class="bi bi-check2-circle" aria-hidden="true"></i> He leído este aviso
+        </button>
+      </form>
+      <p class="small text-muted mt-2 mb-0">
+        La administración verá que lo leíste y la hora.{% if pendientes > 1 %} Luego verás el siguiente aviso.{% endif %}
+      </p>
+      <form method="post" action="{% url 'cuentas:cerrar_sesion' %}" class="mt-3 text-center" data-demo-permitido>
+        {% csrf_token %}
+        <button class="btn btn-link btn-sm link-secondary" type="submit">Cerrar sesión</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Foco en el título del aviso al cargar: el lector de pantalla lo lee primero.
+  document.getElementById("aviso-titulo").focus();
+</script>
+{% endblock %}
