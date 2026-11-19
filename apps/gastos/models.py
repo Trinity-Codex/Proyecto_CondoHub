@@ -233,6 +233,10 @@ class DetalleGastoComun(models.Model):
     monto = models.PositiveIntegerField()
     # Aporte de la unidad al fondo común de reserva (porcentaje del período sobre su monto), en pesos.
     monto_fondo_reserva = models.PositiveIntegerField()
+    # Suma de los ítems de cobro que alcanzan a la unidad (RQ-02, #117): cuotas extraordinarias,
+    # multas... El detalle de cada ítem está en sus LineaCobro (related_name="lineas").
+    # 0 por defecto: los cobros emitidos antes de #117 no cambian.
+    monto_items = models.PositiveIntegerField("ítems de cobro", default=0)
     estado = models.CharField(max_length=10, choices=Estado.choices, default=Estado.PENDIENTE)
 
     class Meta:
@@ -249,8 +253,77 @@ class DetalleGastoComun(models.Model):
 
     @property
     def total(self):
-        """Lo que la unidad debe pagar en el período (gastos + fondo de reserva)."""
-        return self.monto + self.monto_fondo_reserva
+        """Lo que la unidad debe pagar en el período (gastos + fondo de reserva + ítems de cobro)."""
+        return self.monto + self.monto_fondo_reserva + self.monto_items
+
+
+class ItemCobro(models.Model):
+    """
+    Concepto propio que el administrador agrega al cobro de un período (RQ-02, #117):
+    una cuota extraordinaria, una multa... Se edita mientras el período está ABIERTO;
+    al emitir se convierte en una LineaCobro por cada unidad alcanzada.
+
+    Dos modos de monto (ver openspec/changes/agregar-items-de-cobro/design.md):
+      - POR_UNIDAD: cada unidad alcanzada paga `monto` (sirve para multas).
+      - PRORRATEO:  `monto` es el total y se reparte por alícuota entre las unidades
+                    alcanzadas, sin perder pesos (sirve para cuotas extraordinarias).
+    """
+
+    class Modo(models.TextChoices):
+        POR_UNIDAD = "POR_UNIDAD", "Monto por unidad"
+        PRORRATEO = "PRORRATEO", "Total a prorratear según la alícuota"
+
+    class Alcance(models.TextChoices):
+        TODAS = "TODAS", "Todas las unidades"
+        ALGUNAS = "ALGUNAS", "Solo algunas unidades"
+
+    periodo = models.ForeignKey(PeriodoGasto, on_delete=models.CASCADE, related_name="items_cobro")
+    nombre = models.CharField(max_length=120)
+    modo = models.CharField("modo de monto", max_length=12, choices=Modo.choices, default=Modo.POR_UNIDAD)
+    monto = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(MONTO_MAXIMO)])
+    alcance = models.CharField(max_length=10, choices=Alcance.choices, default=Alcance.TODAS)
+    # Solo con alcance ALGUNAS. Con TODAS se usan las unidades que existan al emitir.
+    unidades = models.ManyToManyField("condominios.Unidad", blank=True, related_name="items_cobro")
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="items_cobro_registrados"
+    )
+    creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "ítem de cobro"
+        verbose_name_plural = "ítems de cobro"
+        ordering = ["creado", "pk"]
+
+    def __str__(self):
+        return f"{self.nombre} (${self.monto})"
+
+
+class LineaCobro(models.Model):
+    """
+    Lo que un ítem de cobro le cobró a UNA unidad al emitir (una línea del detalle del
+    residente). Se guarda, en vez de calcularse al vuelo, para que un mes ya cobrado no
+    cambie si después cambian las alícuotas o las unidades. La suma de las líneas de un
+    cobro es su `monto_items`.
+    """
+
+    detalle = models.ForeignKey(DetalleGastoComun, on_delete=models.CASCADE, related_name="lineas")
+    # RESTRICT: un ítem ya cobrado no se puede borrar suelto (dejaría monto_items sin sus líneas);
+    # sí se borra junto con su período o condominio, porque sus líneas caen en la misma operación.
+    item = models.ForeignKey(ItemCobro, on_delete=models.RESTRICT, related_name="lineas")
+    # Copia del nombre del ítem: lo que vio el residente queda igual.
+    nombre = models.CharField(max_length=120)
+    monto = models.PositiveIntegerField()
+
+    class Meta:
+        verbose_name = "línea de cobro"
+        verbose_name_plural = "líneas de cobro"
+        ordering = ["item__creado", "item__pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["detalle", "item"], name="uq_linea_detalle_item"),
+        ]
+
+    def __str__(self):
+        return f"{self.nombre}: ${self.monto}"
 
 
 class MovimientoFondo(models.Model):

@@ -6,7 +6,7 @@ cuánto se cobró, cuánto se recaudó y quién debe. Este módulo arma ese repo
 para UN período emitido (opcionalmente, de un solo edificio).
 
 Definiciones que usa el reporte:
-  - Total emitido:    lo que se cobró a las unidades (gastos + fondo de reserva).
+  - Total emitido:    lo que se cobró a las unidades (gastos + fondo de reserva + ítems).
   - Total recaudado:  lo que ya se pagó de esos cobros.
   - % de recaudación: recaudado × 100 / emitido.
   - Saldo:            lo que falta pagar de un cobro (total - pagado).
@@ -31,7 +31,7 @@ from .models import DetalleGastoComun, PeriodoGasto
 def anotar_pagado(cobros):
     """
     Agrega a cada cobro (DetalleGastoComun) dos columnas calculadas por la base de datos:
-      - total_cobro: gastos + fondo de reserva
+      - total_cobro: gastos + fondo de reserva + ítems de cobro (#117)
       - pagado:      cuánto se ha pagado de ese cobro
 
     Es el ÚNICO lugar del reporte donde se decide cuánto se pagó. Sigue la misma
@@ -43,7 +43,7 @@ def anotar_pagado(cobros):
 
     Coalesce(..., 0): un cobro sin pagos da SUM = NULL en SQL; Coalesce lo cambia por 0.
     """
-    total = F("monto") + F("monto_fondo_reserva")
+    total = F("monto") + F("monto_fondo_reserva") + F("monto_items")
     pagado = Case(
         When(estado=DetalleGastoComun.Estado.PAGADO, then=total),
         default=Coalesce(Sum("pagos__monto", filter=Q(pagos__anulado=False)), 0),

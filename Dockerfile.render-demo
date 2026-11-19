@@ -1,0 +1,37 @@
+# Demo visual de CondoHub en Render Free (Issue #111). Solo lectura y datos ficticios.
+# La imagen no lleva base ni claves: la SQLite se crea al arrancar (scripts/iniciar_render_demo.sh).
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DJANGO_SETTINGS_MODULE=config.settings_render_demo
+
+WORKDIR /app
+
+# mysqlclient (requirements.txt) se compila: necesita gcc y las cabeceras de MySQL/MariaDB.
+# Se conserva aunque la demo use SQLite, para instalar las mismas dependencias que el equipo.
+# libmariadb3 se pide explícito para que el purge final lo conserve: mysqlclient lo carga. Solo ruedas binarias
+# (no se ejecutan scripts de instalación), salvo mysqlclient, que no publica ruedas para Linux.
+# ponytail: requirements.txt fija versiones sin hashes; si el equipo los agrega, sumar --require-hashes.
+COPY requirements.txt .
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential default-libmysqlclient-dev libmariadb3 pkg-config \
+    && pip install --only-binary :all: --no-binary mysqlclient -r requirements.txt \
+    && apt-get purge -y --auto-remove build-essential pkg-config default-libmysqlclient-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . .
+
+# Usuario sin privilegios, dueño solo de lo que la demo escribe en ejecución.
+RUN useradd --create-home --uid 10001 condohub \
+    && mkdir -p .demo_cliente staticfiles \
+    && chown condohub:condohub .demo_cliente staticfiles
+USER condohub
+
+# Render entrega el puerto en $PORT; 10000 es su valor por defecto.
+ENV PORT=10000
+EXPOSE 10000
+# Se invoca con sh: el script no necesita permiso de ejecución dentro de la imagen.
+CMD ["sh", "scripts/iniciar_render_demo.sh"]
