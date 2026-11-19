@@ -14,6 +14,7 @@ from apps.cartera.permisos import condominios_de_cartera
 from apps.comunicados.models import Comunicado
 from apps.condominios.models import Residente, Unidad
 from apps.incidentes.models import Incidente
+from apps.mantenciones.alertas import mantenciones_por_atender
 from apps.gastos.filtros import SITUACIONES
 from apps.pagos.consultas import cobros_del_residente, reporte_del_ultimo_periodo, total_adeudado
 from apps.reservas.models import Reserva
@@ -50,6 +51,10 @@ class InicioView(RolRequeridoMixin, TemplateView):
         contexto["mis_incidentes"] = Incidente.objects.filter(
             reportado_por=usuario, condominio=condominio
         ).exclude(estado=Incidente.Estado.RESUELTO)[:5]
+
+        # Mantenciones por vencer o vencidas (Issue #123): solo el administrador, que es quien las gestiona.
+        if ADMINISTRADOR in self.request.roles:
+            contexto["mantenciones_alerta"] = mantenciones_por_atender(condominio, timezone.localdate())
 
         # Tarjeta "Mi deuda": solo la calculamos si el usuario es residente.
         if RESIDENTE in self.request.roles:

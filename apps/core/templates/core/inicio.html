@@ -64,6 +64,23 @@
 {% endif %}
 {% endif %}
 
+{% if mantenciones_alerta %}
+  <div class="card border-warning mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-calendar2-check" aria-hidden="true"></i> Mantenciones por atender</span>
+      <a href="{% url 'mantenciones:lista' %}" class="small">Ver calendario</a>
+    </div>
+    <ul class="list-group list-group-flush">
+      {% for m in mantenciones_alerta %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        <span>{{ m.nombre }} <span class="text-muted small">· {{ m.proxima_fecha|date:"d-m-Y" }}</span></span>
+        <span class="insignia insignia-{% if m.estado == "VENCIDA" %}moroso{% else %}con-deuda{% endif %}">{{ m.estado.label }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
 <div class="row g-4">
   {# ---- Últimos comunicados (todos los roles) ---- #}
   <div class="col-lg-6">

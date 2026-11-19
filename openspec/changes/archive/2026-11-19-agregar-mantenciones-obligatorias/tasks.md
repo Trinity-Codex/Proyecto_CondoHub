@@ -33,5 +33,5 @@ Este cambio cubre el Issue #123 en dos PR: modelo y calendario (secciones 1 a 5,
 
 ## 6. Alertas y certificados (PR 2, `Closes #123`)
 
-- [ ] 6.1 Notificación (Observer) y comando de gestión idempotente cuando una mantención entra en su ventana de alerta, y tarjeta en el panel de inicio (avisar a Maximiliano).
-- [ ] 6.2 Certificado o foto adjunta en la ejecución (JPG, PNG o PDF real, máximo 5 MB), cuando #116 esté unido.
+- [x] 6.1 Notificación (Observer) y comando de gestión idempotente cuando una mantención entra en su ventana de alerta, y tarjeta en el panel de inicio (avisar a Maximiliano).
+- [x] 6.2 Certificado o foto adjunta en la ejecución (JPG, PNG o PDF real, máximo 5 MB). Se entrega solo por `CertificadoView` (descarga con permisos), nunca por MEDIA_URL.

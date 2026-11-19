@@ -6,6 +6,7 @@ from django.utils import timezone
 from apps.core.formularios import CampoFecha, ModeloFormularioBootstrap
 from apps.proveedores.models import Proveedor
 
+from .certificados import preparar_certificado
 from .models import EjecucionMantencion, Mantencion
 
 
@@ -64,7 +65,7 @@ class MantencionForm(ModeloFormularioBootstrap):
 class EjecucionForm(ModeloFormularioBootstrap):
     class Meta:
         model = EjecucionMantencion
-        fields = ["fecha", "observacion"]
+        fields = ["fecha", "observacion", "certificado"]
         widgets = {
             "fecha": CampoFecha(),
             "observacion": forms.Textarea(attrs={"rows": 3, "placeholder": "Ej.: Se recargaron 12 extintores."}),
@@ -72,7 +73,12 @@ class EjecucionForm(ModeloFormularioBootstrap):
         help_texts = {
             "fecha": "El día en que se hizo. La próxima fecha se cuenta desde aquí.",
             "observacion": "Opcional. Qué se hizo o qué se encontró.",
+            "certificado": "Opcional. Certificado o foto de respaldo: JPG, PNG o PDF de hasta 5 MB.",
         }
+
+    # @spec:mantenciones-certificados-de-mantencion
+    def clean_certificado(self):
+        return preparar_certificado(self.cleaned_data.get("certificado"))
 
     def clean_fecha(self):
         """No se registra como hecha una mantención futura: movería la próxima fecha sin que haya ocurrido."""

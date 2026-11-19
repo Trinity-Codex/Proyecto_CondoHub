@@ -31,7 +31,8 @@
     <tbody>
       {% for m in mantenciones %}
       <tr>
-        <td>{{ m.nombre }}<div class="small text-muted d-md-none">Cada {{ m.frecuencia_meses }} mes{{ m.frecuencia_meses|pluralize:"es" }}</div></td>
+        <td>{{ m.nombre }}<div class="small text-muted d-md-none">Cada {{ m.frecuencia_meses }} mes{{ m.frecuencia_meses|pluralize:"es" }}</div>
+          {% if m.ultimo_certificado %}<a class="small" href="{% url 'mantenciones:certificado' m.ultimo_certificado.pk %}"><i class="bi bi-paperclip" aria-hidden="true"></i> Certificado del {{ m.ultimo_certificado.fecha|date:"d-m-Y" }}</a>{% endif %}</td>
         <td class="text-nowrap">
           {{ m.proxima_fecha|date:"d-m-Y" }}
           <div class="small text-muted">

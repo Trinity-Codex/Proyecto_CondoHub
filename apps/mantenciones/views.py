@@ -5,11 +5,15 @@ Permisos:
   - Ver el calendario:                         administrador, comité y conserje (el residente recibe 403)
   - Crear, editar y registrar ejecuciones:     solo el administrador
 """
+import mimetypes
+
 from django.contrib import messages
+from django.http import FileResponse, Http404
 from django.db import transaction
 from django.urls import reverse_lazy
 from django.utils import timezone
-from django.views.generic import CreateView, ListView, UpdateView
+from django.utils.cache import patch_cache_control
+from django.views.generic import CreateView, ListView, UpdateView, View
 from django.views.generic.detail import SingleObjectMixin
 from django.views.generic.edit import FormView
 
@@ -18,7 +22,7 @@ from apps.core.listados import FiltrosGetMixin
 from apps.core.permisos import ADMINISTRADOR, COMITE, CONSERJE, CondominioQuerysetMixin, RolRequeridoMixin
 
 from .forms import EjecucionForm, MantencionForm
-from .models import Mantencion
+from .models import EjecucionMantencion, Mantencion
 
 # Color de cada estado: reutiliza las insignias y chips que ya existen (.insignia-*, .chip-*).
 COLOR_ESTADO = {
@@ -59,11 +63,13 @@ class MantencionListView(FiltrosGetMixin, RolRequeridoMixin, CondominioQuerysetM
     # @spec:mantenciones-calendario-de-mantenciones
     def get_queryset(self):
         hoy = timezone.localdate()
-        todas = list(super().get_queryset().select_related("proveedor").order_by("proxima_fecha", "nombre", "pk"))
+        todas = list(super().get_queryset().select_related("proveedor").prefetch_related("ejecuciones").order_by("proxima_fecha", "nombre", "pk"))
         for m in todas:
             m.estado_hoy = m.estado_en(hoy)
             m.color_estado = COLOR_ESTADO[m.estado_hoy]
             m.dias_restantes = (m.proxima_fecha - hoy).days  # negativo = días de atraso
+            # Última ejecución con certificado (las ejecuciones vienen de la más reciente a la más antigua).
+            m.ultimo_certificado = next((e for e in m.ejecuciones.all() if e.certificado), None)
             m.dias_abs = abs(m.dias_restantes)  # para el texto «Hace 3 días» / «En 1 día»
         self.todas = todas  # los chips cuentan sobre todas, antes de filtrar
         elegido = self.filtro("estado")
@@ -163,9 +169,37 @@ class EjecucionCreateView(RolRequeridoMixin, CondominioQuerysetMixin, SingleObje
     def form_valid(self, form):
         self.object.registrar_ejecucion(
             self.request.user, form.cleaned_data["fecha"], form.cleaned_data["observacion"],
+            form.cleaned_data["certificado"],
         )
         messages.success(
             self.request,
             f"Ejecución registrada. La próxima fecha de «{self.object}» es el {self.object.proxima_fecha:%d-%m-%Y}.",
         )
         return super().form_valid(form)
+
+
+class CertificadoView(RolRequeridoMixin, CondominioQuerysetMixin, SingleObjectMixin, View):
+    """
+    Entrega el certificado de una ejecución. No se sirve por MEDIA_URL: aquí se aplican los permisos, así que pedir
+    la URL directa sin ser del condominio da 404 y siendo residente, 403.
+    """
+
+    roles_permitidos = [ADMINISTRADOR, COMITE, CONSERJE]
+    model = EjecucionMantencion
+    campo_condominio = "mantencion__condominio"
+
+    # @spec:mantenciones-certificados-de-mantencion
+    def get(self, request, *args, **kwargs):
+        ejecucion = self.get_object()
+        if not ejecucion.certificado:
+            raise Http404("Esta ejecución no tiene certificado.")
+        try:
+            archivo = ejecucion.certificado.open("rb")
+        except FileNotFoundError:
+            raise Http404("El archivo ya no existe.") from None
+        tipo = mimetypes.guess_type(ejecucion.certificado.name)[0] or "application/octet-stream"
+        # as_attachment: un PDF se descarga en vez de abrirse en el sitio (puede traer scripts).
+        respuesta = FileResponse(archivo, content_type=tipo, as_attachment=True)
+        respuesta["X-Content-Type-Options"] = "nosniff"
+        patch_cache_control(respuesta, private=True, no_store=True)  # no queda en equipos compartidos
+        return respuesta

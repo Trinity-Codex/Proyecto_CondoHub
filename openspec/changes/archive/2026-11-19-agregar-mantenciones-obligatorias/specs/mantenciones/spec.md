@@ -56,3 +56,41 @@ El sistema SHALL llevar por condominio un calendario de mantenciones periódicas
 #### Scenario: El calendario no afirma obligaciones legales
 - **WHEN** cualquier rol con acceso abre el calendario
 - **THEN** el texto aclara que cada condominio define qué mantenciones lleva y con qué frecuencia, sin presentarlas como obligaciones legales
+
+### Requirement: Alertas de vencimiento
+El sistema SHALL avisar a los administradores del condominio, por la campana y por correo (patrón Observer), cuando una mantención entra en su ventana de alerta o ya venció, y SHALL mostrar las mantenciones por vencer o vencidas en el panel de inicio del administrador. Cada mantención se avisa una sola vez por fecha de vencimiento, aunque el comando de alertas corra varias veces.
+
+#### Scenario: Mantención que entra en su ventana
+- **WHEN** corre el comando de alertas y una mantención está por vencer o vencida y aún no se avisó para su fecha
+- **THEN** cada administrador activo del condominio recibe una notificación con el enlace al calendario
+
+#### Scenario: Comando repetido
+- **WHEN** el comando corre de nuevo para la misma fecha de vencimiento
+- **THEN** no se envía otra notificación
+
+#### Scenario: Ciclo siguiente
+- **WHEN** se registra una ejecución y la nueva fecha vuelve a entrar en su ventana
+- **THEN** el comando vuelve a avisar, una vez, para la nueva fecha
+
+#### Scenario: Otro condominio
+- **WHEN** vence una mantención de un condominio
+- **THEN** solo los administradores de ese condominio reciben el aviso
+
+#### Scenario: Tarjeta en el panel
+- **WHEN** el administrador abre el panel de inicio y hay mantenciones por vencer o vencidas
+- **THEN** ve una tarjeta con ellas; comité, conserje y residente no la ven
+
+### Requirement: Certificados de mantención
+El sistema SHALL permitir adjuntar a una ejecución un certificado o foto (JPG, PNG o PDF reales, hasta 5 MB), SHALL quitar los metadatos EXIF de las imágenes y SHALL entregar el archivo solo mediante una vista con permisos, nunca por una URL pública.
+
+#### Scenario: Adjuntar un certificado válido
+- **WHEN** el administrador registra una ejecución con un JPG, PNG o PDF válido
+- **THEN** la ejecución guarda el certificado con un nombre generado y, si es imagen, sin EXIF
+
+#### Scenario: Adjunto no permitido
+- **WHEN** el administrador adjunta un archivo que no es JPG, PNG ni PDF reales, o que pesa más de 5 MB
+- **THEN** la ejecución no se registra y se muestra un mensaje claro
+
+#### Scenario: Quién descarga el certificado
+- **WHEN** el administrador, el comité o el conserje del condominio piden el certificado
+- **THEN** reciben el archivo; un residente recibe 403 y quien pertenece a otro condominio, 404
