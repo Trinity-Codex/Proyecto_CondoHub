@@ -13,10 +13,13 @@ Permisos:
   - Crear, editar y eliminar:      administrador
   - Marcar como leído:             residente al que va dirigido (Issue #58)
   - Ver las confirmaciones:        administrador (Issue #58)
+  - Aviso prioritario (#118):      el residente lo ve y lo confirma; administrador y comité
+                                   ven quién confirmó y quién no, con fecha y hora
 """
 from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from django.views import View
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
@@ -34,6 +37,7 @@ from apps.core.permisos import (
 )
 
 from .forms import ComunicadoForm
+from .middleware import SIGUIENTE, aviso_pendiente, debe_ver_avisos
 from .models import Comunicado, LecturaComunicado
 
 
@@ -171,3 +175,62 @@ class ComunicadoDeleteView(RolRequeridoMixin, CondominioQuerysetMixin, DeleteVie
     def form_valid(self, form):
         messages.success(self.request, "Comunicado eliminado.")
         return super().form_valid(form)
+
+
+# ---------------------------------------------------------------------------
+# Aviso prioritario (#118, RQ-03)
+# ---------------------------------------------------------------------------
+class AvisoPrioritarioView(RolRequeridoMixin, View):
+    """
+    Pantalla completa con el primer aviso prioritario pendiente del residente. Sin avisos
+    pendientes, vuelve a la página que había pedido (o al inicio).
+    """
+
+    roles_permitidos = [RESIDENTE]
+    template_name = "comunicados/aviso_prioritario.html"
+
+    def get(self, request):
+        aviso = aviso_pendiente(request) if debe_ver_avisos(request) else None
+        if aviso is None:
+            destino = request.session.pop(SIGUIENTE, None)
+            if not destino or not url_has_allowed_host_and_scheme(destino, allowed_hosts={request.get_host()}):
+                destino = reverse_lazy("core:inicio")
+            return redirect(destino)
+        pendientes = Comunicado.objects.avisos_pendientes(request.user, request.condominio, timezone.localdate())
+        return render(request, self.template_name, {"aviso": aviso, "pendientes": pendientes.count()})
+
+
+class ConfirmarAvisoView(RolRequeridoMixin, View):
+    """
+    «He leído este aviso»: guarda la lectura (con fecha y hora) y vuelve a la pantalla del
+    aviso, que muestra el siguiente o devuelve al residente a donde iba. Solo por POST.
+    """
+
+    roles_permitidos = [RESIDENTE]
+    http_method_names = ["post"]
+
+    def post(self, request, pk):
+        visibles = Comunicado.objects.visibles_para(request.user, request.condominio, ve_todos=False)
+        aviso = get_object_or_404(visibles.filter(prioritario=True), pk=pk)
+        LecturaComunicado.objects.get_or_create(comunicado=aviso, usuario=request.user)
+        return redirect("comunicados:aviso_prioritario")
+
+
+class LecturasComunicadoView(RolRequeridoMixin, CondominioQuerysetMixin, DetailView):
+    """
+    Quién confirmó y quién no, por residente y con fecha y hora (#118). Solo administrador y
+    comité: es un dato personal. El residente nunca ve la lectura de otros.
+    """
+
+    roles_permitidos = [ADMINISTRADOR, COMITE]
+    model = Comunicado
+    template_name = "comunicados/lecturas.html"
+    context_object_name = "comunicado"
+
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+        filas = self.object.lecturas_por_residente()
+        contexto["confirmaron"] = [f for f in filas if f[2]]
+        contexto["faltan"] = [f for f in filas if not f[2]]
+        contexto["total"] = len(filas)
+        return contexto

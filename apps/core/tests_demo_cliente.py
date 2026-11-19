@@ -46,6 +46,9 @@ def huella_modo_cliente():
     huella["reservas"]["CONFIRMADA"] += 2
     huella["comunicados"] += 2
     huella["notificaciones"] += 5  # avisos de los dos comunicados nuevos
+    # Issue #118: un aviso prioritario a la Torre B (avisa a residente2 y al comité).
+    huella["comunicados"] += 1
+    huella["notificaciones"] += 2
     return huella
 
 

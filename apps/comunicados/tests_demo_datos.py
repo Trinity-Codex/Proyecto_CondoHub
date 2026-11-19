@@ -42,8 +42,13 @@ class ComunicadosDemoTest(TestCase):
         self.assertContains(lista, general.titulo)
         self.assertContains(lista, dirigido.titulo)
 
-        # El residente de la Torre B no ve el vencido en la lista principal, sí en «Ver vencidos».
+        # El residente de la Torre B primero confirma el aviso prioritario de su torre (#118);
+        # después no ve el vencido en la lista principal, sí en «Ver vencidos».
         self.client.force_login(Usuario.objects.get(email="residente2@condohub.cl"))
+        aviso = vista_verde.get(prioritario=True)
+        self.assertRedirects(self.client.get(reverse("comunicados:lista")), reverse("comunicados:aviso_prioritario"),
+                             fetch_redirect_response=False)
+        self.client.post(reverse("comunicados:confirmar_aviso", args=[aviso.pk]))
         self.assertNotContains(self.client.get(reverse("comunicados:lista")), vencido.titulo)
         self.assertContains(self.client.get(reverse("comunicados:lista"), {"vigencia": "vencidos"}), vencido.titulo)
 
