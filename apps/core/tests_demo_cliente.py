@@ -135,8 +135,9 @@ class PrepararDemoClienteTest(SimpleTestCase):
             self.assertEqual(datos["huella"]["usuarios"], 8)
             self.assertEqual(datos["huella"]["condominios"],
                              ["Condominio Vista Verde", "Edificio Los Aromos"])
-            self.assertEqual(datos["huella"]["suma_cobros"], {"s": 4989239, "f": 249462, "i": 1225000})
-            self.assertEqual(datos["periodos"], [
+            self.assertEqual(datos["huella"]["suma_cobros"], {"s": 11444514, "f": 572226, "i": 1225000})
+            self.assertEqual(datos["periodos"], [  # junio a agosto: historia del fondo (#119)
+                [2026, 6, "EMITIDO"], [2026, 7, "EMITIDO"], [2026, 8, "EMITIDO"],
                 [2026, 9, "EMITIDO"], [2026, 10, "EMITIDO"],
                 [2026, 11, "ABIERTO"], [2026, 10, "EMITIDO"],
             ])
@@ -168,7 +169,7 @@ class DatosDemoClienteTest(TestCase):
         self.assertEqual(pruebas_core.huella_demo(), pruebas_core.CargarDemoTest.HUELLA)
         self.assertEqual(list(PeriodoGasto.objects.filter(
             condominio__nombre="Condominio Vista Verde").order_by("anio", "mes")
-            .values_list("anio", "mes")), [(2024, 12), (2025, 1), (2025, 2)])
+            .values_list("anio", "mes")), [(2024, 9), (2024, 10), (2024, 11), (2024, 12), (2025, 1), (2025, 2)])
 
     @override_settings(DEMO_FECHA_REFERENCIA=date(2026, 11, 16))
     def test_saldo_demo_coincide_movimientos(self):
@@ -178,7 +179,7 @@ class DatosDemoClienteTest(TestCase):
         self.maxDiff = None
         self.assertEqual(pruebas_core.huella_demo(), huella_modo_cliente())
         for nombre, saldo, meses, apertura in [
-            ("Condominio Vista Verde", 1140537, [9, 10, 11], 1000000),
+            ("Condominio Vista Verde", 1463301, [6, 7, 8, 9, 10, 11], 1000000),  # junio a agosto: #119
             ("Edificio Los Aromos", 533925, [10], 500000),
         ]:
             with self.subTest(condominio=nombre):
@@ -188,7 +189,7 @@ class DatosDemoClienteTest(TestCase):
                                  [(2026, mes) for mes in meses])
                 inicial = MovimientoFondo.objects.get(condominio=condominio, tipo="INICIAL")
                 self.assertEqual(inicial.monto, apertura)
-                self.assertLess(inicial.fecha, date(2026, 9, 1))
+                self.assertLess(inicial.fecha, date(2026, 6, 1))
                 self.assertEqual(saldo_fondo(condominio), saldo)
                 self.assertEqual(sum(m.monto for m in movimientos_fondo(condominio)), saldo)
                 for periodo in periodos.filter(estado="EMITIDO"):

@@ -480,3 +480,20 @@ footer {
 }
 .busqueda-opcion[aria-selected="true"] .busqueda-opcion-titulo { color: var(--condohub-azul); }
 .busqueda-opcion[aria-selected="true"] .busqueda-opcion-detalle { color: #34424f; }
+
+/* Gráfico de la evolución del fondo de reserva (RQ-05, #119): SVG sin librerías. */
+.grafico-fondo-lienzo { overflow-x: auto; }
+.grafico-fondo-lienzo svg { display: block; width: 100%; height: auto; max-height: 260px; }
+.grafico-fondo-barra { fill: var(--condohub-teal-texto); }
+.grafico-fondo-negativa { fill: var(--estado-moroso); }
+.grafico-fondo-cero { stroke: #5c6b7a; stroke-width: 1; }
+.grafico-fondo-etiqueta { fill: #34424f; font-size: 13px; }
+.grafico-fondo-trama-fondo { fill: var(--estado-recibido-fondo); }
+.grafico-fondo-trama-linea { stroke: var(--condohub-azul); stroke-width: 2; }
+.grafico-fondo-leyenda {
+  display: inline-block; width: 0.9rem; height: 0.9rem; vertical-align: -0.1rem;
+  border-radius: 2px; background: var(--condohub-teal-texto);
+}
+.grafico-fondo-leyenda-trama {
+  background: repeating-linear-gradient(45deg, var(--estado-recibido-fondo) 0 3px, var(--condohub-azul) 3px 5px);
+}

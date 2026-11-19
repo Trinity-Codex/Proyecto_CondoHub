@@ -11,6 +11,10 @@ urlpatterns = [
     path("fondo/egreso/", views.FondoCreateView.as_view(tipo="EGRESO"), name="fondo_egreso"),
     path("fondo/ajuste/", views.FondoCreateView.as_view(tipo="AJUSTE"), name="fondo_ajuste"),
     path("fondo/<int:pk>/", views.FondoDetailView.as_view(), name="fondo_detalle"),
+    # Evolución del fondo (RQ-05, #119): solo lectura.
+    path("fondo/evolucion/", views.EvolucionFondoView.as_view(), name="fondo_evolucion"),
+    path("fondo/unidad/<int:pk>/", views.AporteUnidadView.as_view(), name="fondo_unidad"),
+    path("fondo/mi-aporte/", views.MiAporteFondoView.as_view(), name="fondo_mi_aporte"),
     path("", views.PeriodoListView.as_view(), name="periodos"),
     path("periodos/nuevo/", views.PeriodoCreateView.as_view(), name="periodo_nuevo"),
     path("periodos/<int:pk>/", views.PeriodoDetailView.as_view(), name="periodo_detalle"),

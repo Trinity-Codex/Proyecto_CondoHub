@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
-  <link href="{% static 'css/condohub.css' %}?v=20261116" rel="stylesheet">
+  <link href="{% static 'css/condohub.css' %}?v=20261119" rel="stylesheet">
   {# PWA: permite "instalar" el sitio en el celular como una app (RNF03). #}
   <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
   <link rel="icon" href="{% static 'img/favicon.ico' %}" sizes="48x48">
@@ -85,6 +85,8 @@
         {# NUEVO (Issue #3): enlace del estado de cuenta, solo para residentes #}
         {% if es_residente %}
         <li class="nav-item"><a class="nav-link {% if vista == 'estado_cuenta' or vista == 'cobro_detalle' %}active{% endif %}" href="{% url 'pagos:estado_cuenta' %}"><i class="bi bi-wallet2"></i> Mi cuenta</a></li>
+        {# RQ-05 (#119): saldo total del fondo y el aporte propio del residente #}
+        <li class="nav-item"><a class="nav-link {% if vista == 'fondo_mi_aporte' %}active{% endif %}" href="{% url 'gastos:fondo_mi_aporte' %}"><i class="bi bi-piggy-bank"></i> Fondo</a></li>
         {% endif %}
         {% comment %}
           Administración (administrador y comité): un menú desplegable, así la barra
@@ -93,7 +95,7 @@
         {% endcomment %}
         {% if es_admin or es_comite %}
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle {% if seccion == 'condominios' or seccion == 'gastos' or seccion == 'proveedores' or seccion == 'pagos' and vista != 'estado_cuenta' and vista != 'cobro_detalle' or seccion == 'cuentas' and 'usuario' in vista or seccion == 'rendicion' or seccion == 'auditoria' %}active{% endif %}"
+          <a class="nav-link dropdown-toggle {% if seccion == 'condominios' or seccion == 'gastos' and vista != 'fondo_mi_aporte' or seccion == 'proveedores' or seccion == 'pagos' and vista != 'estado_cuenta' and vista != 'cobro_detalle' or seccion == 'cuentas' and 'usuario' in vista or seccion == 'rendicion' or seccion == 'auditoria' %}active{% endif %}"
              href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="bi bi-briefcase"></i> Administración
           </a>
@@ -105,7 +107,7 @@
             {% endif %}
             <li><hr class="dropdown-divider"></li>
             <li><h6 class="dropdown-header">Finanzas</h6></li>
-            <li><a class="dropdown-item {% if seccion == 'gastos' and vista != 'reporte' %}active{% endif %}" href="{% url 'gastos:periodos' %}"><i class="bi bi-cash-coin"></i> Gastos comunes</a></li>
+            <li><a class="dropdown-item {% if seccion == 'gastos' and vista != 'reporte' and vista != 'fondo_mi_aporte' %}active{% endif %}" href="{% url 'gastos:periodos' %}"><i class="bi bi-cash-coin"></i> Gastos comunes</a></li>
             <li><a class="dropdown-item {% if seccion == 'pagos' and vista != 'estado_cuenta' and vista != 'cobro_detalle' %}active{% endif %}" href="{% url 'pagos:cobranza' %}"><i class="bi bi-cash-stack"></i> Cobranza</a></li>
             <li><a class="dropdown-item {% if vista == 'reporte' %}active{% endif %}" href="{% url 'gastos:reporte' %}"><i class="bi bi-graph-up"></i> Reporte de morosidad</a></li>
             <li><a class="dropdown-item {% if seccion == 'proveedores' %}active{% endif %}" href="{% url 'proveedores:lista' %}"><i class="bi bi-truck"></i> Proveedores</a></li>
