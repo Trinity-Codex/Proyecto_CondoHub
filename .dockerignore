@@ -1,0 +1,43 @@
+# Contexto de Dockerfile.render-demo: solo el código. Nada local, secreto ni de agentes.
+.git
+.gitattributes
+.github
+# Claves locales (el modelo .env.example tampoco hace falta en la imagen)
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.key
+# Entornos virtuales y compilados
+venv/
+.venv/
+__pycache__/
+*.pyc
+# Bases y estáticos locales: la demo crea los suyos al arrancar
+*.sqlite3
+*.sqlite3-*
+.demo_cliente
+.demo_cliente/
+staticfiles/
+*.log
+# Material local de agentes, editores y MockUp
+.agents/
+.claude/
+.codex/
+.Codex/
+.locks/
+.prowl/
+.prowl-setup.lock
+.serena/
+.gemini/
+CLAUDE.local.md
+ia.md
+.vscode/
+.idea/
+openspec/
+MockUp/
+mockup/
+docs/
+logos/
+*.bat

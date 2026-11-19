@@ -1,0 +1,17 @@
+# Blueprint de la demo visual de CondoHub (Issue #111). Un único Web Service Docker, plan Free.
+# No crea bases ni servicios adicionales. El operador configura el secreto en el panel.
+services:
+  - type: web
+    name: condohub-demo-visual
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile.render-demo
+    dockerContext: .
+    # Inicio de sesión por GET: responde 200 cuando la demo ya preparó su base.
+    healthCheckPath: /cuentas/iniciar-sesion/
+    # Solo despliega el commit que el operador elija tras la revisión.
+    autoDeployTrigger: off
+    envVars:
+      # Sin valor versionado: Render lo pide al crear el servicio desde el Blueprint.
+      - key: DJANGO_SECRET_KEY
+        sync: false
