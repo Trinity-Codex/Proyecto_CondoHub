@@ -1,0 +1,27 @@
+{% load condohub %}
+<p>{{ periodo.condominio.nombre }} · {{ periodo }}</p>
+<h2 class="h5">Caja del condominio</h2>
+<p>Ingresos del mes: {{ caja.ingresos|pesos }} · Egresos del mes: {{ caja.egresos|pesos }}<br>
+Saldo acumulado según movimientos registrados hasta fin de mes: {{ caja.saldo|pesos }}. Falta conciliar el saldo inicial de caja.</p>
+<h2 class="h5">Ingresos por fecha de pago</h2>
+<table class="table table-sm" repeat="1"><thead><tr><th>Fecha</th><th>Unidad</th><th>Cobro</th><th>Monto</th></tr></thead><tbody>
+{% for p in pagos %}<tr><td>{{ p.fecha|date:"d-m-Y" }}</td><td>{{ p.detalle.unidad }}</td><td>{{ p.detalle.periodo }}</td><td>{{ p.monto|pesos }}</td></tr>{% empty %}<tr><td colspan="4">Sin ingresos registrados en el mes.</td></tr>{% endfor %}
+</tbody></table>
+<h2 class="h5">Egresos por fecha de boleta</h2>
+<table class="table table-sm" repeat="1"><thead><tr><th>Fecha</th><th>Descripción</th><th>Proveedor</th><th>Monto</th></tr></thead><tbody>
+{% for e in egresos %}<tr><td>{{ e.fecha|date:"d-m-Y" }}</td><td>{{ e.descripcion }}</td><td>{{ e.proveedor.razon_social|default:"Sin proveedor" }}</td><td>{{ e.monto|pesos }}</td></tr>{% empty %}<tr><td colspan="4">Sin egresos registrados en el mes.</td></tr>{% endfor %}
+</tbody></table>
+<h2 class="h5">Recaudación y morosidad</h2>
+<p>Cobros emitidos: {{ reporte.total_emitido|pesos }} · Recaudado de esos cobros a la fecha: {{ reporte.total_recaudado|pesos }} ({{ reporte.porcentaje_recaudacion }} %)<br>
+Saldo de los cobros del período: {{ reporte.saldo_periodo|pesos }} · Deuda anterior: {{ reporte.deuda_anterior|pesos }} · Unidades morosas: {{ reporte.unidades_morosas|length }}</p>
+<h2 class="h5">Fondo de reserva</h2>
+{% if saldo_fondo == None %}<p>Histórico no disponible para este período.</p>{% else %}
+<p>Saldo contable al cierre: {{ saldo_fondo|pesos }}</p>
+<table class="table table-sm" repeat="1"><thead><tr><th>Fecha</th><th>Movimiento</th><th>Descripción</th><th>Monto</th></tr></thead><tbody>
+{% for m in movimientos %}<tr><td>{{ m.fecha|date:"d-m-Y" }}</td><td>{{ m.get_tipo_display }}</td><td>{{ m.descripcion }}</td><td>{{ m.monto|pesos }}</td></tr>{% empty %}<tr><td colspan="4">Sin movimientos del fondo este mes.</td></tr>{% endfor %}
+</tbody></table>{% endif %}
+<h2 class="h5">Pagos anulados</h2>
+<p>Se incluyen pagos con fecha de abono o anulación en el mes. Se excluyen de los ingresos.</p>
+<table class="table table-sm" repeat="1"><thead><tr><th>Pago y unidad</th><th>Abono</th><th>Anulación</th><th>Monto</th><th>Motivo</th></tr></thead><tbody>
+{% for p in anulados %}<tr><td>#{{ p.pk }} · {{ p.detalle.unidad }}</td><td>{{ p.fecha|date:"d-m-Y" }}</td><td>{{ p.anulado_en|date:"d-m-Y"|default:"Sin fecha" }}</td><td>{{ p.monto|pesos }}</td><td>{{ p.motivo_anulacion }}</td></tr>{% empty %}<tr><td colspan="5">Sin pagos anulados para este mes.</td></tr>{% endfor %}
+</tbody></table>

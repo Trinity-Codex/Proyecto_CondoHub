@@ -1,0 +1,37 @@
+{% extends "core/pdf/base.html" %}
+{% load aviso_pagos %}
+{% block titulo %}Aviso de cobro{% endblock %}
+{% block encabezado %}Aviso de cobro{% endblock %}
+{% block estilos %}
+body { font-size: 9.5pt; }
+td { padding: 2pt 4pt; }
+p { margin: 3pt 0; }
+h2 { margin: 8pt 0 3pt; }
+{% endblock %}
+{% block contenido %}
+<h2>{{ periodo.condominio.nombre }}</h2>
+<p>{{ periodo.condominio.direccion }}, {{ periodo.condominio.comuna }}<br>
+Unidad {{ cobro.unidad.numero }} · {{ cobro.unidad.edificio.nombre }} · {{ periodo }}<br>
+Vencimiento: {{ periodo.fecha_vencimiento|date:"d-m-Y"|default:"Sin registrar" }}</p>
+<p>Reparto: {{ periodo.get_criterio_prorrateo_display }} · Alícuota vigente de la unidad (fracción): {{ cobro.unidad.alicuota|floatformat:"-6" }}
+{% if periodo.criterio_prorrateo == "PARTES_IGUALES" %}<br>Reglamento: {{ periodo.referencia_reglamento|default:"Sin registrar" }}{% endif %}</p>
+<h2>Cuenta de la unidad</h2>
+<table>
+<tr><td>Parte de los gastos comunes</td><td>$ {{ cobro.monto|miles }}</td></tr>
+<tr><td>Aporte al fondo de reserva</td><td>$ {{ cobro.monto_fondo_reserva|miles }}</td></tr>
+<tr><td>Ítems adicionales</td><td>$ {{ cobro.monto_items|miles }}</td></tr>
+<tr><td>Intereses y multas</td><td>$ 0</td></tr>
+<tr><td>Cobro del período</td><td>$ {{ cobro.total|miles }}</td></tr>
+<tr><td>Pagos vigentes del cobro</td><td>$ {{ pagado|miles }}</td></tr>
+<tr><td>Saldo del período</td><td>$ {{ saldo|miles }}</td></tr>
+<tr><td>Saldo pendiente de períodos anteriores</td><td>$ {{ anterior|miles }}</td></tr>
+<tr><td><strong>Total a pagar hasta este período</strong></td><td><strong>$ {{ total|miles }}</strong></td></tr>
+</table>
+<h2>Egresos del período por categoría</h2>
+<table>{% for linea in egresos %}<tr><td>{{ linea.categoria }}</td><td>$ {{ linea.subtotal|miles }}</td></tr>{% empty %}<tr><td>Sin egresos registrados</td></tr>{% endfor %}</table>
+<p>Saldo del fondo de reserva al cierre: {% if saldo_fondo == None %}histórico no disponible{% else %}$ {{ saldo_fondo|miles }}{% endif %}</p>
+<h2>Caja del condominio</h2>
+<p>Ingresos del mes: $ {{ caja.ingresos|miles }} · Egresos del mes: $ {{ caja.egresos|miles }}<br>
+Saldo de caja según movimientos registrados hasta fin de mes: $ {{ caja.saldo|miles }}</p>
+<p>Documento de demostración. El saldo considera los pagos y egresos registrados en CondoHub. Falta conciliar el saldo inicial de caja.</p>
+{% endblock %}

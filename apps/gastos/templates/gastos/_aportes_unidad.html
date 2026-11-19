@@ -1,0 +1,13 @@
+{% load condohub %}
+{# Aportes mes a mes de una unidad (RQ-05, #119). Recibe "cobros" (DetalleGastoComun), "total" y "titulo_tabla". #}
+<div class="table-responsive">
+<table class="table table-sm align-middle mb-0" aria-label="{{ titulo_tabla }}">
+  <thead><tr><th scope="col">Mes</th><th scope="col" class="text-end">Aporte al fondo</th></tr></thead>
+  <tbody>
+  {% for cobro in cobros %}
+  <tr><th scope="row" class="fw-normal">{{ cobro.periodo }}</th><td class="text-end text-nowrap">{{ cobro.monto_fondo_reserva|pesos }}</td></tr>
+  {% empty %}<tr><td colspan="2" class="text-center text-muted py-3">Aún no hay aportes emitidos.</td></tr>{% endfor %}
+  </tbody>
+  <tfoot><tr class="fw-semibold"><th scope="row">Total acumulado</th><td class="text-end text-nowrap">{{ total|pesos }}</td></tr></tfoot>
+</table>
+</div>

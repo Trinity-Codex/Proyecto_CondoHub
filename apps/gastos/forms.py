@@ -1,4 +1,6 @@
 """Formularios de gastos comunes."""
+from decimal import Decimal
+
 from django import forms
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import Q
@@ -232,3 +234,33 @@ class MovimientoFondoForm(FormularioBootstrap):
         else:
             self.fields["monto"].min_value = 1
             self.fields["monto"].validators.append(MinValueValidator(1))
+
+
+class CampoPorcentaje(forms.DecimalField):
+    """Porcentaje con coma o punto decimal ("4,5" o "4.5"); vacío vale 0."""
+
+    def __init__(self, *, minimo, maximo, **kwargs):
+        super().__init__(
+            required=False, max_digits=5, decimal_places=2,
+            validators=[MinValueValidator(minimo), MaxValueValidator(maximo)],
+            widget=forms.TextInput(attrs={"inputmode": "decimal", "placeholder": "Ej.: 4,5"}),
+            **kwargs,
+        )
+
+    def to_python(self, value):
+        if isinstance(value, str):
+            value = value.strip().replace(",", ".")
+        valor = super().to_python(value)
+        return Decimal("0") if valor is None else valor
+
+
+class ProyeccionForm(FormularioBootstrap):
+    """
+    Parámetros de la proyección anual (RQ-06, #121). Se envían por GET: la URL guarda los
+    supuestos y la proyección se puede repetir o compartir. Rangos (supuesto provisorio):
+    IPC entre -10 % y 30 %, crecimiento entre -50 % y 50 %.
+    """
+
+    anio = forms.IntegerField(label="Año base", min_value=2000, max_value=2099)
+    ipc = CampoPorcentaje(label="IPC anual (%)", minimo=Decimal("-10"), maximo=Decimal("30"))
+    crecimiento = CampoPorcentaje(label="Crecimiento anual (%)", minimo=Decimal("-50"), maximo=Decimal("50"))

@@ -1,0 +1,3 @@
+La caja usa los pagos vigentes por fecha de abono y los egresos por fecha de boleta, como el aviso de cobro. El reporte de morosidad mide el saldo actual de los cobros emitidos en el período. Una cobranza posterior afecta ese reporte pero no los ingresos del mes anterior. Ambas salidas consultan los datos al descargarse.
+
+El libro del fondo determina los movimientos del mes y el saldo acumulado al cierre. Si falta cobertura histórica, se indica en ambos documentos. Las anulaciones se presentan cuando el abono o su anulación corresponden al mes. El residente recibe solo el saldo del fondo en su aviso. La rendición detallada requiere rol administrador o comité del condominio activo.

@@ -8,7 +8,7 @@ la Torre B, lo marcó como leído (el administrador ve «1 de N unidades confirm
 Demo del cliente (datos["fecha_referencia_demo"], Issue #96): se suman dos comunicados vigentes, uno
 general con fecha de vigencia y uno dirigido a la Torre A con lectura confirmada por
 residente@condohub.cl. Se publican al cargar (nunca con fecha futura, que los ocultaría) y la carga
-normal conserva sus 3 comunicados.
+normal conserva sus 3 comunicados. También un aviso prioritario (#118) para la Torre B.
 """
 from datetime import timedelta
 
@@ -59,3 +59,16 @@ def cargar(datos):
         )
         bicicletas.publicar()
         LecturaComunicado.objects.create(comunicado=bicicletas, usuario=datos["usuarios"]["residente"])
+
+        # Aviso prioritario (#118): a la Torre B, para que residente2 lo vea a pantalla completa
+        # al entrar y la cuenta principal del recorrido (residente, Torre A) siga sin bloqueo.
+        # Nadie lo ha confirmado: el administrador ve «0 de N» en «Ver quién leyó».
+        Comunicado(
+            condominio=vista_verde, autor=admin, tipo=Comunicado.Tipo.POR_EDIFICIO, prioritario=True,
+            edificio=vista_verde.edificios.get(nombre="Torre B"),
+            titulo="Simulacro de evacuación en Torre B",
+            contenido="El jueves a las 11:00 se realizará un simulacro de evacuación en la Torre B.\n\n"
+                      "Al sonar la alarma, bajen por la escalera de emergencia y reúnanse en la plaza central. "
+                      "No usen los ascensores.",
+            vigente_hasta=hasta,
+        ).publicar()

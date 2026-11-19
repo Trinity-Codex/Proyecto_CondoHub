@@ -307,25 +307,26 @@ class CargarDemoTest(TestCase):
         # 21 y no 22: el aviso de Pago.registrar solo llega a quien ve el cobro
         # (residencia vigente); el residente recién llegado de demo.py no lo recibe.
         # + 2 por el pago anulado de A-101: su aviso y el de la anulación (#53).
-        "notificaciones": 23,
+        "notificaciones": 23 + 15,  # + 15 por la historia del fondo (#119): avisos de 3 emisiones y sus pagos
         "incidentes": {"EN_PROCESO": 1, "RECIBIDO": 1},
         "proveedores": {False: 1, True: 3},
-        "periodos": {"ABIERTO": 1, "EMITIDO": 3},  # + el mes anterior de Los Aromos (#54)
-        "egresos": 28,
-        "egresos_con_proveedor": 9,
-        "suma_egresos": 7155439,
+        # + el mes anterior de Los Aromos (#54); + 3 meses de historia del fondo de Vista Verde (#119)
+        "periodos": {"ABIERTO": 1, "EMITIDO": 6},
+        "egresos": 52,
+        "egresos_con_proveedor": 18,
+        "suma_egresos": 13610714,
         "movimientos_fondo": {
             "INICIAL": {"cantidad": 2, "suma": 1500000},
-            "INGRESO": {"cantidad": 3, "suma": 249462},
+            "INGRESO": {"cantidad": 6, "suma": 572226},
             "EGRESO": {"cantidad": 1, "suma": -75000},
         },
-        "cobros": {"PAGADO": 13, "PENDIENTE": 11},
+        "cobros": {"PAGADO": 43, "PENDIENTE": 11},  # + 30 cobros pagados de la historia del fondo (#119)
         # i: cuota extraordinaria ($1.200.000) y multa ($25.000) del mes anterior (#117).
-        "suma_cobros": {"s": 4989239, "f": 249462, "i": 1225000},
-        "pagos": 15,  # + el pago anulado de la demo (#53)
+        "suma_cobros": {"s": 11444514, "f": 572226, "i": 1225000},
+        "pagos": 45,  # + el pago anulado de la demo (#53); + 30 pagos de la historia del fondo (#119)
         # + el pago anulado de la demo (#53); + 793.000 de ítems de cobro (#117) en los cobros
         # del mes anterior que la demo de pagos deja pagados.
-        "suma_pagos": 4253817,
+        "suma_pagos": 11031856,  # + 6.778.039 de la historia del fondo (#119)
     }
 
     def cargar(self, *argumentos):

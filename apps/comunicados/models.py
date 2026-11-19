@@ -10,8 +10,22 @@ Vigencia y lectura (Issue #58, RF13):
     de la lista principal y del panel de inicio (sigue en "Ver vencidos").
   - LecturaComunicado: el residente lo marca como leído. El administrador ve el conteo
     POR UNIDAD (confirmaciones()): una unidad confirma si cualquiera de sus residentes leyó.
+
+Aviso prioritario (Issue #118, RQ-03):
+  - prioritario: el administrador lo marca al publicar y debe poner «Visible hasta».
+  - Mientras esté vigente y el residente no lo haya confirmado, AvisoPrioritarioMiddleware
+    (middleware.py) lo lleva a la pantalla del aviso en cada página. Confirmar crea la misma
+    LecturaComunicado de #58, con su fecha y hora.
+  - lecturas_por_residente(): quién confirmó y quién no, por PERSONA (administrador y comité).
+
+Seguimiento de lectura (Issue #120, RQ-04):
+  - comunicados_sin_leer(): el contador del menú del residente.
+  - porcentajes_de_lectura(): por residente y por unidad, para el administrador.
+  - AjustesComunicados y RecordatorioComunicado: el recordatorio a quien no lee después de N
+    días (ver recordatorios.py y el comando enviar_recordatorios_comunicados).
 """
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
 from django.urls import reverse
 
@@ -43,6 +57,19 @@ class ComunicadoQuerySet(models.QuerySet):
         """Con la fecha "Visible hasta" ya pasada."""
         return self.filter(vigente_hasta__lt=hoy)
 
+    def avisos_pendientes(self, usuario, condominio, hoy):
+        """
+        Avisos prioritarios vigentes dirigidos al residente que aún no confirmó (#118), del más
+        antiguo al más nuevo: se muestran de a uno, en orden de publicación.
+        """
+        return (
+            self.visibles_para(usuario, condominio, ve_todos=False)
+            .vigentes(hoy)
+            .filter(prioritario=True)
+            .exclude(lecturas__usuario=usuario)
+            .order_by("fecha_publicacion", "pk")
+        )
+
 
 class Comunicado(Sujeto, models.Model):
     class Tipo(models.TextChoices):
@@ -59,6 +86,8 @@ class Comunicado(Sujeto, models.Model):
         "condominios.Edificio", on_delete=models.CASCADE, null=True, blank=True, related_name="comunicados"
     )
     fijado = models.BooleanField(default=False, help_text="Los fijados aparecen primero.")
+    # Issue #118: bloquea la navegación del residente hasta que confirme la lectura.
+    prioritario = models.BooleanField("aviso prioritario", default=False, db_default=False)
     # Issue #58: el día indicado todavía se ve; desde el siguiente está vencido.
     vigente_hasta = models.DateField("visible hasta", null=True, blank=True)
     fecha_publicacion = models.DateTimeField("fecha de publicación", auto_now_add=True)
@@ -101,6 +130,40 @@ class Comunicado(Sujeto, models.Model):
         )
         return confirmadas, destinatarias
 
+    def porcentajes_de_lectura(self):
+        """
+        (por_residente, por_unidad): porcentajes enteros de lectura (#120), o None si no hay a
+        quién medir. Por residente cuenta personas; por unidad usa el criterio de #58.
+        """
+        filas = self.lecturas_por_residente()
+        confirmadas, destinatarias = self.confirmaciones()
+
+        def porcentaje(parte, total):
+            return round(100 * parte / total) if total else None
+
+        return porcentaje(sum(1 for f in filas if f[2]), len(filas)), porcentaje(len(confirmadas), len(destinatarias))
+
+    def residentes_destinatarios(self):
+        """Residentes activos a los que va el comunicado (sin el comité): base de la lectura por persona."""
+        residentes = Residente.objects.filter(activo=True, unidad__edificio__condominio=self.condominio)
+        if self.tipo == self.Tipo.POR_EDIFICIO and self.edificio_id:
+            residentes = residentes.filter(unidad__edificio=self.edificio)
+        return residentes
+
+    def lecturas_por_residente(self):
+        """
+        Lista de (usuario, unidades, fecha_de_lectura o None), una fila por persona, ordenada
+        por edificio y unidad (#118). Solo para el administrador y el comité: es un dato personal.
+        """
+        lecturas = dict(self.lecturas.values_list("usuario_id", "leido"))
+        filas = {}
+        for r in self.residentes_destinatarios().select_related("usuario", "unidad__edificio").order_by(
+            "unidad__edificio__nombre", "unidad__piso", "unidad__numero"
+        ):
+            usuario, unidades, _ = filas.setdefault(r.usuario_id, (r.usuario, [], lecturas.get(r.usuario_id)))
+            unidades.append(r.unidad)
+        return list(filas.values())
+
     def destinatarios(self):
         """Usuarios que deben recibir el comunicado: residentes del condominio o del edificio."""
         residentes = Residente.objects.filter(activo=True, unidad__edificio__condominio=self.condominio)
@@ -128,8 +191,72 @@ class Comunicado(Sujeto, models.Model):
                 mensaje=self.titulo,
                 destinatarios=self.destinatarios(),
                 url=self.get_absolute_url(),
+                # #120: el asunto dice de qué trata, sin abrir el correo.
+                asunto=f"{'Aviso importante' if self.prioritario else 'Nuevo comunicado'}: {self.titulo}",
             )
         )
+
+
+def comunicados_sin_leer(usuario, condominio, hoy):
+    """Comunicados vigentes que el residente ve y aún no lee: el contador del menú (#120)."""
+    return (
+        Comunicado.objects.visibles_para(usuario, condominio, ve_todos=False)
+        .vigentes(hoy)
+        .exclude(lecturas__usuario=usuario)
+    )
+
+
+class AjustesComunicados(models.Model):
+    """
+    Ajustes de comunicados de un condominio (#120). Si no existe la fila, valen los valores
+    por defecto: se crea recién cuando el administrador cambia algo.
+    """
+
+    DIAS_POR_DEFECTO = 3
+    condominio = models.OneToOneField(
+        "condominios.Condominio", on_delete=models.CASCADE, related_name="ajustes_comunicados"
+    )
+    dias_recordatorio = models.PositiveSmallIntegerField(
+        "días para el recordatorio",
+        default=DIAS_POR_DEFECTO,
+        validators=[MinValueValidator(1), MaxValueValidator(30)],
+        help_text="Días sin leer después de publicado. Entre 1 y 30.",
+    )
+
+    class Meta:
+        verbose_name = "ajustes de comunicados"
+        verbose_name_plural = "ajustes de comunicados"
+
+    def __str__(self):
+        return f"Ajustes de comunicados de {self.condominio}"
+
+    @classmethod
+    def dias_de(cls, condominio):
+        ajuste = cls.objects.filter(condominio=condominio).values_list("dias_recordatorio", flat=True).first()
+        return ajuste or cls.DIAS_POR_DEFECTO
+
+
+class RecordatorioComunicado(models.Model):
+    """
+    Constancia de un recordatorio de lectura ya enviado (#120): uno por comunicado y persona.
+    Así el comando enviar_recordatorios_comunicados no repite avisos aunque corra varias veces.
+    """
+
+    comunicado = models.ForeignKey("Comunicado", on_delete=models.CASCADE, related_name="recordatorios")
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="recordatorios_comunicados"
+    )
+    enviado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "recordatorio de comunicado"
+        verbose_name_plural = "recordatorios de comunicados"
+        constraints = [
+            models.UniqueConstraint(fields=["comunicado", "usuario"], name="uq_recordatorio_comunicado_usuario")
+        ]
+
+    def __str__(self):
+        return f"Recordatorio de «{self.comunicado}» -> {self.usuario}"
 
 
 class LecturaComunicado(models.Model):

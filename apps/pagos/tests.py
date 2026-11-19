@@ -1,5 +1,8 @@
 """Pruebas del estado de cuenta del residente (Issue #3, RF03)."""
 import datetime
+from io import BytesIO
+
+from pypdf import PdfReader
 from unittest import mock
 
 from django.core.exceptions import ValidationError
@@ -15,6 +18,7 @@ from apps.gastos.reportes import anotar_pagado, generar_reporte
 from apps.gastos.servicios import emitir_periodo
 from apps.notificaciones.models import Notificacion
 
+from .consultas import egresos_para_residente
 from .models import Pago
 
 Estado = DetalleGastoComun.Estado
@@ -39,6 +43,83 @@ class EstadoCuentaTest(TestCase):
         return DetalleGastoComun.objects.create(
             periodo=periodo, unidad=unidad, monto=monto, monto_fondo_reserva=fondo, estado=estado
         )
+
+    def test_comprobante_descargable_refleja_pago_y_saldo_actual(self):
+        cobro = self.cobro(self.oct, self.e.a101)
+        pago = Pago.objects.create(detalle=cobro, monto=12345, fecha=datetime.date(2026, 10, 3))
+        Pago.objects.create(detalle=cobro, monto=1000)
+        url = reverse("pagos:comprobante_pago", args=[pago.pk])
+        for anulado, saldo in ((False, "$ 28.655"), (True, "$ 41.000")):
+            Pago.objects.filter(pk=pago.pk).update(anulado=anulado)
+            for usuario, pagina in (
+                (self.e.residente, reverse("pagos:cobro_detalle", args=[cobro.pk])),
+                (self.e.administrador, reverse("pagos:cuenta_unidad", args=[cobro.unidad_id])),
+            ):
+                with self.subTest(usuario=usuario, anulado=anulado):
+                    self.client.force_login(usuario)
+                    self.assertContains(self.client.get(pagina), url)
+                    respuesta = self.client.get(url)
+                    self.assertEqual(respuesta["Content-Type"], "application/pdf")
+                    self.assertIn(f'attachment; filename="comprobante-pago-{pago.pk}.pdf"',
+                                  respuesta["Content-Disposition"])
+                    self.assertIn("no-store", respuesta["Cache-Control"])
+                    pdf = PdfReader(BytesIO(respuesta.content))
+                    texto = " ".join(" ".join(p.extract_text() for p in pdf.pages).split())
+                    for dato in (f"Pago N° {pago.pk}", "03-10-2026", "$ 12.345", "Transferencia",
+                                 str(cobro.periodo), saldo):
+                        self.assertIn(dato, texto)
+                    self.assertEqual("Anulado" in texto, anulado)
+
+    def test_comprobante_limita_unidad_periodo_condominio_y_rol(self):
+        cobro = self.cobro(self.oct, self.e.a101)
+        pago = Pago.objects.create(detalle=cobro, monto=2000)
+        url = reverse("pagos:comprobante_pago", args=[pago.pk])
+        self.assertEqual(self.client.get(url).status_code, 302)
+        Residente.objects.filter(usuario=self.e.residente).update(desde=datetime.date(2026, 11, 1))
+        for usuario, estado in ((self.e.residente, 404), (self.e.residente_b, 404),
+                                (self.e.residente_ajeno, 404), (self.e.comite, 403), (self.e.conserje, 403)):
+            self.client.force_login(usuario)
+            self.assertEqual(self.client.get(url).status_code, estado)
+        otro = self.e.ajeno
+        periodo = PeriodoGasto.objects.create(condominio=otro, anio=2026, mes=10, estado="EMITIDO")
+        ajeno = Pago.objects.create(detalle=self.cobro(periodo, self.e.unidad_ajena), monto=1000)
+        self.client.force_login(self.e.administrador)
+        self.assertEqual(self.client.get(reverse("pagos:comprobante_pago", args=[ajeno.pk])).status_code, 404)
+
+    def test_aviso_pdf_cuadra_con_abonos_y_protege_egresos(self):
+        self.cobro(self.sep, self.e.a101, monto=3000, fondo=0)
+        cobro = self.cobro(self.oct, self.e.a101, monto=48000, fondo=2000)
+        Pago.objects.create(detalle=cobro, monto=7010, fecha=datetime.date(2026, 10, 3))
+        Pago.objects.create(detalle=cobro, monto=100, anulado=True)
+        Egreso.objects.create(periodo=self.oct, categoria=Egreso.Categoria.REMUNERACIONES,
+                              descripcion="Nombre confidencial", monto=1000, creado_por=self.e.administrador)
+        url = reverse("pagos:aviso_cobro", args=[cobro.pk])
+        for usuario in (self.e.residente, self.e.administrador):
+            with self.subTest(usuario=usuario):
+                self.client.force_login(usuario)
+                respuesta = self.client.get(url)
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertTrue(respuesta["Content-Disposition"].startswith("attachment;"))
+                lector = PdfReader(BytesIO(respuesta.content))
+                texto = " ".join(" ".join(p.extract_text() for p in lector.pages).split())
+                for fragmento in ("$ 45.990", "$ 42.990", "$ 7.010", "$ 3.000",
+                                  "Remuneraciones del personal", "Documento de demostración"):
+                    self.assertIn(fragmento, texto)
+                self.assertNotIn("Nombre confidencial", texto)
+
+    def test_aviso_respeta_residencia_condominio_estado_y_rol(self):
+        propio = self.cobro(self.oct, self.e.a101)
+        ajeno = self.cobro(self.oct, self.e.b101)
+        antiguo = self.cobro(self.sep, self.e.a101)
+        abierto = self.cobro(self.nov, self.e.a101)
+        Residente.objects.filter(usuario=self.e.residente).update(desde=datetime.date(2026, 10, 1))
+        self.client.force_login(self.e.residente)
+        for cobro in (ajeno, antiguo, abierto):
+            self.assertEqual(self.client.get(reverse("pagos:aviso_cobro", args=[cobro.pk])).status_code, 404)
+        self.client.force_login(self.e.residente_ajeno)
+        self.assertEqual(self.client.get(reverse("pagos:aviso_cobro", args=[propio.pk])).status_code, 404)
+        self.client.force_login(self.e.comite)
+        self.assertEqual(self.client.get(reverse("pagos:aviso_cobro", args=[propio.pk])).status_code, 403)
 
     def test_residente_ve_solo_sus_cobros_emitidos(self):
         propio = self.cobro(self.oct, self.e.a101)
@@ -122,6 +203,145 @@ class EstadoCuentaTest(TestCase):
         self.assertContains(self.client.get(reverse("core:inicio")), "Mi cuenta")
         self.client.force_login(self.e.administrador)
         self.assertNotContains(self.client.get(reverse("core:inicio")), "Mi cuenta")
+
+
+class EgresosParaResidenteTest(TestCase):
+    """Issue #115 (RQ-09): el residente ve los egresos agrupados por categoría, sin sueldos ni descripciones libres."""
+
+    SUELDO = "Sueldo conserje (jornada completa)"
+    CLASE_FILA = 'class="list-group-item d-flex justify-content-between gap-3"'
+
+    def fila(self, nombre, subtotal):
+        """HTML de una fila de egresos tal como la pinta pagos/detalle.html."""
+        return f'<li {self.CLASE_FILA}><span>{nombre}</span><span class="text-nowrap">{subtotal}</span></li>'
+
+    def setUp(self):
+        self.e = crear_escenario()
+        self.periodo = PeriodoGasto.objects.create(
+            condominio=self.e.condominio, anio=2026, mes=10, estado=PeriodoGasto.Estado.EMITIDO
+        )
+        # Dos remuneraciones, dos egresos de aseo y uno de consumos: los sueldos deben sumarse en una línea.
+        for categoria, descripcion, monto in (
+            ("REMUNERACIONES", self.SUELDO, 650000),
+            ("REMUNERACIONES", "Sueldo personal de aseo", 520000),
+            ("ASEO", "Insumos de limpieza Casa Pérez", 80000),
+            ("ASEO", "Aseo de áreas comunes", 20000),
+            ("CONSUMOS", "Cuenta de luz octubre", 300000),
+        ):
+            Egreso.objects.create(
+                periodo=self.periodo, categoria=categoria, descripcion=descripcion, monto=monto,
+                creado_por=self.e.administrador,
+            )
+        self.cobro = DetalleGastoComun.objects.create(
+            periodo=self.periodo, unidad=self.e.a101, monto=40000, monto_fondo_reserva=2000
+        )
+        self.url = reverse("pagos:cobro_detalle", args=[self.cobro.pk])
+
+    def test_el_residente_no_ve_sueldos_ni_descripciones_libres(self):
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(self.url)
+        self.assertEqual(respuesta.status_code, 200)
+        prohibidos = (self.SUELDO, "Sueldo personal de aseo", "Casa Pérez", "Cuenta de luz octubre", "650.000")
+        for texto in prohibidos:
+            self.assertNotContains(respuesta, texto)
+
+    def test_el_residente_ve_las_remuneraciones_en_una_sola_linea(self):
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(self.url)
+        # Se afirma la fila completa (nombre + subtotal juntos), no textos sueltos que podrían estar en otra parte.
+        html = respuesta.content.decode()
+        self.assertInHTML(self.fila("Remuneraciones del personal", "$1.170.000"), html)  # 650.000 + 520.000
+        self.assertInHTML(self.fila("Aseo", "$100.000"), html)  # 80.000 + 20.000
+        self.assertContains(respuesta, "Remuneraciones del personal", count=1)
+        # Una fila por categoría (remuneraciones, consumos, aseo): ningún egreso suelto.
+        self.assertEqual(len(respuesta.context["egresos"]), 3)
+
+    def test_una_categoria_fuera_de_las_opciones_no_da_500(self):
+        """Un dato antiguo o cargado sin validar se muestra con su valor crudo en vez de romper la página."""
+        Egreso.objects.filter(periodo=self.periodo, categoria="OTROS").delete()
+        egreso = Egreso.objects.create(
+            periodo=self.periodo, categoria="OTROS", descripcion="Dato antiguo", monto=7000,
+            creado_por=self.e.administrador,
+        )
+        # update() salta la validación de choices, como un dato cargado por fuera del formulario.
+        Egreso.objects.filter(pk=egreso.pk).update(categoria="LEGADO")
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(self.url)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertInHTML(self.fila("LEGADO", "$7.000"), respuesta.content.decode())
+        self.assertNotContains(respuesta, "Dato antiguo")
+
+    def test_un_periodo_con_solo_remuneraciones_muestra_la_linea_agrupada(self):
+        """
+        Riesgo aceptado por el equipo (design.md «Riesgo conocido»): con un único egreso de remuneraciones,
+        la línea agrupada deja ver ese monto. Lo que nunca sale es la descripción libre del egreso.
+        """
+        solo = PeriodoGasto.objects.create(
+            condominio=self.e.condominio, anio=2026, mes=11, estado=PeriodoGasto.Estado.EMITIDO
+        )
+        Egreso.objects.create(
+            periodo=solo, categoria="REMUNERACIONES", descripcion="Sueldo de Juan Soto", monto=480000,
+            creado_por=self.e.administrador,
+        )
+        cobro = DetalleGastoComun.objects.create(periodo=solo, unidad=self.e.a101, monto=10000, monto_fondo_reserva=0)
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(reverse("pagos:cobro_detalle", args=[cobro.pk]))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertInHTML(self.fila("Remuneraciones del personal", "$480.000"), respuesta.content.decode())
+        self.assertEqual(len(respuesta.context["egresos"]), 1)
+        self.assertNotContains(respuesta, "Sueldo de Juan Soto")
+        self.assertEqual(respuesta.context["total_egresos"], 480000)
+
+    def test_los_subtotales_cuadran_con_el_total_del_periodo(self):
+        lineas = egresos_para_residente(self.periodo)
+        self.assertEqual(sum(linea["subtotal"] for linea in lineas), self.periodo.total_egresos())
+        self.assertEqual(
+            [(linea["categoria"], linea["subtotal"]) for linea in lineas],
+            [
+                ("Remuneraciones del personal", 1170000),
+                ("Consumos básicos (luz, agua, gas)", 300000),
+                ("Aseo", 100000),
+            ],
+        )
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(self.url)
+        self.assertEqual(respuesta.context["egresos"], lineas)
+        self.assertEqual(respuesta.context["total_egresos"], self.periodo.total_egresos())
+
+    def test_periodo_sin_egresos_da_lista_vacia(self):
+        vacio = PeriodoGasto.objects.create(condominio=self.e.condominio, anio=2026, mes=9)
+        self.assertEqual(egresos_para_residente(vacio), [])
+
+    def test_residente_de_otro_condominio_no_ve_el_cobro(self):
+        self.client.force_login(self.e.residente_ajeno)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_residente_de_otra_unidad_no_ve_el_cobro(self):
+        self.client.force_login(self.e.residente_b)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_respeta_el_filtro_de_residencia(self):
+        """#46: quien llegó después del período no ve el cobro ni sus egresos, aunque viva en la unidad."""
+        recien_llegado = crear_usuario("nuevo@prueba.cl")
+        Residente.objects.create(usuario=recien_llegado, unidad=self.e.a101, desde=datetime.date(2026, 11, 1))
+        self.client.force_login(recien_llegado)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_el_residente_no_entra_al_detalle_completo_de_gastos(self):
+        url = reverse("gastos:periodo_detalle", args=[self.periodo.pk])
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(url)
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertNotContains(respuesta, self.SUELDO, status_code=403)
+
+    def test_administrador_y_comite_conservan_el_detalle_completo(self):
+        url = reverse("gastos:periodo_detalle", args=[self.periodo.pk])
+        for usuario in (self.e.administrador, self.e.comite):
+            self.client.force_login(usuario)
+            respuesta = self.client.get(url)
+            self.assertEqual(respuesta.status_code, 200)
+            self.assertContains(respuesta, self.SUELDO)
+
 
 class RegistrarPagosTest(TestCase):
     """Issue #4 (RF04): el administrador registra pagos, totales o parciales, sin pagar de más."""

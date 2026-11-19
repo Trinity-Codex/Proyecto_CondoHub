@@ -14,11 +14,24 @@ from django.db import transaction
 
 from apps.auditoria.servicios import Accion, registrar
 
-from .models import Edificio, Membresia, Residente, Unidad
+from .models import Condominio, Edificio, Membresia, Residente, Unidad
 
 
 def datos_de(objeto):
-    """Diccionario con lo que se audita de un edificio, una unidad, un residente o una persona."""
+    """Diccionario con lo que se audita de un condominio, un edificio, una unidad, un residente o una persona."""
+    if isinstance(objeto, Condominio):
+        # De las imágenes basta un identificador corto (#116): el nombre del archivo es al azar,
+        # así que cambia con cada imagen nueva y el registro muestra que se reemplazó.
+        def imagen(archivo):
+            return f"imagen {archivo.name.rsplit('/', 1)[-1][:8]}" if archivo else "sin imagen"
+
+        return {
+            "nombre": objeto.nombre,
+            "direccion": objeto.direccion,
+            "comuna": objeto.comuna,
+            "logo": imagen(objeto.logo),
+            "portada": imagen(objeto.portada),
+        }
     if isinstance(objeto, Edificio):
         return {"nombre": objeto.nombre, "direccion": objeto.direccion}
     if isinstance(objeto, Unidad):

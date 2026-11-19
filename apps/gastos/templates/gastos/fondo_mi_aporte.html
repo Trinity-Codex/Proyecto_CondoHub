@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load condohub %}
+{% block titulo %}Mi aporte al fondo de reserva{% endblock %}
+{% block contenido %}
+<h1 class="h3 mb-3">Fondo de reserva</h1>
+<div class="row g-3 mb-3">
+  <div class="col-md-6"><div class="card tarjeta-indicador h-100"><div class="card-body">
+    <h2 class="h6">Saldo total del fondo del condominio</h2>
+    {% if aviso_apertura %}
+    <p class="mb-0">El saldo aún no está disponible: la administración debe configurar el saldo inicial del fondo.</p>
+    {% else %}
+    <p class="h3 fw-semibold mb-1">{{ saldo|pesos }}</p>
+    <p class="text-muted small mb-0">Saldo contable: incluye aportes emitidos aunque estén impagos.</p>
+    {% endif %}
+  </div></div></div>
+  <div class="col-md-6"><div class="card tarjeta-indicador h-100"><div class="card-body">
+    <h2 class="h6">Tu aporte acumulado</h2>
+    <p class="h3 fw-semibold mb-1">{{ total|pesos }}</p>
+    <p class="text-muted small mb-0">Solo los meses de tu período de residencia.</p>
+  </div></div></div>
+</div>
+{% for item in unidades %}
+<section class="card mb-3" aria-labelledby="titulo-unidad-{{ item.unidad.pk }}">
+  <div class="card-body pb-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <h2 class="h5 mb-2" id="titulo-unidad-{{ item.unidad.pk }}">{{ item.unidad.edificio.nombre }} · {{ item.unidad.numero }}</h2>
+  </div>
+  {% include "gastos/_aportes_unidad.html" with cobros=item.cobros total=item.total titulo_tabla="Tu aporte al fondo de reserva, mes a mes" %}
+</section>
+{% empty %}
+<div class="alert alert-info" role="status">No tienes unidades con residencia vigente en este condominio.</div>
+{% endfor %}
+<p class="text-muted small">Los ítems de cobro (cuotas extraordinarias, multas) no aportan al fondo de reserva.</p>
+{% endblock %}

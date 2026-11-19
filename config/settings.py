@@ -7,6 +7,7 @@ crea el suyo copiando ".env.example" (el ".env" NO se sube a GitHub porque
 contiene claves). Ver DOCUMENTACION.md, sección "Instalación".
 """
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -77,6 +78,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Propio: deja en request.condominio el condominio que el usuario está viendo.
     "apps.core.middleware.CondominioActivoMiddleware",
+    # Propio (#118): lleva al residente al aviso prioritario pendiente. Necesita request.condominio.
+    "apps.comunicados.middleware.AvisoPrioritarioMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -176,6 +179,26 @@ USE_TZ = True
 # ---------------------------------------------------------------------------
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+
+# ---------------------------------------------------------------------------
+# Archivos subidos por los usuarios (logo y portada del condominio, #116)
+# ---------------------------------------------------------------------------
+# Nunca se publican como estáticos: MEDIA_URL no tiene ruta en config/urls.py. Cada imagen se
+# entrega por una vista que revisa la sesión y el condominio (condominios:imagen), así un
+# archivo no se ve desde otro condominio ni sin iniciar sesión. Dónde viven en producción
+# (disco persistente o almacenamiento externo) se decide en #29; MEDIA_ROOT se puede cambiar
+# con la variable de entorno del mismo nombre.
+MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT") or BASE_DIR / "media")
+MEDIA_URL = "/media/"
+# Las pruebas (y cargar_demo dentro de ellas) escriben en una carpeta temporal que se borra
+# al terminar, no en la carpeta media/ del proyecto.
+if sys.argv[1:2] == ["test"]:
+    import atexit
+    import shutil
+    import tempfile
+
+    MEDIA_ROOT = Path(tempfile.mkdtemp(prefix="condohub-media-pruebas-"))
+    atexit.register(shutil.rmtree, MEDIA_ROOT, ignore_errors=True)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
