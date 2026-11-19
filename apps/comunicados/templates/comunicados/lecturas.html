@@ -15,7 +15,13 @@
   {{ comunicado.titulo }} · {% if comunicado.edificio %}Para {{ comunicado.edificio.nombre }}{% else %}Para todo el condominio{% endif %}
 </p>
 
-<p class="fs-5">Confirmaron <strong>{{ confirmaron|length }} de {{ total }}</strong> residentes.</p>
+<p class="fs-5 mb-1">Confirmaron <strong>{{ confirmaron|length }} de {{ total }}</strong> residentes{% if porcentaje_residentes is not None %} ({{ porcentaje_residentes }} %){% endif %}.</p>
+{% if porcentaje_unidades is not None %}<p class="text-muted">Por unidad: {{ porcentaje_unidades }} % de las unidades destinatarias tiene al menos un residente que lo leyó.</p>{% endif %}
+{% if total %}
+<div class="progress mb-4" role="progressbar" aria-label="Lectura por residente" aria-valuenow="{{ porcentaje_residentes }}" aria-valuemin="0" aria-valuemax="100" style="height: 0.75rem;">
+  <div class="progress-bar" style="width: {{ porcentaje_residentes }}%; background-color: var(--condohub-teal-texto, #0d7a7f);"></div>
+</div>
+{% endif %}
 
 <div class="row g-4">
   <section class="col-lg-6" aria-labelledby="titulo-faltan">

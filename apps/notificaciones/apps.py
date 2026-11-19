@@ -16,6 +16,7 @@ class NotificacionesConfig(AppConfig):
         Para un canal nuevo (ej. correo), basta con agregar otra línea aquí.
         """
         from apps.comunicados.models import Comunicado
+        from apps.comunicados.recordatorios import RecordatorioLectura
         from apps.gastos.models import PeriodoGasto
         from apps.incidentes.models import Incidente
         from apps.pagos.models import Pago
@@ -31,6 +32,7 @@ class NotificacionesConfig(AppConfig):
         Pago.suscribir(notificador)  # pago registrado (Issue #4)
         SolicitudTitular.suscribir(notificador)  # solicitudes de datos personales (Issue #51)
         Recordatorio.suscribir(notificador)  # recordatorios de pago (Issue #57)
+        RecordatorioLectura.suscribir(notificador)  # comunicados sin leer (Issue #120)
 
         # Canal nuevo: correo electrónico (Issue #14). Solo se agregan estas
         # líneas; comunicados, incidentes, gastos y pagos no se modifican.
@@ -41,3 +43,4 @@ class NotificacionesConfig(AppConfig):
         Pago.suscribir(correo)
         SolicitudTitular.suscribir(correo)
         Recordatorio.suscribir(correo)
+        RecordatorioLectura.suscribir(correo)

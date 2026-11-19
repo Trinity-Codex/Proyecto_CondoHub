@@ -16,4 +16,6 @@ urlpatterns = [
     path("aviso/", views.AvisoPrioritarioView.as_view(), name="aviso_prioritario"),
     path("<int:pk>/confirmar-aviso/", views.ConfirmarAvisoView.as_view(), name="confirmar_aviso"),
     path("<int:pk>/lecturas/", views.LecturasComunicadoView.as_view(), name="lecturas"),
+    # Seguimiento de lectura (#120)
+    path("ajustes/", views.AjustesComunicadosView.as_view(), name="ajustes"),
 ]

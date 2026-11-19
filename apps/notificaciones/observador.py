@@ -42,6 +42,7 @@ class Evento:
     mensaje: str                # detalle
     destinatarios: list = field(default_factory=list)  # usuarios a avisar
     url: str = ""               # enlace para ver el detalle en el sitio
+    asunto: str = ""            # asunto del correo; vacío = el título (#120: «Nuevo comunicado: <título>»)
 
 
 class Observador(ABC):
@@ -130,6 +131,8 @@ class NotificadorCorreo(Observador):
     def enviar(self, evento, usuarios):
         """Un correo por persona (con su nombre), todos por la misma conexión al servidor de correo."""
         enlace = f"{settings.SITIO_URL}{evento.url}" if evento.url else settings.SITIO_URL
+        # Una sola línea: un salto de línea en el asunto haría fallar el envío (BadHeaderError).
+        asunto = " ".join(f"[CondoHub] {evento.asunto or evento.titulo}".split())
         try:
             with get_connection() as conexion:
                 for usuario in usuarios:
@@ -143,7 +146,7 @@ class NotificadorCorreo(Observador):
                         },
                     )
                     send_mail(
-                        subject=f"[CondoHub] {evento.titulo}",
+                        subject=asunto,
                         message=cuerpo,
                         from_email=None,  # usa DEFAULT_FROM_EMAIL
                         recipient_list=[usuario.email],

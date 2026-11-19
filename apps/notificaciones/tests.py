@@ -144,7 +144,7 @@ class NotificadorCorreoTest(TestCase):
     def test_contenido_del_correo(self):
         comunicado = self.publicar_comunicado()
         correo = next(m for m in mail.outbox if m.to == ["residente@prueba.cl"])
-        self.assertEqual(correo.subject, "[CondoHub] Nuevo comunicado")
+        self.assertEqual(correo.subject, "[CondoHub] Nuevo comunicado: Corte de agua")  # #120: el asunto lleva el título
         self.assertIn("Hola residente:", correo.body)
         self.assertIn("Prueba", correo.body)  # nombre del condominio
         self.assertIn(f"https://condohub.test{comunicado.get_absolute_url()}", correo.body)  # enlace completo
