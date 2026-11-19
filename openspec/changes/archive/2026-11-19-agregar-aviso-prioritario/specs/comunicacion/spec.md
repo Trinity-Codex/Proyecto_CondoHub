@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Confirmación de lectura
-El sistema SHALL permitir que un residente al que va dirigido un comunicado lo marque como leído una sola vez, guardando la fecha y hora, y SHALL mostrar al administrador cuántas de las unidades destinatarias con residentes activos confirmaron la lectura. El conteo MUST ser por unidad: una unidad cuenta como confirmada si cualquiera de sus residentes activos marcó el comunicado. El sistema SHALL mostrar además al administrador y al comité qué residentes confirmaron, con fecha y hora, y cuáles no; un residente MUST ver solo su propio estado.
+El sistema SHALL permitir que un residente al que va dirigido un comunicado lo marque como leído una sola vez, con fecha y hora, y SHALL mostrar al administrador cuántas unidades destinatarias confirmaron; una unidad MUST contar si cualquiera de sus residentes activos lo marcó. Administrador y comité SHALL ver qué residentes confirmaron y cuándo; un residente MUST ver solo su propio estado.
 
 #### Scenario: El residente marca como leído
 - **WHEN** un residente abre un comunicado dirigido a él y pulsa «Marcar como leído»
