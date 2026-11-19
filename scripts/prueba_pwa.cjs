@@ -4,9 +4,9 @@ const assert = require("node:assert/strict");
 
 (async () => {
   const origen = new URL(process.argv[2] || "http://127.0.0.1:8000").origin;
-  const navegador = await chromium.launch({ executablePath: process.env.CHROMIUM_BIN || undefined });
+  // Un directorio vacío crea un perfil temporal normal que Playwright limpia al cerrar.
+  const contexto = await chromium.launchPersistentContext("", { executablePath: process.env.CHROMIUM_BIN || undefined });
   try {
-    const contexto = await navegador.newContext();
     // La prueba de la app local es independiente de la disponibilidad de sus CDN.
     await contexto.route(/^https:\/\//, ruta =>
       new URL(ruta.request().url()).origin === origen ? ruta.continue() : ruta.abort()
@@ -32,6 +32,6 @@ const assert = require("node:assert/strict");
     await pagina.locator('input[type=password]').waitFor();
     console.log("Chromium: instalación sin errores, navegación sin conexión y recuperación verificadas.");
   } finally {
-    await navegador.close();
+    await contexto.close();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });
