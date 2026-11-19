@@ -30,4 +30,7 @@ urlpatterns = [
     # Reporte de morosidad (Issue #5): los filtros van en la URL (?periodo=..&edificio=..)
     path("reporte/", views.ReporteView.as_view(), name="reporte"),
     path("reporte/csv/", views.ReporteCsvView.as_view(), name="reporte_csv"),
+    # Proyección anual (RQ-06, #121): los parámetros van en la URL (?anio=..&ipc=..&crecimiento=..)
+    path("proyeccion/", views.ProyeccionView.as_view(), name="proyeccion"),
+    path("proyeccion/csv/", views.ProyeccionCsvView.as_view(), name="proyeccion_csv"),
 ]
