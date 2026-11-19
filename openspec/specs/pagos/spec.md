@@ -7,7 +7,7 @@ Mostrar a cada residente lo que debe y registrar los pagos de cada cobro, totale
 ## Requirements
 
 ### Requirement: Estado de cuenta del residente
-El sistema SHALL mostrar en "Mi cuenta" los cobros de las unidades donde la persona es residente activa cuyo período se superpone con su residencia, con lo pagado y el saldo de cada uno, y el detalle de cada cobro. Un período se superpone si la residencia cubre al menos un día de ese mes. La deuda mostrada en el panel de inicio MUST seguir la misma regla.
+Mi cuenta SHALL mostrar los cobros y su detalle, con pagos y saldos, de las unidades donde la residencia activa cubra algún día del mes cobrado. El panel MUST aplicar ese filtro a la deuda. El detalle SHALL agrupar egresos por categoría con subtotales que sumen el total del período. Las remuneraciones SHALL figurar en una sola línea «Remuneraciones del personal». El detalle SHALL omitir descripciones libres, proveedores y fechas de boleta.
 
 #### Scenario: Residente al día
 - **WHEN** un residente cuyos cobros están todos pagados abre Mi cuenta
@@ -32,6 +32,22 @@ El sistema SHALL mostrar en "Mi cuenta" los cobros de las unidades donde la pers
 #### Scenario: Residente dado de baja
 - **WHEN** una persona dada de baja de una unidad, que sigue siendo residente activa de otra unidad, abre Mi cuenta
 - **THEN** ve solo los cobros de la unidad donde sigue activa
+
+#### Scenario: Egresos agrupados sin remuneraciones individuales
+- **WHEN** un residente abre el detalle de su cobro y el período tiene los sueldos «Sueldo conserje (jornada completa)» y «Sueldo personal de aseo»
+- **THEN** ve una sola línea «Remuneraciones del personal» con la suma de ambos, no ve ninguna descripción libre de los egresos y la suma de los subtotales es igual al total de egresos del período
+
+#### Scenario: Detalle completo solo para la administración
+- **WHEN** un residente pide por URL directa el detalle de un período en gastos
+- **THEN** el sistema responde 403, y el administrador y el comité reciben 200 con el detalle línea a línea
+
+#### Scenario: Categoría fuera de las opciones del modelo
+- **WHEN** un residente abre el detalle de un cobro cuyo período tiene un egreso con una categoría que no está entre las opciones del modelo
+- **THEN** el sistema responde 200 y muestra esa categoría con su valor crudo y su subtotal, sin la descripción del egreso
+
+#### Scenario: Período con un solo egreso de remuneraciones
+- **WHEN** un residente abre el detalle de un cobro cuyo período solo tiene un egreso de remuneraciones
+- **THEN** ve la línea «Remuneraciones del personal» con ese subtotal (riesgo aceptado, ver design.md) y no ve la descripción libre del egreso
 
 ### Requirement: Cobranza por unidad
 El sistema SHALL mostrar al administrador y al comité la deuda de cada unidad del condominio activo y la cuenta completa de cada unidad, sin limitarla por las fechas de residencia.
