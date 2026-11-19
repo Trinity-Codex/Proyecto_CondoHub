@@ -3,10 +3,69 @@ from django import forms
 from django.utils import timezone
 
 from apps.core.formularios import CampoFecha, FormularioBootstrap, ModeloFormularioBootstrap
+from apps.core.imagenes import TAMANO_MAXIMO, preparar_imagen
 from apps.cuentas.models import Usuario
 
 from .importacion import MAX_BYTES
-from .models import Edificio, Residente, Unidad
+from .models import Condominio, Edificio, Residente, Unidad
+
+# Logo: se reduce a 512 px por lado (se muestra a 56 px; sobra para pantallas de alta densidad).
+# Portada: 1920 px, el ancho de un monitor de escritorio.
+LADO_LOGO = 512
+LADO_PORTADA = 1920
+# Solo JPG y PNG (#116). El servidor lo vuelve a comprobar: `accept` solo filtra el selector.
+ACEPTA_IMAGEN = "image/jpeg,image/png,.jpg,.jpeg,.png"
+
+
+class CondominioDatosForm(ModeloFormularioBootstrap):
+    """
+    «Datos del condominio» (#116, RQ-01): nombre, dirección, comuna, logo y portada.
+    Las imágenes usan FileInput simple (no ClearableFileInput, que enlazaría a la URL pública
+    del archivo) y una casilla aparte para quitarlas. La vista guarda y borra los archivos viejos.
+    """
+
+    quitar_logo = forms.BooleanField(label="Quitar el logo actual", required=False)
+    quitar_portada = forms.BooleanField(label="Quitar la portada actual", required=False)
+
+    class Meta:
+        model = Condominio
+        fields = ["nombre", "direccion", "comuna", "logo", "portada"]
+        labels = {"nombre": "Nombre", "direccion": "Dirección", "comuna": "Comuna", "logo": "Logo", "portada": "Portada"}
+        widgets = {
+            "nombre": forms.TextInput(attrs={"placeholder": "Ej.: Condominio Vista Verde", "autocomplete": "organization"}),
+            "direccion": forms.TextInput(attrs={"placeholder": "Ej.: Av. Los Aromos 1234", "autocomplete": "street-address"}),
+            "comuna": forms.TextInput(attrs={"placeholder": "Ej.: Maipú"}),
+            "logo": forms.FileInput(attrs={"accept": ACEPTA_IMAGEN}),
+            "portada": forms.FileInput(attrs={"accept": ACEPTA_IMAGEN}),
+        }
+        help_texts = {
+            "nombre": "Se muestra en grande en todas las pantallas, para saber siempre en qué condominio se trabaja.",
+            "logo": f"Opcional. JPG o PNG de hasta {TAMANO_MAXIMO // (1024 * 1024)} MB; idealmente cuadrado. "
+                    "Se ve junto al nombre del condominio.",
+            "portada": f"Opcional. JPG o PNG de hasta {TAMANO_MAXIMO // (1024 * 1024)} MB; idealmente apaisada "
+                       "(por ejemplo, 1600 × 400). Se ve en el panel de inicio.",
+        }
+
+    def clean_nombre(self):
+        nombre = self.cleaned_data["nombre"].strip()
+        if not nombre:
+            raise forms.ValidationError("Escriba el nombre del condominio.")
+        return nombre
+
+    def clean_logo(self):
+        return preparar_imagen(self.cleaned_data.get("logo"), lado_maximo=LADO_LOGO)
+
+    def clean_portada(self):
+        return preparar_imagen(self.cleaned_data.get("portada"), lado_maximo=LADO_PORTADA)
+
+    def clean(self):
+        datos = super().clean()
+        for campo in ("logo", "portada"):
+            # False = vaciar el campo (así lo entiende FileField.save_form_data). Si además se
+            # subió una imagen nueva, gana la nueva: «Quitar» solo aplica sin subida.
+            if datos.get(f"quitar_{campo}") and campo not in self.files:
+                datos[campo] = False
+        return datos
 
 
 class EdificioForm(ModeloFormularioBootstrap):
