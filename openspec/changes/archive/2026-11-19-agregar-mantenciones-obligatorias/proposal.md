@@ -23,7 +23,6 @@ que sean obligaciones legales.
 
 - **Alertas** de vencimiento (notificación con el patrón Observer, comando de gestión idempotente y tarjeta en el panel de inicio).
 - **Certificados** de mantención (JPG, PNG o PDF, máximo 5 MB): dependen de #116 (`apps/core/imagenes.py` y `MEDIA`), que aún no está unido.
-- Las rutas de escritura en `apps/core/middleware_demo.py` (demo de Render, #111): ese archivo está en otro PR sin unir.
 
 ## Capabilities
 

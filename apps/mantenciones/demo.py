@@ -5,8 +5,7 @@ Las fechas salen de la fecha de referencia de la demo ("fecha_referencia_demo"; 
 una mantención vencida, una por vencer y una al día, sin importar cuándo se cargue. Son ejemplos: no se afirma que
 sean obligaciones legales ni que esas sean sus frecuencias; eso lo define cada condominio.
 
-OJO: para que `cargar_demo` la llame hay que agregar "mantenciones" a APPS_DEMO en
-apps/core/management/commands/cargar_demo.py (pendiente, ver tasks.md del cambio).
+`cargar_demo` la llama porque "mantenciones" está en APPS_DEMO (apps/core/management/commands/cargar_demo.py).
 """
 from datetime import timedelta
 
