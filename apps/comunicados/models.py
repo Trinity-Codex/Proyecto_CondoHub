@@ -10,6 +10,13 @@ Vigencia y lectura (Issue #58, RF13):
     de la lista principal y del panel de inicio (sigue en "Ver vencidos").
   - LecturaComunicado: el residente lo marca como leído. El administrador ve el conteo
     POR UNIDAD (confirmaciones()): una unidad confirma si cualquiera de sus residentes leyó.
+
+Aviso prioritario (Issue #118, RQ-03):
+  - prioritario: el administrador lo marca al publicar y debe poner «Visible hasta».
+  - Mientras esté vigente y el residente no lo haya confirmado, AvisoPrioritarioMiddleware
+    (middleware.py) lo lleva a la pantalla del aviso en cada página. Confirmar crea la misma
+    LecturaComunicado de #58, con su fecha y hora.
+  - lecturas_por_residente(): quién confirmó y quién no, por PERSONA (administrador y comité).
 """
 from django.conf import settings
 from django.db import models, transaction
@@ -43,6 +50,19 @@ class ComunicadoQuerySet(models.QuerySet):
         """Con la fecha "Visible hasta" ya pasada."""
         return self.filter(vigente_hasta__lt=hoy)
 
+    def avisos_pendientes(self, usuario, condominio, hoy):
+        """
+        Avisos prioritarios vigentes dirigidos al residente que aún no confirmó (#118), del más
+        antiguo al más nuevo: se muestran de a uno, en orden de publicación.
+        """
+        return (
+            self.visibles_para(usuario, condominio, ve_todos=False)
+            .vigentes(hoy)
+            .filter(prioritario=True)
+            .exclude(lecturas__usuario=usuario)
+            .order_by("fecha_publicacion", "pk")
+        )
+
 
 class Comunicado(Sujeto, models.Model):
     class Tipo(models.TextChoices):
@@ -59,6 +79,8 @@ class Comunicado(Sujeto, models.Model):
         "condominios.Edificio", on_delete=models.CASCADE, null=True, blank=True, related_name="comunicados"
     )
     fijado = models.BooleanField(default=False, help_text="Los fijados aparecen primero.")
+    # Issue #118: bloquea la navegación del residente hasta que confirme la lectura.
+    prioritario = models.BooleanField("aviso prioritario", default=False, db_default=False)
     # Issue #58: el día indicado todavía se ve; desde el siguiente está vencido.
     vigente_hasta = models.DateField("visible hasta", null=True, blank=True)
     fecha_publicacion = models.DateTimeField("fecha de publicación", auto_now_add=True)
@@ -100,6 +122,27 @@ class Comunicado(Sujeto, models.Model):
             .select_related("edificio")
         )
         return confirmadas, destinatarias
+
+    def residentes_destinatarios(self):
+        """Residentes activos a los que va el comunicado (sin el comité): base de la lectura por persona."""
+        residentes = Residente.objects.filter(activo=True, unidad__edificio__condominio=self.condominio)
+        if self.tipo == self.Tipo.POR_EDIFICIO and self.edificio_id:
+            residentes = residentes.filter(unidad__edificio=self.edificio)
+        return residentes
+
+    def lecturas_por_residente(self):
+        """
+        Lista de (usuario, unidades, fecha_de_lectura o None), una fila por persona, ordenada
+        por edificio y unidad (#118). Solo para el administrador y el comité: es un dato personal.
+        """
+        lecturas = dict(self.lecturas.values_list("usuario_id", "leido"))
+        filas = {}
+        for r in self.residentes_destinatarios().select_related("usuario", "unidad__edificio").order_by(
+            "unidad__edificio__nombre", "unidad__piso", "unidad__numero"
+        ):
+            usuario, unidades, _ = filas.setdefault(r.usuario_id, (r.usuario, [], lecturas.get(r.usuario_id)))
+            unidades.append(r.unidad)
+        return list(filas.values())
 
     def destinatarios(self):
         """Usuarios que deben recibir el comunicado: residentes del condominio o del edificio."""

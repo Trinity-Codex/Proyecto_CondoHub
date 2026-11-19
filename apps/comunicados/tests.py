@@ -221,3 +221,180 @@ class LecturaTest(TestCase):
         self.client.force_login(self.e.residente)
         self.assertEqual(self.client.get(reverse("comunicados:marcar_leido", args=[self.general.pk])).status_code, 405)
         self.assertFalse(LecturaComunicado.objects.exists())
+
+
+# ---------------------------------------------------------------------------
+# Aviso prioritario (#118, RQ-03)
+# ---------------------------------------------------------------------------
+from unittest import mock  # noqa: E402
+
+from apps.condominios.models import Membresia  # noqa: E402
+from apps.core.middleware_demo import es_escritura_bloqueada  # noqa: E402
+
+
+class AvisoPrioritarioTest(TestCase):
+    def setUp(self):
+        self.e = crear_escenario()
+        self.hoy = timezone.localdate()
+        self.url_aviso = reverse("comunicados:aviso_prioritario")
+
+    def aviso(self, titulo="Simulacro", condominio=None, **campos):
+        datos = {"prioritario": True, "vigente_hasta": self.hoy + timedelta(days=3), **campos}
+        aviso = Comunicado(condominio=condominio or self.e.condominio, autor=self.e.administrador,
+                           titulo=titulo, contenido="Detalle del aviso", **datos)
+        aviso.publicar()
+        return aviso
+
+    def confirmar(self, aviso):
+        return self.client.post(reverse("comunicados:confirmar_aviso", args=[aviso.pk]))
+
+    def assertBloqueado(self, ruta):
+        self.assertRedirects(self.client.get(ruta), self.url_aviso, fetch_redirect_response=False)
+
+    # Bloqueo -------------------------------------------------------------------
+    def test_bloquea_cualquier_pagina_hasta_confirmar(self):
+        aviso = self.aviso()
+        self.client.force_login(self.e.residente)
+        for ruta in (reverse("core:inicio"), reverse("reservas:espacios"), reverse("comunicados:lista"),
+                     reverse("cuentas:perfil"), "/reservas/espacios/999/"):
+            with self.subTest(ruta=ruta):
+                self.assertBloqueado(ruta)
+        pantalla = self.client.get(self.url_aviso)
+        self.assertContains(pantalla, "Simulacro")
+        self.assertContains(pantalla, 'role="alertdialog"')
+        self.assertContains(pantalla, "He leído este aviso")
+        # Un POST a otra ruta tampoco pasa.
+        self.assertRedirects(self.client.post(reverse("reservas:nueva")), self.url_aviso, fetch_redirect_response=False)
+
+        antes = timezone.now()
+        self.confirmar(aviso)
+        lectura = LecturaComunicado.objects.get(comunicado=aviso, usuario=self.e.residente)
+        self.assertGreaterEqual(lectura.leido, antes)
+        self.assertEqual(self.client.get(reverse("core:inicio")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("comunicados:lista")).status_code, 200)
+
+    def test_al_confirmar_vuelve_a_la_pagina_pedida(self):
+        aviso = self.aviso()
+        self.client.force_login(self.e.residente)
+        self.client.get(reverse("reservas:espacios") + "?x=1")
+        self.assertRedirects(self.confirmar(aviso), self.url_aviso, fetch_redirect_response=False)
+        self.assertRedirects(self.client.get(self.url_aviso), reverse("reservas:espacios") + "?x=1",
+                             fetch_redirect_response=False)
+
+    def test_no_sigue_un_destino_externo(self):
+        aviso = self.aviso()
+        self.client.force_login(self.e.residente)
+        self.confirmar(aviso)
+        sesion = self.client.session
+        sesion["aviso_prioritario_siguiente"] = "https://otro-sitio.example/robar"
+        sesion.save()
+        self.assertRedirects(self.client.get(self.url_aviso), reverse("core:inicio"), fetch_redirect_response=False)
+
+    def test_varios_avisos_de_a_uno_por_orden_de_publicacion(self):
+        primero, segundo = self.aviso("Primero"), self.aviso("Segundo")
+        self.client.force_login(self.e.residente)
+        pantalla = self.client.get(self.url_aviso)
+        self.assertContains(pantalla, "Primero")
+        self.assertNotContains(pantalla, "Segundo")
+        self.assertContains(pantalla, "1 de 2")
+        self.confirmar(primero)
+        self.assertContains(self.client.get(self.url_aviso), "Segundo")
+        self.confirmar(segundo)
+        self.assertEqual(self.client.get(reverse("core:inicio")).status_code, 200)
+
+    def test_vencido_o_normal_no_bloquea(self):
+        self.aviso("Vencido", vigente_hasta=self.hoy - timedelta(days=1))
+        Comunicado(condominio=self.e.condominio, autor=self.e.administrador, titulo="Normal",
+                   contenido="x", vigente_hasta=self.hoy + timedelta(days=3)).publicar()
+        self.client.force_login(self.e.residente)
+        self.assertEqual(self.client.get(reverse("core:inicio")).status_code, 200)
+        self.assertRedirects(self.client.get(self.url_aviso), reverse("core:inicio"), fetch_redirect_response=False)
+
+    def test_solo_bloquea_al_rol_residente(self):
+        self.aviso()
+        # El comité de prueba también vive en el condominio: tiene un rol de administración, no se bloquea.
+        Residente.objects.create(usuario=self.e.comite, unidad=self.e.a102, desde=self.hoy)
+        for persona in (self.e.administrador, self.e.comite, self.e.conserje):
+            with self.subTest(persona=persona.email):
+                self.client.force_login(persona)
+                self.assertEqual(self.client.get(reverse("core:inicio")).status_code, 200)
+                # Sin rol de residente, 403; el comité que además vive ahí vuelve al inicio sin ver el aviso.
+                self.assertIn(self.client.get(self.url_aviso).status_code, (302, 403))
+
+    def test_aviso_de_un_edificio_solo_bloquea_a_sus_residentes(self):
+        self.aviso(tipo=Comunicado.Tipo.POR_EDIFICIO, edificio=self.e.torre_b)
+        self.client.force_login(self.e.residente)  # Torre A
+        self.assertEqual(self.client.get(reverse("core:inicio")).status_code, 200)
+        self.client.force_login(self.e.residente_b)  # Torre B
+        self.assertBloqueado(reverse("core:inicio"))
+
+    def test_cerrar_sesion_funciona_siempre(self):
+        self.aviso()
+        self.client.force_login(self.e.residente)
+        self.client.post(reverse("cuentas:cerrar_sesion"))
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_aislamiento_entre_condominios(self):
+        aviso = self.aviso()
+        self.client.force_login(self.e.residente_ajeno)
+        self.assertEqual(self.client.get(reverse("core:inicio")).status_code, 200)
+        self.assertEqual(self.confirmar(aviso).status_code, 404)
+        self.assertFalse(LecturaComunicado.objects.filter(usuario=self.e.residente_ajeno).exists())
+        # Un comunicado normal no se confirma por la ruta del aviso.
+        normal = Comunicado(condominio=self.e.condominio, autor=self.e.administrador, titulo="N", contenido="x")
+        normal.publicar()
+        self.client.force_login(self.e.residente)
+        self.assertEqual(self.confirmar(normal).status_code, 404)
+
+    def test_falla_abierta(self):
+        self.aviso()
+        self.client.force_login(self.e.residente)
+        with mock.patch("apps.comunicados.middleware.aviso_pendiente", side_effect=RuntimeError("caída")), \
+                self.assertLogs("apps.comunicados.middleware", "ERROR"):
+            self.assertEqual(self.client.get(reverse("core:inicio")).status_code, 200)
+
+    # Lectura por residente ------------------------------------------------------
+    def test_administrador_y_comite_ven_quien_leyo_con_fecha_y_hora(self):
+        aviso = self.aviso()
+        self.client.force_login(self.e.residente)
+        self.confirmar(aviso)
+        url = reverse("comunicados:lecturas", args=[aviso.pk])
+        for persona in (self.e.administrador, self.e.comite):
+            with self.subTest(persona=persona.email):
+                self.client.force_login(persona)
+                respuesta = self.client.get(url)
+                self.assertContains(respuesta, "Confirmaron <strong>1 de 2</strong>", html=False)
+                filas = dict((u.email, (unidades, leido)) for u, unidades, leido in respuesta.context["confirmaron"])
+                self.assertIn(self.e.residente.email, filas)
+                self.assertEqual([u.email for u, *_ in respuesta.context["faltan"]], [self.e.residente_b.email])
+                self.assertContains(respuesta, timezone.localtime(filas[self.e.residente.email][1]).strftime("%d-%m-%Y %H:%M"))
+
+    def test_el_residente_nunca_ve_la_lectura_de_otros(self):
+        aviso = self.aviso()
+        url = reverse("comunicados:lecturas", args=[aviso.pk])
+        for persona in (self.e.residente, self.e.conserje):
+            with self.subTest(persona=persona.email):
+                self.client.force_login(persona)
+                if persona == self.e.residente:
+                    self.confirmar(aviso)
+                self.assertEqual(self.client.get(url).status_code, 403)
+        # Desde otro condominio, 404.
+        ajeno = Membresia.objects.create(usuario=crear_usuario("admin.ajeno@prueba.cl"), condominio=self.e.ajeno,
+                                         rol=Membresia.Rol.ADMINISTRADOR).usuario
+        self.client.force_login(ajeno)
+        self.assertEqual(self.client.get(url).status_code, 404)
+
+    # Formulario y demo ----------------------------------------------------------
+    def test_prioritario_exige_visible_hasta(self):
+        self.client.force_login(self.e.administrador)
+        datos = {"titulo": "Urgente", "contenido": "x", "tipo": Comunicado.Tipo.GENERAL, "prioritario": "on"}
+        respuesta = self.client.post(reverse("comunicados:nuevo"), datos)
+        self.assertContains(respuesta, "Un aviso prioritario necesita la fecha")
+        self.assertFalse(Comunicado.objects.exists())
+        datos["vigente_hasta"] = (self.hoy + timedelta(days=2)).isoformat()
+        self.client.post(reverse("comunicados:nuevo"), datos)
+        self.assertTrue(Comunicado.objects.get().prioritario)
+
+    def test_la_demo_de_solo_lectura_permite_confirmar(self):
+        self.assertFalse(es_escritura_bloqueada("POST", "comunicados:confirmar_aviso"))
+        self.assertTrue(es_escritura_bloqueada("POST", "comunicados:marcar_leido"))

@@ -27,6 +27,7 @@
         <a href="{{ c.get_absolute_url }}" class="text-decoration-none">{{ c.titulo }}</a>
       </h2>
       <span class="d-flex flex-wrap gap-1 align-self-start">
+        {% if c.prioritario %}<span class="insignia insignia-moroso">Prioritario</span>{% endif %}
         {% if ver_vencidos %}<span class="insignia">Vencido</span>{% endif %}
         <span class="badge {% if c.edificio %}insignia-edificio{% else %}text-bg-secondary{% endif %}">
           {% if c.edificio %}{{ c.edificio.nombre }}{% else %}General{% endif %}

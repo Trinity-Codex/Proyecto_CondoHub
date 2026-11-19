@@ -77,6 +77,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Propio: deja en request.condominio el condominio que el usuario está viendo.
     "apps.core.middleware.CondominioActivoMiddleware",
+    # Propio (#118): lleva al residente al aviso prioritario pendiente. Necesita request.condominio.
+    "apps.comunicados.middleware.AvisoPrioritarioMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
