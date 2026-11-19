@@ -9,6 +9,8 @@
     <a class="btn btn-outline-primary" href="{% url 'gastos:fondo' %}">Fondo de reserva</a>
     {# Reporte de morosidad (Issue #5): administrador y comité #}
     <a class="btn btn-outline-primary" href="{% url 'gastos:reporte' %}"><i class="bi bi-graph-up"></i> Reporte de morosidad</a>
+    {# Proyección anual (RQ-06, #121): administrador y comité #}
+    <a class="btn btn-outline-primary" href="{% url 'gastos:proyeccion' %}"><i class="bi bi-calendar-range"></i> Proyección anual</a>
     {% if es_admin %}
     <a class="btn btn-primary" href="{% url 'gastos:periodo_nuevo' %}"><i class="bi bi-plus-lg"></i> Abrir período</a>
     {% endif %}

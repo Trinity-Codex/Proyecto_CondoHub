@@ -22,6 +22,9 @@ Evolución del fondo de reserva (RQ-05, #119, solo lectura; el cálculo está en
   - mes a mes, por edificio, unidad y residente: administrador y comité
   - desglose de una unidad: administrador y comité (cualquiera); residente, solo la suya (403)
   - «Mi aporte al fondo»: el residente ve el saldo total y solo el aporte de sus unidades
+
+Proyección anual (RQ-06, #121, administrador y comité, solo lectura): ProyeccionView y su CSV.
+El cálculo y sus supuestos están en proyeccion.py.
 """
 from collections import Counter
 
@@ -40,10 +43,11 @@ from apps.core.permisos import ADMINISTRADOR, COMITE, RESIDENTE, CondominioQuery
 from apps.core.templatetags.condohub import pesos
 
 from .filtros import COLOR_SITUACION, SITUACIONES, ordenar_por_urgencia
-from .forms import EgresoForm, FiltroReporteForm, ItemCobroForm, MovimientoFondoForm, PeriodoForm
+from .forms import EgresoForm, FiltroReporteForm, ItemCobroForm, MovimientoFondoForm, PeriodoForm, ProyeccionForm
 from .models import Egreso, ItemCobro, MovimientoFondo, PeriodoGasto
 from . import evolucion
 from .fondo import registrar_movimiento, saldo_fondo
+from .proyeccion import proyectar
 from .reportes import generar_reporte
 from .servicios import calcular_emision, eliminar_item, emitir_periodo, guardar_item
 
@@ -645,3 +649,61 @@ class MiAporteFondoView(RolRequeridoMixin, TemplateView):
             unidades.append({"unidad": unidad, "cobros": cobros, "total": sum(c.monto_fondo_reserva for c in cobros)})
         contexto.update(unidades=unidades, total=sum(u["total"] for u in unidades))
         return contexto
+
+
+# --------------------------------------------------------------------------
+# Proyección anual (RQ-06, #121): solo lectura, administrador y comité
+# --------------------------------------------------------------------------
+class ProyeccionMixin(RolRequeridoMixin):
+    """
+    Lee los parámetros de la URL (?anio=..&ipc=..&crecimiento=..) y calcula la proyección del
+    condominio activo con proyeccion.proyectar(): la pantalla y el CSV usan el mismo cálculo.
+    """
+
+    roles_permitidos = [ADMINISTRADOR, COMITE]
+
+    def preparar_proyeccion(self):
+        """Deja en self: form, proyeccion (None si los parámetros no son válidos) y la consulta."""
+        datos = self.request.GET.copy()  # copy(): request.GET no se puede modificar
+        if not datos.get("anio"):
+            datos["anio"] = str(timezone.localdate().year)  # sin año elegido: el año en curso
+        self.form = ProyeccionForm(datos)
+        self.proyeccion = None
+        if self.form.is_valid():
+            d = self.form.cleaned_data
+            self.proyeccion = proyectar(self.request.condominio, d["anio"], d["ipc"], d["crecimiento"])
+        self.consulta = datos.urlencode()
+
+
+class ProyeccionView(ProyeccionMixin, TemplateView):
+    template_name = "gastos/proyeccion.html"
+
+    def get_context_data(self, **kwargs):
+        self.preparar_proyeccion()
+        contexto = super().get_context_data(**kwargs)
+        contexto.update(form=self.form, proyeccion=self.proyeccion, consulta=self.consulta)
+        return contexto
+
+
+class ProyeccionCsvView(ProyeccionMixin, View):
+    """Mismos números que la pantalla: una fila por mes y unidad, el total de cada mes y los supuestos."""
+
+    def get(self, request, *args, **kwargs):
+        self.preparar_proyeccion()
+        p = self.proyeccion
+        if p is None or not p.meses:
+            messages.error(request, "Revisa los parámetros: con ellos no hay proyección que descargar.")
+            return redirect(f"{reverse('gastos:proyeccion')}?{self.consulta}")
+        encabezados = ["Mes", "Edificio", "Unidad", f"Base {p.anio_base}", "Base estimada",
+                       "Egresos proyectados", "Fondo de reserva", "Total"]
+        filas = []
+        for mes in p.meses:
+            nombre = f"{mes.nombre} {p.anio}"
+            for unidad, (egresos, fondo) in zip(p.unidades, mes.por_unidad):
+                filas.append([nombre, unidad.edificio.nombre, unidad.numero, "", "", egresos, fondo, egresos + fondo])
+            filas.append([nombre, "Total del mes", "", mes.base, "Sí" if mes.estimado else "No",
+                          mes.egresos, mes.fondo, mes.total])
+        filas.append([f"Total {p.anio}", "", "", p.total_base, "", p.total_egresos, p.total_fondo, p.total])
+        filas.append([])
+        filas += [[texto, valor] for texto, valor in p.supuestos]
+        return respuesta_csv(f"proyeccion-{p.anio}.csv", encabezados, filas)
