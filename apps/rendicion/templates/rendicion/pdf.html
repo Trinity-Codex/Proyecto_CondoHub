@@ -1,0 +1,4 @@
+{% extends "core/pdf/base.html" %}
+{% block titulo %}Rendición de {{ periodo }}{% endblock %}
+{% block encabezado %}Rendición de {{ periodo }}{% endblock %}
+{% block contenido %}{% include "rendicion/_informe.html" %}{% endblock %}

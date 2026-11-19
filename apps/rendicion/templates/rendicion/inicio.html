@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block titulo %}Rendición mensual{% endblock %}
+{% block contenido %}
+<h1 class="h3">Rendición mensual</h1>
+<ul class="list-group">{% for periodo in periodos %}<li class="list-group-item"><a href="{% url 'rendicion:detalle' periodo.pk %}">{{ periodo }}</a></li>{% empty %}<li class="list-group-item">Aún no hay períodos emitidos.</li>{% endfor %}</ul>
+{% endblock %}

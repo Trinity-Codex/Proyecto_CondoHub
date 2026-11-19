@@ -1,0 +1,4 @@
+- [x] Listar períodos emitidos y habilitar la consulta y el PDF para administrador y comité.
+- [x] Reutilizar el reporte de morosidad, el cálculo de caja y el libro del fondo.
+- [x] Agregar el saldo del fondo al aviso y distinguir histórico desconocido de saldo cero.
+- [x] Comprobar permisos, aislamiento, importes y contenido del PDF.

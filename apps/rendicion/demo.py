@@ -1,10 +1,5 @@
-"""
-Datos demo de rendicion (Issue #62, cargar_demo por app).
-
-Por ahora vacío: los datos llegan con el Issue #55. Usa lo que dejaron las apps
-anteriores en "datos" (ver apps/core/management/commands/cargar_demo.py).
-"""
+"""La rendición consulta los períodos, pagos, proveedores y movimientos de la demo."""
 
 
 def cargar(datos):
-    """Sin datos demo todavía (ver el comentario del módulo)."""
+    """Los módulos de origen ya cargaron los registros que se rinden."""

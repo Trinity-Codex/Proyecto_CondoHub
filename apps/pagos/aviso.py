@@ -1,35 +1,16 @@
 """Aviso de cobro por unidad y período (RF03, #6)."""
-from datetime import date
 
-from django.db.models import Q, Sum
+from django.db.models import Q
 from django.utils.cache import add_never_cache_headers
 from django.utils.http import content_disposition_header
 from django.views.generic import DetailView
 
 from apps.core.pdf import renderizar_pdf
 from apps.core.permisos import ADMINISTRADOR, RESIDENTE, CondominioQuerysetMixin, RolRequeridoMixin
-from apps.gastos.models import DetalleGastoComun, Egreso, PeriodoGasto, primer_dia_mes_siguiente
+from apps.gastos.models import DetalleGastoComun, PeriodoGasto
 
 from .consultas import cobros_del_residente, egresos_para_residente, pagado_del_cobro, saldo_del_cobro, total_adeudado
-from .models import Pago
-
-
-def caja_del_mes(periodo):
-    """Caja registrada por fecha del movimiento, incluso si se abona un cobro antiguo."""
-    inicio = date(periodo.anio, periodo.mes, 1)
-    fin = primer_dia_mes_siguiente(periodo.anio, periodo.mes)
-    ingresos = Pago.objects.vigentes().filter(detalle__periodo__condominio=periodo.condominio)
-    egresos = Egreso.objects.filter(periodo__condominio=periodo.condominio)
-
-    def movimientos(consulta):
-        return consulta.filter(fecha__lt=fin).aggregate(
-            mes=Sum("monto", filter=Q(fecha__gte=inicio), default=0),
-            acumulado=Sum("monto", default=0),
-        )
-
-    entradas, salidas = movimientos(ingresos), movimientos(egresos)
-    return {"ingresos": entradas["mes"], "egresos": salidas["mes"],
-            "saldo": entradas["acumulado"] - salidas["acumulado"]}
+from apps.rendicion.consultas import caja_del_mes, saldo_fondo_del_periodo
 
 
 class AvisoCobroView(RolRequeridoMixin, CondominioQuerysetMixin, DetailView):
@@ -57,6 +38,7 @@ class AvisoCobroView(RolRequeridoMixin, CondominioQuerysetMixin, DetailView):
         respuesta = renderizar_pdf("pagos/pdf/aviso.html", {
             "cobro": cobro, "periodo": periodo, "egresos": egresos_para_residente(periodo),
             "anterior": anterior, "pagado": pagado_del_cobro(cobro), "saldo": saldo,
+            "saldo_fondo": saldo_fondo_del_periodo(periodo),
             "total": anterior + saldo, "caja": caja_del_mes(periodo),
         }, nombre)
         respuesta["Content-Disposition"] = content_disposition_header(True, nombre)
