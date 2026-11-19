@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
-  <link href="{% static 'css/condohub.css' %}?v=20261119" rel="stylesheet">
+  <link href="{% static 'css/condohub.css' %}?v=20261119b" rel="stylesheet">
   {# PWA: permite "instalar" el sitio en el celular como una app (RNF03). #}
   <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
   <link rel="icon" href="{% static 'img/favicon.ico' %}" sizes="48x48">
@@ -101,8 +101,10 @@
           </a>
           <ul class="dropdown-menu">
             <li><h6 class="dropdown-header">Comunidad</h6></li>
-            <li><a class="dropdown-item {% if seccion == 'condominios' %}active{% endif %}" href="{% url 'condominios:unidades' %}"><i class="bi bi-buildings"></i> Unidades</a></li>
+            <li><a class="dropdown-item {% if seccion == 'condominios' and vista != 'datos' %}active{% endif %}" href="{% url 'condominios:unidades' %}"><i class="bi bi-buildings"></i> Unidades</a></li>
             {% if es_admin %}
+            {# RQ-01 (#116): nombre, dirección, logo y portada del condominio #}
+            <li><a class="dropdown-item {% if seccion == 'condominios' and vista == 'datos' %}active{% endif %}" href="{% url 'condominios:datos' %}"><i class="bi bi-building-gear"></i> Datos del condominio</a></li>
             <li><a class="dropdown-item {% if seccion == 'cuentas' and 'usuario' in vista %}active{% endif %}" href="{% url 'cuentas:usuarios' %}"><i class="bi bi-people"></i> Usuarios</a></li>
             {% endif %}
             <li><hr class="dropdown-divider"></li>
@@ -150,9 +152,8 @@
             {% endfor %}
           </ul>
         </li>
-        {% elif condominio_activo %}
-        <li class="nav-item"><span class="navbar-text me-lg-3"><i class="bi bi-building"></i> {{ condominio_activo.nombre }}</span></li>
         {% endif %}
+        {# Con un solo condominio no hay selector: el nombre ya está en grande en el encabezado (#116). #}
 
         {% comment %}
           Campana de notificaciones (RF10). Se ve distinta según el tamaño de pantalla:
@@ -207,6 +208,29 @@
     </div>
   </div>
 </nav>
+
+{% comment %}
+  Encabezado del condominio (#116, RQ-01): nombre en grande y logo en todas las pantallas, para
+  saber siempre en qué condominio se trabaja. La portada se ve solo en el panel de inicio, con
+  un velo oscuro para que el texto blanco cumpla contraste AA sobre cualquier foto.
+  Las imágenes pasan por condominios:imagen (revisa sesión y condominio); el logo es decorativo
+  (alt vacío) porque el nombre está escrito al lado. El administrador edita todo desde
+  Administración → Datos del condominio.
+{% endcomment %}
+{% if condominio_activo %}
+{% with portada=condominio_activo.url_portada en_panel=request.resolver_match.view_name %}
+<header class="encabezado-condominio{% if portada and en_panel == 'core:inicio' %} con-portada{% endif %}"
+        {% if portada and en_panel == 'core:inicio' %}style="--portada: url('{{ portada }}')"{% endif %}>
+  <div class="container d-flex align-items-center gap-3">
+    {% if condominio_activo.logo %}
+    <img src="{{ condominio_activo.url_logo }}" alt="" class="encabezado-logo" width="56" height="56">
+    {% endif %}
+    {# Solo el nombre: la dirección es un dato del condominio que no debe aparecer en todas las páginas (ej. el aviso de privacidad). #}
+    <p class="encabezado-nombre">{{ condominio_activo.nombre }}</p>
+  </div>
+</header>
+{% endwith %}
+{% endif %}
 {% endif %}
 
 <main class="container py-4 flex-grow-1">

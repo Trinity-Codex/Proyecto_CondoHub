@@ -497,3 +497,49 @@ footer {
 .grafico-fondo-leyenda-trama {
   background: repeating-linear-gradient(45deg, var(--estado-recibido-fondo) 0 3px, var(--condohub-azul) 3px 5px);
 }
+
+/* Encabezado del condominio (RQ-01, #116): nombre en grande y logo en todas las pantallas.
+   Sin portada: #113358 sobre #e6edf5 = 10,9:1.
+   Con portada: texto blanco sobre un velo #0b2440 al 78 %; aunque la foto sea blanca, el fondo
+   resultante es más oscuro que #3c4f67, y el blanco sobre él supera 8:1. */
+.encabezado-condominio {
+  background-color: var(--estado-recibido-fondo);
+  border-bottom: 1px solid #c9d6e3;
+  padding: 0.85rem 0;
+}
+.encabezado-condominio.con-portada {
+  background-image: linear-gradient(rgba(11, 36, 64, 0.78), rgba(11, 36, 64, 0.78)), var(--portada);
+  background-size: cover;
+  background-position: center;
+  padding: 2.25rem 0;
+  border-bottom: 0;
+}
+.encabezado-nombre {
+  min-width: 0;  /* permite que un nombre largo haga salto de línea en 375 px */
+  margin: 0;
+  font-family: "Montserrat", var(--bs-body-font-family);
+  font-weight: 700;
+  font-size: clamp(1.25rem, 1rem + 1.6vw, 1.85rem);
+  line-height: 1.2;
+  color: var(--condohub-azul);
+  overflow-wrap: anywhere;
+}
+.encabezado-logo {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  background-color: #fff;
+  border-radius: 0.5rem;
+  border: 1px solid #c9d6e3;
+  padding: 2px;
+}
+.con-portada .encabezado-nombre { color: #fff; }
+.con-portada .encabezado-nombre { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+
+/* Vistas previas en «Datos del condominio». */
+.vista-previa-logo {
+  width: 72px; height: 72px; object-fit: contain;
+  border: 1px solid #c9d6e3; border-radius: 0.5rem; padding: 2px; background: #fff;
+}
+.vista-previa-portada { display: block; width: 100%; max-height: 140px; object-fit: cover; border-radius: 0.5rem; }

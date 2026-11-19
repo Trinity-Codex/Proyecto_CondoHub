@@ -6,6 +6,9 @@ from . import views
 app_name = "condominios"
 
 urlpatterns = [
+    # Identidad visual (#116)
+    path("datos/", views.CondominioDatosView.as_view(), name="datos"),
+    path("<int:pk>/imagen/<str:tipo>/", views.ImagenCondominioView.as_view(), name="imagen"),
     path("unidades/", views.UnidadesView.as_view(), name="unidades"),
     path("unidades/sugerencias/", views.SugerenciasUnidadesView.as_view(), name="unidades_sugerencias"),
     # Edificios
