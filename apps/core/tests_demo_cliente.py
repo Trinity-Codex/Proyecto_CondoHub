@@ -135,7 +135,7 @@ class PrepararDemoClienteTest(SimpleTestCase):
             self.assertEqual(datos["huella"]["usuarios"], 8)
             self.assertEqual(datos["huella"]["condominios"],
                              ["Condominio Vista Verde", "Edificio Los Aromos"])
-            self.assertEqual(datos["huella"]["suma_cobros"], {"s": 4989239, "f": 249462})
+            self.assertEqual(datos["huella"]["suma_cobros"], {"s": 4989239, "f": 249462, "i": 1225000})
             self.assertEqual(datos["periodos"], [
                 [2026, 9, "EMITIDO"], [2026, 10, "EMITIDO"],
                 [2026, 11, "ABIERTO"], [2026, 10, "EMITIDO"],

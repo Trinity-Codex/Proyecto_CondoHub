@@ -23,7 +23,7 @@
 {# ---- Vista previa: aún no se guarda nada ---- #}
 <p class="text-muted">
   <i class="bi bi-eye"></i> Vista previa: revisa los montos antes de confirmar. Al emitir, el período se cierra
-  (sus egresos ya no se podrán modificar) y se avisa a los residentes.
+  (sus egresos e ítems de cobro ya no se podrán modificar) y se avisa a los residentes.
 </p>
 
 <div class="row g-3 mb-4">
@@ -35,6 +35,7 @@
   </div></div></div>
   <div class="col-sm-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
     <div class="text-muted small">Total a cobrar</div><div class="fs-4 fw-semibold">{{ emision.total_a_cobrar|pesos }}</div>
+    {% if emision.total_items %}<div class="small text-muted">Incluye {{ emision.total_items|pesos }} en ítems de cobro</div>{% endif %}
   </div></div></div>
   <div class="col-sm-6 col-lg-3"><div class="card tarjeta-indicador h-100"><div class="card-body">
     <div class="text-muted small">Criterio de prorrateo</div><div class="fw-semibold">{{ estrategia }}</div>
@@ -45,7 +46,7 @@
   <div class="card-header">Cobro por unidad ({{ emision.filas|length }} unidades)</div>
   <div class="table-responsive">
     <table class="table table-sm align-middle mb-0">
-      <thead><tr><th scope="col">Unidad</th><th scope="col" class="text-end">Alícuota</th><th scope="col" class="text-end">Gastos</th><th scope="col" class="text-end">Fondo de reserva</th><th scope="col" class="text-end">Total</th></tr></thead>
+      <thead><tr><th scope="col">Unidad</th><th scope="col" class="text-end">Alícuota</th><th scope="col" class="text-end">Gastos</th><th scope="col" class="text-end">Fondo de reserva</th>{% if emision.total_items %}<th scope="col" class="text-end">Ítems de cobro</th>{% endif %}<th scope="col" class="text-end">Total</th></tr></thead>
       <tbody>
         {% for fila in emision.filas %}
         <tr>
@@ -53,11 +54,12 @@
           <td class="text-end">{{ fila.unidad.alicuota|floatformat:6 }}</td>
           <td class="text-end">{{ fila.monto|pesos }}</td>
           <td class="text-end">{{ fila.fondo|pesos }}</td>
+          {% if emision.total_items %}<td class="text-end">{% if fila.items %}{{ fila.items|pesos }}{% for item, monto in fila.lineas %}<div class="small text-muted">{{ item.nombre }}: {{ monto|pesos }}</div>{% endfor %}{% else %}—{% endif %}</td>{% endif %}
           <td class="text-end fw-semibold">{{ fila.total|pesos }}</td>
         </tr>
         {% endfor %}
       </tbody>
-      <tfoot><tr class="fw-semibold"><td colspan="2">Total</td><td class="text-end">{{ emision.total_egresos|pesos }}</td><td class="text-end">{{ emision.total_fondo|pesos }}</td><td class="text-end">{{ emision.total_a_cobrar|pesos }}</td></tr></tfoot>
+      <tfoot><tr class="fw-semibold"><td colspan="2">Total</td><td class="text-end">{{ emision.total_egresos|pesos }}</td><td class="text-end">{{ emision.total_fondo|pesos }}</td>{% if emision.total_items %}<td class="text-end">{{ emision.total_items|pesos }}</td>{% endif %}<td class="text-end">{{ emision.total_a_cobrar|pesos }}</td></tr></tfoot>
     </table>
   </div>
 </div>

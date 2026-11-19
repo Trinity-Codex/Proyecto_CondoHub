@@ -4,6 +4,9 @@ Datos demo de gastos comunes (Issues #1, #2 y #62), en Vista Verde:
   - mes ANTERIOR: emitido;
   - mes ACTUAL: abierto, con egresos, listo para probar la emisión.
 Los pagos de los meses emitidos los registra apps/pagos/demo.py.
+Ítems de cobro (RQ-02, #117) del mes ANTERIOR, antes de emitirlo: una cuota extraordinaria para
+todas las unidades (prorrateada por alícuota) y una multa a la unidad A-101 del residente demo.
+El mes ACTUAL repite la cuota, para mostrar el mantenedor con el período abierto.
 Y en Edificio Los Aromos (Issue #54): el mes ANTERIOR, emitido y sin pagos, para que la cartera muestre
 las cifras de los dos condominios.
 
@@ -13,8 +16,8 @@ y el de Los Aromos: "los_aromos".
 from datetime import date, timedelta
 
 from apps.gastos.fondo import registrar_movimiento
-from apps.gastos.models import Egreso, PeriodoGasto
-from apps.gastos.servicios import emitir_periodo
+from apps.gastos.models import Egreso, ItemCobro, PeriodoGasto
+from apps.gastos.servicios import emitir_periodo, guardar_item
 
 
 def cargar(datos):
@@ -34,8 +37,10 @@ def cargar(datos):
     antiguo = _periodo_con_egresos(datos, hace_dos_meses, ajuste=1.02)
     emitir_periodo(antiguo)
     anterior = _periodo_con_egresos(datos, mes_anterior, ajuste=0.97)
+    _items_de_cobro(datos, anterior, con_multa=True)
     emitir_periodo(anterior)
     actual = _periodo_con_egresos(datos, hoy)
+    _items_de_cobro(datos, actual)
     aromos = _periodo_los_aromos(datos, mes_anterior)
     emitir_periodo(aromos)
     registrar_movimiento(datos["vista_verde"], tipo="EGRESO", monto=75000, fecha=mes_anterior,
@@ -87,3 +92,19 @@ def _periodo_los_aromos(datos, fecha):
             fecha=fecha.replace(day=min(dia, fecha.day)), creado_por=administrador,
         )
     return periodo
+
+
+def _items_de_cobro(datos, periodo, con_multa=False):
+    """Cuota extraordinaria ficticia para todas las unidades y, si con_multa=True, una multa ficticia a A-101."""
+    administrador = datos["usuarios"]["administrador"]
+    cuota = ItemCobro(
+        periodo=periodo, nombre="Cuota extraordinaria pintura de fachada", modo=ItemCobro.Modo.PRORRATEO,
+        monto=1_200_000, alcance=ItemCobro.Alcance.TODAS, creado_por=administrador,
+    )
+    guardar_item(cuota, [], usuario=administrador)
+    if con_multa:
+        multa = ItemCobro(
+            periodo=periodo, nombre="Multa por ruidos molestos (ficticia)", modo=ItemCobro.Modo.POR_UNIDAD,
+            monto=25_000, alcance=ItemCobro.Alcance.ALGUNAS, creado_por=administrador,
+        )
+        guardar_item(multa, [datos["unidades"]["A-101"]], usuario=administrador)
