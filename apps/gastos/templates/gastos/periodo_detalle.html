@@ -14,6 +14,7 @@
   <div class="d-flex flex-wrap gap-2">
     <a class="btn btn-outline-secondary" href="{% url 'gastos:periodo_editar' periodo.pk %}"><i class="bi bi-pencil"></i> Editar período</a>
     <a class="btn btn-outline-primary" href="{% url 'gastos:egreso_nuevo' periodo.pk %}"><i class="bi bi-plus-lg"></i> Registrar egreso</a>
+    <a class="btn btn-outline-primary" href="{% url 'gastos:item_nuevo' periodo.pk %}"><i class="bi bi-plus-lg"></i> Agregar ítem de cobro</a>
     <a class="btn btn-primary" href="{% url 'gastos:periodo_emitir' periodo.pk %}"><i class="bi bi-send-check"></i> Emitir gastos comunes</a>
   </div>
   {% endif %}
@@ -21,7 +22,7 @@
 
 {% if not periodo.esta_abierto %}
 <div class="alert alert-info">
-  <i class="bi bi-lock"></i> Este período ya fue emitido{% if periodo.fecha_emision %} el {{ periodo.fecha_emision|date:"d-m-Y \a \l\a\s H:i" }}{% endif %}: sus egresos ya no se pueden modificar.
+  <i class="bi bi-lock"></i> Este período ya fue emitido{% if periodo.fecha_emision %} el {{ periodo.fecha_emision|date:"d-m-Y \a \l\a\s H:i" }}{% endif %}: sus egresos e ítems de cobro ya no se pueden modificar.
   {# El criterio de prorrateo se muestra en la tarjeta "Vencimiento" de la derecha (#62). #}
   <span class="d-block small mt-1">
     <a href="{% url 'gastos:reporte' %}?periodo={{ periodo.pk }}" class="alert-link">Ver recaudación y morosidad</a></span>
@@ -31,17 +32,18 @@
 <div class="card mb-4">
   <div class="card-header d-flex flex-wrap justify-content-between gap-2">
     <span><i class="bi bi-house-door"></i> Cobro por unidad</span>
-    <span>Total a cobrar: {{ totales_cobros.gastos|add:totales_cobros.fondo|pesos }}</span>
+    <span>Total a cobrar: {{ totales_cobros.gastos|add:totales_cobros.fondo|add:totales_cobros.items|pesos }}</span>
   </div>
   <div class="table-responsive">
     <table class="table table-sm align-middle mb-0">
-      <thead><tr><th scope="col">Unidad</th><th scope="col" class="text-end">Gastos</th><th scope="col" class="text-end">Fondo de reserva</th><th scope="col" class="text-end">Total</th><th scope="col">Estado</th></tr></thead>
+      <thead><tr><th scope="col">Unidad</th><th scope="col" class="text-end">Gastos</th><th scope="col" class="text-end">Fondo de reserva</th>{% if hay_items %}<th scope="col" class="text-end">Ítems de cobro</th>{% endif %}<th scope="col" class="text-end">Total</th><th scope="col">Estado</th></tr></thead>
       <tbody>
         {% for cobro in cobros %}
         <tr>
           <td>{{ cobro.unidad }}</td>
           <td class="text-end">{{ cobro.monto|pesos }}</td>
           <td class="text-end">{{ cobro.monto_fondo_reserva|pesos }}</td>
+          {% if hay_items %}<td class="text-end">{% if cobro.monto_items %}{{ cobro.monto_items|pesos }}{% else %}—{% endif %}</td>{% endif %}
           <td class="text-end fw-semibold">{{ cobro.total|pesos }}</td>
           <td>
             {% if cobro.estado == "PAGADO" %}<span class="badge text-bg-success">Pagado</span>
@@ -93,6 +95,7 @@
         </table>
       </div>
     </div>
+    {% include "gastos/_items_cobro.html" %}
   </div>
 
   {# ---- Resumen por categoría y fondo de reserva ---- #}

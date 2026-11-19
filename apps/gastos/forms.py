@@ -3,13 +3,13 @@ from django import forms
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import Q
 
-from apps.condominios.models import Edificio
+from apps.condominios.models import Edificio, Unidad
 from apps.core.campos import MontoField
 from apps.core.formato import formatear_monto
 from apps.core.formularios import CampoFecha, FormularioBootstrap, ModeloFormularioBootstrap
 from apps.proveedores.models import Proveedor
 
-from .models import DIA_VENCIMIENTO, MESES, MONTO_MAXIMO, Egreso, PeriodoGasto, vencimiento_por_defecto
+from .models import DIA_VENCIMIENTO, MESES, MONTO_MAXIMO, Egreso, ItemCobro, PeriodoGasto, vencimiento_por_defecto
 
 
 class PeriodoForm(ModeloFormularioBootstrap):
@@ -129,6 +129,54 @@ class EgresoForm(ModeloFormularioBootstrap):
         self.fields["monto"].validators.append(
             MaxValueValidator(MONTO_MAXIMO, message=f"El monto no puede superar ${formatear_monto(MONTO_MAXIMO)}.")
         )
+
+
+class ItemCobroForm(ModeloFormularioBootstrap):
+    """
+    Registrar o editar un ítem de cobro del período (RQ-02, #117). El período y quien lo
+    crea los asigna la vista; las unidades se guardan con servicios.guardar_item().
+    """
+
+    class Meta:
+        model = ItemCobro
+        fields = ["nombre", "modo", "monto", "alcance", "unidades"]
+        widgets = {
+            "nombre": forms.TextInput(attrs={"placeholder": "Ej.: Cuota extraordinaria pintura de fachada"}),
+            "modo": forms.RadioSelect,
+            "alcance": forms.RadioSelect,
+            "unidades": forms.CheckboxSelectMultiple,
+        }
+        field_classes = {"monto": MontoField}
+        labels = {"nombre": "Nombre", "modo": "Modo de monto", "monto": "Monto", "alcance": "A quién se cobra",
+                  "unidades": "Unidades"}
+        help_texts = {
+            "nombre": "Se muestra como una línea aparte en el cobro del residente.",
+            "modo": "«Monto por unidad»: cada unidad alcanzada paga el monto (sirve para multas). "
+            "«Total a prorratear»: el monto es el total y se reparte según la alícuota de las unidades "
+            "alcanzadas (sirve para cuotas extraordinarias).",
+            "monto": "En pesos, con o sin puntos de miles. No aporta al fondo de reserva.",
+            "alcance": "Todas las unidades del condominio o solo las que elijas.",
+            "unidades": "Solo si eliges «Solo algunas unidades».",
+        }
+
+    def __init__(self, *args, condominio, **kwargs):
+        super().__init__(*args, **kwargs)
+        # REGLA MULTI-CONDOMINIO: solo unidades de ESTE condominio; una ajena enviada a mano
+        # se rechaza como opción inválida.
+        self.fields["unidades"].queryset = (
+            Unidad.objects.filter(edificio__condominio=condominio).select_related("edificio")
+            .order_by("edificio__nombre", "piso", "numero")
+        )
+        self.fields["monto"].widget.attrs["placeholder"] = "Ej.: 25.000"
+        self.fields["monto"].validators.append(
+            MaxValueValidator(MONTO_MAXIMO, message=f"El monto no puede superar ${formatear_monto(MONTO_MAXIMO)}.")
+        )
+
+    def clean(self):
+        datos = super().clean()
+        if datos.get("alcance") == ItemCobro.Alcance.ALGUNAS and not datos.get("unidades"):
+            self.add_error("unidades", "Elige al menos una unidad, o cobra el ítem a todas las unidades.")
+        return datos
 
 
 class FiltroReporteForm(FormularioBootstrap):

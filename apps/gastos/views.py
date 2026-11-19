@@ -12,6 +12,9 @@ EMITIDO (Issue #2) quedan bloqueados: cambiarlos descuadraría lo ya cobrado.
 Emitir (solo administrador): EmitirPeriodoView muestra una vista previa con
 lo que pagará cada unidad y, al confirmar, usa servicios.emitir_periodo().
 
+Ítems de cobro (RQ-02, #117, solo administrador y con el período abierto): cuotas
+extraordinarias, multas... que se suman al cobro de las unidades al emitir.
+
 Reporte de morosidad (Issue #5, administrador y comité): ReporteView lo muestra
 y ReporteCsvView lo descarga para Excel. El cálculo está en reportes.py.
 """
@@ -31,11 +34,11 @@ from apps.core.permisos import ADMINISTRADOR, COMITE, CondominioQuerysetMixin, R
 from apps.core.templatetags.condohub import pesos
 
 from .filtros import COLOR_SITUACION, SITUACIONES, ordenar_por_urgencia
-from .forms import EgresoForm, FiltroReporteForm, MovimientoFondoForm, PeriodoForm
-from .models import Egreso, MovimientoFondo, PeriodoGasto
+from .forms import EgresoForm, FiltroReporteForm, ItemCobroForm, MovimientoFondoForm, PeriodoForm
+from .models import Egreso, ItemCobro, MovimientoFondo, PeriodoGasto
 from .fondo import registrar_movimiento, saldo_fondo
 from .reportes import generar_reporte
-from .servicios import calcular_emision, emitir_periodo
+from .servicios import calcular_emision, eliminar_item, emitir_periodo, guardar_item
 
 
 # --------------------------------------------------------------------------
@@ -138,6 +141,8 @@ class PeriodoDetailView(FiltrosGetMixin, RolRequeridoMixin, CondominioQuerysetMi
         cantidades = {fila["categoria"]: fila["n"] for fila in resumen}
         opciones = [(valor, nombres[valor], "reserva") for valor in Egreso.Categoria.values if valor in cantidades]
         contexto["chips"] = self.chips("categoria", opciones, cantidades, singular="egreso", plural="egresos")
+        # Ítems de cobro del período (#117): el comité los ve; solo el administrador los cambia.
+        contexto["items_cobro"] = self.object.items_cobro.prefetch_related("unidades__edificio")
         # Si ya se emitió: lo que paga cada unidad (DetalleGastoComun).
         if not self.object.esta_abierto:
             cobros = self.object.detalles.select_related("unidad__edificio").order_by(
@@ -145,8 +150,9 @@ class PeriodoDetailView(FiltrosGetMixin, RolRequeridoMixin, CondominioQuerysetMi
             )
             contexto["cobros"] = cobros
             contexto["totales_cobros"] = cobros.aggregate(
-                gastos=Sum("monto"), fondo=Sum("monto_fondo_reserva")
+                gastos=Sum("monto"), fondo=Sum("monto_fondo_reserva"), items=Sum("monto_items")
             )
+            contexto["hay_items"] = bool(contexto["totales_cobros"]["items"])
         return contexto
 
 
@@ -190,9 +196,11 @@ class EmitirPeriodoView(RolRequeridoMixin, CondominioQuerysetMixin, DetailView):
 # --------------------------------------------------------------------------
 class PeriodoAbiertoMixin:
     """
-    Bloquea crear, editar o eliminar egresos de un período que ya no está abierto.
-    Cada vista define get_periodo() para saber de qué período se trata.
+    Bloquea crear, editar o eliminar egresos (o ítems de cobro) de un período que ya no
+    está abierto. Cada vista define get_periodo() para saber de qué período se trata.
     """
+
+    que_se_bloquea = "sus egresos"
 
     def dispatch(self, request, *args, **kwargs):
         # RolRequeridoMixin (que va antes en la lista de clases) ya revisó la
@@ -200,7 +208,7 @@ class PeriodoAbiertoMixin:
         if request.user.is_authenticated and request.condominio is not None:
             periodo = self.get_periodo()
             if not periodo.esta_abierto:
-                messages.error(request, f"El período {periodo} ya fue emitido: sus egresos no se pueden modificar.")
+                messages.error(request, f"El período {periodo} ya fue emitido: {self.que_se_bloquea} no se pueden modificar.")
                 return redirect(periodo)
         return super().dispatch(request, *args, **kwargs)
 
@@ -277,6 +285,97 @@ class EgresoDeleteView(RolRequeridoMixin, EgresoDelPeriodoMixin, PeriodoAbiertoM
     def form_valid(self, form):
         messages.success(self.request, "Egreso eliminado.")
         return super().form_valid(form)
+
+
+# --------------------------------------------------------------------------
+# Ítems de cobro (RQ-02, #117)
+# --------------------------------------------------------------------------
+class ItemCobroMixin(PeriodoAbiertoMixin):
+    """
+    Lo que comparten crear, editar y eliminar ítems. El guardado pasa por servicios.py, que
+    bloquea el período y vuelve a revisar que siga abierto: si una emisión ganó la carrera,
+    el cambio se rechaza con el mismo aviso que da PeriodoAbiertoMixin.
+    """
+
+    model = ItemCobro
+    que_se_bloquea = "sus ítems de cobro"
+
+    def rechazar_por_emision(self, error):
+        for mensaje in error.messages:
+            messages.error(self.request, mensaje)
+        return redirect(self.get_periodo())
+
+    def get_success_url(self):
+        return self.get_periodo().get_absolute_url()
+
+
+class ItemCobroFormMixin(ItemCobroMixin):
+    form_class = ItemCobroForm
+    template_name = "gastos/item_formulario.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["condominio"] = self.request.condominio  # para ofrecer solo sus unidades
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+        contexto["periodo"] = self.get_periodo()
+        return contexto
+
+    def form_valid(self, form):
+        item = form.save(commit=False)
+        item.periodo = self.get_periodo()
+        if item.pk is None:
+            item.creado_por = self.request.user
+        try:
+            self.object = guardar_item(item, form.cleaned_data["unidades"], usuario=self.request.user)
+        except ValidationError as error:
+            return self.rechazar_por_emision(error)
+        messages.success(self.request, self.mensaje_exito)
+        return redirect(self.get_success_url())
+
+
+class ItemCobroCreateView(RolRequeridoMixin, ItemCobroFormMixin, CreateView):
+    roles_permitidos = [ADMINISTRADOR]
+    mensaje_exito = "Ítem de cobro registrado. Se sumará al cobro de las unidades al emitir el período."
+
+    def get_periodo(self):
+        # Solo períodos del condominio activo: el de otro condominio responde 404.
+        if not hasattr(self, "_periodo"):
+            self._periodo = get_object_or_404(PeriodoGasto, pk=self.kwargs["periodo_pk"], condominio=self.request.condominio)
+        return self._periodo
+
+
+class ItemCobroDelPeriodoMixin(CondominioQuerysetMixin):
+    """Para editar y eliminar: el ítem debe ser de un período del condominio activo (si no, 404)."""
+
+    campo_condominio = "periodo__condominio"
+
+    def get_periodo(self):
+        # Se guarda: dispatch, el contexto, form_valid y la redirección lo piden en la misma solicitud.
+        if not hasattr(self, "_periodo"):
+            self._periodo = self.get_object().periodo
+        return self._periodo
+
+
+class ItemCobroUpdateView(RolRequeridoMixin, ItemCobroDelPeriodoMixin, ItemCobroFormMixin, UpdateView):
+    roles_permitidos = [ADMINISTRADOR]
+    mensaje_exito = "Ítem de cobro actualizado."
+
+
+class ItemCobroDeleteView(RolRequeridoMixin, ItemCobroDelPeriodoMixin, ItemCobroMixin, DeleteView):
+    roles_permitidos = [ADMINISTRADOR]
+    template_name = "gastos/item_confirmar_eliminar.html"
+
+    def form_valid(self, form):
+        periodo = self.get_periodo()
+        try:
+            eliminar_item(self.object, usuario=self.request.user)
+        except ValidationError as error:
+            return self.rechazar_por_emision(error)
+        messages.success(self.request, "Ítem de cobro eliminado.")
+        return redirect(periodo)
 
 
 # --------------------------------------------------------------------------

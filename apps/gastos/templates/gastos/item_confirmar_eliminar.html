@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load condohub %}
+{% block titulo %}Eliminar ítem de cobro{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card border-danger"><div class="card-body">
+      <h1 class="h4">¿Eliminar este ítem de cobro?</h1>
+      <p>Se eliminará <strong>«{{ object.nombre }}»</strong> ({{ object.monto|pesos }}{% if object.modo == "POR_UNIDAD" %} por unidad{% else %} en total{% endif %}) del período {{ object.periodo }}. No se cobrará al emitir.</p>
+      <form method="post" class="d-flex gap-2">
+        {% csrf_token %}
+        <button class="btn btn-danger" type="submit">Sí, eliminar</button>
+        <a class="btn btn-outline-secondary" href="{{ object.periodo.get_absolute_url }}">Cancelar</a>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

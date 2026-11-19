@@ -31,3 +31,10 @@ six==1.17.0
 svglib==2.4.0
 tinycss2==1.5.1
 webencodings==0.6.1
+
+# Demo visual en Render (#111): servidor WSGI y estáticos con DEBUG=False.
+# Solo los usa config/settings_render_demo.py; el entorno habitual no los carga.
+gunicorn==27.0.1
+whitenoise==6.12.0
+# Dependencia de gunicorn (pip la instala sola; se fija igual).
+packaging==26.3
