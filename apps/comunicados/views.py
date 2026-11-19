@@ -36,9 +36,9 @@ from apps.core.permisos import (
     tiene_rol,
 )
 
-from .forms import ComunicadoForm
+from .forms import AjustesComunicadosForm, ComunicadoForm
 from .middleware import SIGUIENTE, aviso_pendiente, debe_ver_avisos
-from .models import Comunicado, LecturaComunicado
+from .models import AjustesComunicados, Comunicado, LecturaComunicado
 
 
 class ComunicadosVisiblesMixin(CondominioQuerysetMixin):
@@ -85,10 +85,11 @@ class ComunicadoListView(RolRequeridoMixin, FiltrosGetMixin, ComunicadosVisibles
         if not contexto["ver_vencidos"]:
             contexto["cantidad_vencidos"] = super().get_queryset().vencidos(timezone.localdate()).count()
         if tiene_rol(self.request, ADMINISTRADOR):
-            # Conteo de lectura por unidad, solo de los comunicados de esta página.
+            # Conteo de lectura por unidad y porcentaje por residente (#120), solo de esta página.
             for comunicado in contexto["comunicados"]:
                 confirmadas, destinatarias = comunicado.confirmaciones()
                 comunicado.confirmadas, comunicado.destinatarias = len(confirmadas), len(destinatarias)
+                comunicado.porcentaje_residentes, comunicado.porcentaje_unidades = comunicado.porcentajes_de_lectura()
         return contexto
 
 
@@ -109,6 +110,7 @@ class ComunicadoDetailView(RolRequeridoMixin, ComunicadosVisiblesMixin, DetailVi
         if tiene_rol(self.request, ADMINISTRADOR):
             confirmadas, destinatarias = comunicado.confirmaciones()
             contexto["confirmadas"], contexto["destinatarias"] = len(confirmadas), len(destinatarias)
+            contexto["porcentaje_residentes"], contexto["porcentaje_unidades"] = comunicado.porcentajes_de_lectura()
             contexto["faltan"] = sorted(destinatarias - confirmadas, key=lambda u: (u.edificio.nombre, u.piso, u.numero))
         return contexto
 
@@ -233,4 +235,25 @@ class LecturasComunicadoView(RolRequeridoMixin, CondominioQuerysetMixin, DetailV
         contexto["confirmaron"] = [f for f in filas if f[2]]
         contexto["faltan"] = [f for f in filas if not f[2]]
         contexto["total"] = len(filas)
+        contexto["porcentaje_residentes"], contexto["porcentaje_unidades"] = self.object.porcentajes_de_lectura()
         return contexto
+
+
+class AjustesComunicadosView(RolRequeridoMixin, UpdateView):
+    """
+    Ajustes de comunicados del condominio activo (#120): por ahora, los días sin leer antes del
+    recordatorio. La fila se crea recién al guardar; mientras tanto vale el valor por defecto.
+    """
+
+    roles_permitidos = [ADMINISTRADOR]
+    form_class = AjustesComunicadosForm
+    template_name = "comunicados/ajustes.html"
+    success_url = reverse_lazy("comunicados:lista")
+
+    def get_object(self, queryset=None):
+        ajustes = AjustesComunicados.objects.filter(condominio=self.request.condominio).first()
+        return ajustes or AjustesComunicados(condominio=self.request.condominio)
+
+    def form_valid(self, form):
+        messages.success(self.request, "Ajustes de comunicados guardados.")
+        return super().form_valid(form)

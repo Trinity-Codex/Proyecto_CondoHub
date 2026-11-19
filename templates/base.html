@@ -79,7 +79,8 @@
       {% with seccion=request.resolver_match.app_name vista=request.resolver_match.url_name %}
       <ul class="navbar-nav me-auto">
         <li class="nav-item"><a class="nav-link {% if seccion == 'core' %}active{% endif %}" href="{% url 'core:inicio' %}"><i class="bi bi-house"></i> Inicio</a></li>
-        <li class="nav-item"><a class="nav-link {% if seccion == 'comunicados' %}active{% endif %}" href="{% url 'comunicados:lista' %}"><i class="bi bi-megaphone"></i> Comunicados</a></li>
+        {# RQ-04 (#120): comunicados vigentes sin leer del residente; el lector de pantalla oye «N sin leer». #}
+        <li class="nav-item"><a class="nav-link {% if seccion == 'comunicados' %}active{% endif %}" href="{% url 'comunicados:lista' %}"><i class="bi bi-megaphone"></i> Comunicados{% if comunicados_sin_leer %} <span class="badge rounded-pill bg-danger">{{ comunicados_sin_leer }}<span class="visually-hidden"> sin leer</span></span>{% endif %}</a></li>
         <li class="nav-item"><a class="nav-link {% if seccion == 'reservas' %}active{% endif %}" href="{% url 'reservas:espacios' %}"><i class="bi bi-calendar-check"></i> Reservas</a></li>
         <li class="nav-item"><a class="nav-link {% if seccion == 'incidentes' %}active{% endif %}" href="{% url 'incidentes:lista' %}"><i class="bi bi-tools"></i> Incidentes</a></li>
         {# NUEVO (Issue #3): enlace del estado de cuenta, solo para residentes #}

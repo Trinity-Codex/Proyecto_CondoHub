@@ -5,7 +5,7 @@ from django.utils import timezone
 from apps.condominios.models import Edificio
 from apps.core.formularios import CampoFecha, ModeloFormularioBootstrap
 
-from .models import Comunicado
+from .models import AjustesComunicados, Comunicado
 
 
 class ComunicadoForm(ModeloFormularioBootstrap):
@@ -63,3 +63,17 @@ class ComunicadoForm(ModeloFormularioBootstrap):
         if datos.get("prioritario") and not datos.get("vigente_hasta") and "vigente_hasta" not in self.errors:
             self.add_error("vigente_hasta", "Un aviso prioritario necesita la fecha «Visible hasta».")
         return datos
+
+
+class AjustesComunicadosForm(ModeloFormularioBootstrap):
+    """Días sin leer antes del recordatorio automático (#120)."""
+
+    class Meta:
+        model = AjustesComunicados
+        fields = ["dias_recordatorio"]
+        labels = {"dias_recordatorio": "Recordar a los días sin leer"}
+        widgets = {"dias_recordatorio": forms.NumberInput(attrs={"min": 1, "max": 30, "inputmode": "numeric"})}
+        help_texts = {
+            "dias_recordatorio": "Si un residente no ha leído un comunicado vigente después de estos días, recibe un "
+                                 "recordatorio por la campana y por correo, una sola vez. Entre 1 y 30; por defecto 3.",
+        }

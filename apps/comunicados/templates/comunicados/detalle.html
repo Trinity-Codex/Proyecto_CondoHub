@@ -61,6 +61,9 @@
   </div>
   <div class="card-body">
     <p class="mb-2">Unidades que confirmaron la lectura: <strong class="text-nowrap">{{ confirmadas }} de {{ destinatarias }}</strong></p>
+    {% if porcentaje_residentes is not None %}
+    <p class="mb-2">Lectura: <strong>{{ porcentaje_unidades }} %</strong> de las unidades y <strong>{{ porcentaje_residentes }} %</strong> de los residentes.</p>
+    {% endif %}
     {% if faltan %}
     <p class="small text-muted mb-1">Faltan:</p>
     <ul class="list-inline mb-0">
