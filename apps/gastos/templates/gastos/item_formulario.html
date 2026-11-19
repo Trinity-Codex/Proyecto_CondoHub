@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{# Misma plantilla para registrar y editar un ítem de cobro (#117): "object" existe solo al editar. #}
+{% block titulo %}{% if object %}Editar ítem de cobro{% else %}Agregar ítem de cobro{% endif %}{% endblock %}
+
+{% block contenido %}
+<nav aria-label="Ruta"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'gastos:periodos' %}">Gastos comunes</a></li>
+  <li class="breadcrumb-item"><a href="{{ periodo.get_absolute_url }}">{{ periodo }}</a></li>
+  <li class="breadcrumb-item active" aria-current="page">{% if object %}Editar ítem de cobro{% else %}Agregar ítem de cobro{% endif %}</li>
+</ol></nav>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <h1 class="h3 mb-3">{% if object %}Editar ítem de cobro{% else %}Agregar ítem de cobro{% endif %} <span class="text-muted fs-5">· {{ periodo }}</span></h1>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include "_formulario_cabecera.html" with form=form %}
+      <section class="card mb-3 seccion-formulario" aria-labelledby="seccion-1">
+        <div class="card-body">
+          <h2 class="seccion-titulo" id="seccion-1"><span class="seccion-numero" aria-hidden="true">1</span>Concepto y monto</h2>
+          <p class="seccion-intro">Qué se cobra y cómo se calcula lo que paga cada unidad.</p>
+          <div class="row g-3">
+            <div class="col-12">{% include "_campo.html" with campo=form.nombre %}</div>
+            <div class="col-12">{% include "_campo.html" with campo=form.modo %}</div>
+            <div class="col-md-6">{% include "_campo.html" with campo=form.monto %}</div>
+          </div>
+        </div>
+      </section>
+      <section class="card mb-3 seccion-formulario" aria-labelledby="seccion-2">
+        <div class="card-body">
+          <h2 class="seccion-titulo" id="seccion-2"><span class="seccion-numero" aria-hidden="true">2</span>Unidades</h2>
+          <p class="seccion-intro">A quién se le cobra. Al emitir el período se suma al cobro de cada unidad como una línea aparte.</p>
+          <div class="row g-3">
+            <div class="col-12">{% include "_campo.html" with campo=form.alcance %}</div>
+            <div class="col-12">{% include "_campo.html" with campo=form.unidades %}</div>
+          </div>
+        </div>
+      </section>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary" type="submit">Guardar</button>
+        <a class="btn btn-outline-secondary" href="{{ periodo.get_absolute_url }}">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

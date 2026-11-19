@@ -1,0 +1,32 @@
+{% load condohub %}
+{# Ítems de cobro del período (RQ-02, #117). Lo incluye periodo_detalle.html. #}
+<div class="card mt-4">
+  <div class="card-header d-flex flex-wrap justify-content-between gap-2">
+    <span><i class="bi bi-plus-slash-minus"></i> Ítems de cobro</span>
+    <span class="small text-muted">Cuotas extraordinarias, multas y otros cargos</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead><tr><th scope="col">Ítem</th><th scope="col">A quién</th><th scope="col" class="text-end">Monto</th>{% if es_admin and periodo.esta_abierto %}<th scope="col"><span class="visually-hidden">Acciones</span></th>{% endif %}</tr></thead>
+      <tbody>
+        {% for item in items_cobro %}
+        <tr>
+          <td>{{ item.nombre }}<div class="small text-muted">{{ item.get_modo_display }}</div></td>
+          <td class="small">
+            {% if item.alcance == "TODAS" %}Todas las unidades{% else %}{% for unidad in item.unidades.all %}{{ unidad }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}
+          </td>
+          <td class="text-end text-nowrap">{{ item.monto|pesos }}{% if item.modo == "POR_UNIDAD" %}<div class="small text-muted">por unidad</div>{% else %}<div class="small text-muted">en total</div>{% endif %}</td>
+          {% if es_admin and periodo.esta_abierto %}
+          <td class="text-end text-nowrap">
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'gastos:item_editar' item.pk %}" aria-label="Editar {{ item.nombre }}"><i class="bi bi-pencil"></i></a>
+            <a class="btn btn-sm btn-outline-danger" href="{% url 'gastos:item_eliminar' item.pk %}" aria-label="Eliminar {{ item.nombre }}"><i class="bi bi-trash"></i></a>
+          </td>
+          {% endif %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="{% if es_admin and periodo.esta_abierto %}4{% else %}3{% endif %}" class="text-center text-muted py-4">Este período no tiene ítems de cobro.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

@@ -265,7 +265,9 @@ def huella_demo():
             for fila in MovimientoFondo.objects.values("tipo").annotate(n=Count("pk"), s=Sum("monto")).order_by("tipo")},
         "suma_egresos": Egreso.objects.aggregate(s=Sum("monto"))["s"],
         "cobros": _por_estado(DetalleGastoComun.objects),
-        "suma_cobros": DetalleGastoComun.objects.aggregate(s=Sum("monto"), f=Sum("monto_fondo_reserva")),
+        "suma_cobros": DetalleGastoComun.objects.aggregate(
+            s=Sum("monto"), f=Sum("monto_fondo_reserva"), i=Sum("monto_items")
+        ),
         "pagos": Pago.objects.count(),
         "suma_pagos": Pago.objects.aggregate(s=Sum("monto"))["s"],
     }
@@ -307,9 +309,12 @@ class CargarDemoTest(TestCase):
             "EGRESO": {"cantidad": 1, "suma": -75000},
         },
         "cobros": {"PAGADO": 13, "PENDIENTE": 11},
-        "suma_cobros": {"s": 4989239, "f": 249462},
+        # i: cuota extraordinaria ($1.200.000) y multa ($25.000) del mes anterior (#117).
+        "suma_cobros": {"s": 4989239, "f": 249462, "i": 1225000},
         "pagos": 15,  # + el pago anulado de la demo (#53)
-        "suma_pagos": 3460817,  # + el pago anulado de la demo (#53)
+        # + el pago anulado de la demo (#53); + 793.000 de ítems de cobro (#117) en los cobros
+        # del mes anterior que la demo de pagos deja pagados.
+        "suma_pagos": 4253817,
     }
 
     def cargar(self, *argumentos):
