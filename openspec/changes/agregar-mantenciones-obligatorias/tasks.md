@@ -23,8 +23,8 @@ Este cambio cubre el Issue #123 en dos PR: modelo y calendario (secciones 1 a 5,
 
 - [x] 4.1 Una línea en `config/settings.py` y otra en `config/urls.py`, y el enlace «Mantenciones» en `templates/base.html` para administrador, comité y conserje. Verificación: `MenuAdministracionTest` en `apps/core/tests.py`.
 - [x] 4.2 `apps/mantenciones/demo.py` con extintores (12 meses, por vencer), red húmeda (6, vencida) y ascensores (1, al día), sin afirmar que sean obligaciones legales. Verificación: `DemoTest`.
-- [ ] 4.3 **Pendiente (otro archivo):** agregar `"mantenciones"` a `APPS_DEMO` en `apps/core/management/commands/cargar_demo.py` para que `cargar_demo` la llame, y revisar entonces los conteos de `CargarDemoTest` en `apps/core/tests.py` (avisar a Walther). No se tocó: ese archivo está fuera de las carpetas de este PR.
-- [ ] 4.4 **Pendiente (otro PR):** dejar las rutas de escritura (`nueva/`, `<id>/editar/`, `<id>/ejecucion/`) en la lista de rutas permitidas de `apps/core/middleware_demo.py` (demo de Render, #111). No se tocó: está en otro PR sin unir.
+- [x] 4.3 agregar `"mantenciones"` a `APPS_DEMO` en `apps/core/management/commands/cargar_demo.py` para que `cargar_demo` la llame, y revisar entonces los conteos de `CargarDemoTest` en `apps/core/tests.py` (avisar a Walther). No se tocó: ese archivo está fuera de las carpetas de este PR.
+- [x] 4.4 dejar las rutas de escritura (`nueva/`, `<id>/editar/`, `<id>/ejecucion/`) en la lista de rutas permitidas de `apps/core/middleware_demo.py` (demo de Render, #111). No se tocó: está en otro PR sin unir.
 
 ## 5. Verificación final del PR
 

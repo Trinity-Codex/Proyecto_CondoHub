@@ -23,6 +23,10 @@ POST_PERMITIDOS = {
     # Aviso prioritario (#118): sin confirmarlo, el residente de la demo quedaría bloqueado en él.
     # Solo guarda la lectura del propio residente (LecturaComunicado).
     "comunicados:confirmar_aviso",
+    # Mantenciones (#123): la demo deja probar el alta, la edición y el registro de ejecuciones.
+    "mantenciones:nueva",
+    "mantenciones:editar",
+    "mantenciones:ejecucion",
 }
 
 # GET que hoy escriben datos de negocio. Revisión del Issue #111: abrir una notificación
