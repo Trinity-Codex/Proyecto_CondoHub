@@ -1,0 +1,16 @@
+{% extends "core/pdf/base.html" %}
+{% load aviso_pagos %}
+{% block titulo %}Comprobante de pago {{ pago.pk }}{% endblock %}
+{% block encabezado %}Comprobante de pago{% endblock %}
+{% block contenido %}
+<h2>Pago N° {{ pago.pk|stringformat:"d" }}</h2>
+{% if pago.anulado %}<p><strong>Anulado</strong> · Este abono ya no reduce el saldo del cobro.</p>{% endif %}
+<p>{{ cobro.periodo.condominio.nombre }} · {{ cobro.unidad.edificio.nombre }} · Unidad {{ cobro.unidad.numero }}</p>
+<table>
+<tr><th>Fecha del pago</th><td>{{ pago.fecha|date:"d-m-Y" }}</td></tr>
+<tr><th>Monto registrado</th><td>$ {{ pago.monto|miles }}</td></tr>
+<tr><th>Medio de pago</th><td>{{ pago.get_medio_display }}</td></tr>
+<tr><th>Cobro abonado</th><td>N° {{ cobro.pk|stringformat:"d" }} · {{ cobro.periodo }}</td></tr>
+<tr><th>Saldo pendiente del cobro al descargar</th><td>$ {{ saldo|miles }}</td></tr>
+</table>
+{% endblock %}

@@ -44,6 +44,48 @@ class EstadoCuentaTest(TestCase):
             periodo=periodo, unidad=unidad, monto=monto, monto_fondo_reserva=fondo, estado=estado
         )
 
+    def test_comprobante_descargable_refleja_pago_y_saldo_actual(self):
+        cobro = self.cobro(self.oct, self.e.a101)
+        pago = Pago.objects.create(detalle=cobro, monto=12345, fecha=datetime.date(2026, 10, 3))
+        Pago.objects.create(detalle=cobro, monto=1000)
+        url = reverse("pagos:comprobante_pago", args=[pago.pk])
+        for anulado, saldo in ((False, "$ 28.655"), (True, "$ 41.000")):
+            Pago.objects.filter(pk=pago.pk).update(anulado=anulado)
+            for usuario, pagina in (
+                (self.e.residente, reverse("pagos:cobro_detalle", args=[cobro.pk])),
+                (self.e.administrador, reverse("pagos:cuenta_unidad", args=[cobro.unidad_id])),
+            ):
+                with self.subTest(usuario=usuario, anulado=anulado):
+                    self.client.force_login(usuario)
+                    self.assertContains(self.client.get(pagina), url)
+                    respuesta = self.client.get(url)
+                    self.assertEqual(respuesta["Content-Type"], "application/pdf")
+                    self.assertIn(f'attachment; filename="comprobante-pago-{pago.pk}.pdf"',
+                                  respuesta["Content-Disposition"])
+                    self.assertIn("no-store", respuesta["Cache-Control"])
+                    pdf = PdfReader(BytesIO(respuesta.content))
+                    texto = " ".join(" ".join(p.extract_text() for p in pdf.pages).split())
+                    for dato in (f"Pago N° {pago.pk}", "03-10-2026", "$ 12.345", "Transferencia",
+                                 str(cobro.periodo), saldo):
+                        self.assertIn(dato, texto)
+                    self.assertEqual("Anulado" in texto, anulado)
+
+    def test_comprobante_limita_unidad_periodo_condominio_y_rol(self):
+        cobro = self.cobro(self.oct, self.e.a101)
+        pago = Pago.objects.create(detalle=cobro, monto=2000)
+        url = reverse("pagos:comprobante_pago", args=[pago.pk])
+        self.assertEqual(self.client.get(url).status_code, 302)
+        Residente.objects.filter(usuario=self.e.residente).update(desde=datetime.date(2026, 11, 1))
+        for usuario, estado in ((self.e.residente, 404), (self.e.residente_b, 404),
+                                (self.e.residente_ajeno, 404), (self.e.comite, 403), (self.e.conserje, 403)):
+            self.client.force_login(usuario)
+            self.assertEqual(self.client.get(url).status_code, estado)
+        otro = self.e.ajeno
+        periodo = PeriodoGasto.objects.create(condominio=otro, anio=2026, mes=10, estado="EMITIDO")
+        ajeno = Pago.objects.create(detalle=self.cobro(periodo, self.e.unidad_ajena), monto=1000)
+        self.client.force_login(self.e.administrador)
+        self.assertEqual(self.client.get(reverse("pagos:comprobante_pago", args=[ajeno.pk])).status_code, 404)
+
     def test_aviso_pdf_cuadra_con_abonos_y_protege_egresos(self):
         self.cobro(self.sep, self.e.a101, monto=3000, fondo=0)
         cobro = self.cobro(self.oct, self.e.a101, monto=48000, fondo=2000)
