@@ -53,10 +53,13 @@ class MantencionForm(ModeloFormularioBootstrap):
         # cerrarla, bloquear la fila con select_for_update dentro de la transacción de la vista.
         """
         datos = super().clean()
-        if self.instance.pk and datos.get("proxima_fecha_cargada") != self.instance.proxima_fecha:
+        cargada = datos.get("proxima_fecha_cargada")
+        if self.instance.pk and cargada != self.instance.proxima_fecha:
+            # Solo un formulario viejo (trae la fecha) se redirige; uno armado sin el campo se queda con el error.
+            self.desactualizado = cargada is not None
             raise forms.ValidationError(
                 "La mantención cambió desde que abriste el formulario (por ejemplo, se registró una ejecución). "
-                "Recarga la página para ver los datos actuales y vuelve a editar."
+                "Revisa los datos actuales y vuelve a editar."
             )
         return datos
 

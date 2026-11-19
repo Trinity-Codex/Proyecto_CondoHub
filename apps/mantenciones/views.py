@@ -7,6 +7,7 @@ Permisos:
 """
 from django.contrib import messages
 from django.db import transaction
+from django.http import HttpResponseRedirect
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, ListView, UpdateView
@@ -99,7 +100,7 @@ class MantencionFormMixin:
         return kwargs
 
 
-class MantencionCreateView(RolRequeridoMixin, MantencionFormMixin, CreateView):
+class MantencionCreateView(RolRequeridoMixin, CondominioQuerysetMixin, MantencionFormMixin, CreateView):
     roles_permitidos = [ADMINISTRADOR]
 
     # @spec:mantenciones-calendario-de-mantenciones
@@ -137,6 +138,14 @@ class MantencionUpdateView(RolRequeridoMixin, MantencionFormMixin, CondominioQue
                 )
         messages.success(self.request, "Mantención actualizada.")
         return respuesta
+
+    def form_invalid(self, form):
+        # Formulario viejo: se vuelve por GET para ver la fecha recalculada. Recargar la respuesta de un POST
+        # reenviaría los mismos datos viejos y el error se repetiría.
+        if getattr(form, "desactualizado", False):
+            messages.error(self.request, form.non_field_errors()[0])
+            return HttpResponseRedirect(self.request.path)
+        return super().form_invalid(form)
 
 
 class EjecucionCreateView(RolRequeridoMixin, CondominioQuerysetMixin, SingleObjectMixin, FormView):

@@ -216,8 +216,11 @@ class CrearYEditarTest(TestCase):
 
         respuesta = self.client.post(url, enviado)
 
-        self.assertEqual(respuesta.status_code, 200)  # no redirige: vuelve al formulario con el aviso
-        self.assertContains(respuesta, "Recarga la página")
+        # Redirige (PRG): recargar un POST reenviaría la fecha vieja. El GET muestra la fecha recalculada.
+        self.assertRedirects(respuesta, url, fetch_redirect_response=False)  # si no, consumiría el aviso
+        seguida = self.client.get(url)
+        self.assertContains(seguida, "Revisa los datos actuales")
+        self.assertEqual(seguida.context["form"]["proxima_fecha_cargada"].value(), recalculada)
         m.refresh_from_db()
         self.assertEqual(m.proxima_fecha, recalculada)
         self.assertEqual(m.estado, Mantencion.Estado.AL_DIA)
