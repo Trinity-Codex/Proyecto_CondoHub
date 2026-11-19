@@ -67,6 +67,16 @@ class AlertasTest(TestCase):
         self.assertEqual(enviar_alertas(self.hoy + timedelta(days=30)), 0)
         self.assertEqual(Notificacion.objects.count(), 1)
 
+    def test_sin_administradores_activos_no_deja_constancia_y_avisa_cuando_los_haya(self):
+        crear_mantencion(self.e.condominio, dias=5)
+        administradores = Membresia.objects.filter(condominio=self.e.condominio, rol=Membresia.Rol.ADMINISTRADOR)
+        administradores.update(activo=False)
+        self.assertEqual(enviar_alertas(self.hoy), 0)
+        self.assertFalse(AlertaEnviada.objects.exists())
+        administradores.update(activo=True)
+        self.assertEqual(enviar_alertas(self.hoy), 1)
+        self.assertEqual(Notificacion.objects.filter(usuario=self.e.administrador).count(), 1)
+
     def test_el_ciclo_siguiente_vuelve_a_avisar(self):
         m = crear_mantencion(self.e.condominio, dias=5, meses=1)
         enviar_alertas(self.hoy)
@@ -176,6 +186,13 @@ class CertificadoTest(TestCase):
         Membresia.objects.create(usuario=ajeno, condominio=self.e.ajeno, rol=Membresia.Rol.ADMINISTRADOR)
         self.client.force_login(ajeno)
         self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_la_descarga_lleva_un_nombre_legible_con_la_fecha(self):
+        self.subir("a.pdf", PDF)
+        self.client.force_login(self.e.administrador)
+        respuesta = self.client.get(reverse("mantenciones:certificado", args=[EjecucionMantencion.objects.get().pk]))
+        self.assertIn(f"certificado-{timezone.localdate():%Y-%m-%d}.pdf", respuesta["Content-Disposition"])
+        b"".join(respuesta.streaming_content)  # leer la respuesta la cierra sin cerrar la conexión de MySQL
 
     def test_la_ejecucion_con_certificado_queda_en_auditoria(self):
         from apps.auditoria.models import RegistroAuditoria

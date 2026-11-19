@@ -6,6 +6,7 @@ Permisos:
   - Crear, editar y registrar ejecuciones:     solo el administrador
 """
 import mimetypes
+from pathlib import Path
 
 from django.contrib import messages
 from django.http import FileResponse, Http404
@@ -208,7 +209,12 @@ class CertificadoView(RolRequeridoMixin, CondominioQuerysetMixin, SingleObjectMi
             raise Http404("El archivo ya no existe.") from None
         tipo = mimetypes.guess_type(ejecucion.certificado.name)[0] or "application/octet-stream"
         # as_attachment: un PDF se descarga en vez de abrirse en el sitio (puede traer scripts).
-        respuesta = FileResponse(archivo, content_type=tipo, as_attachment=True)
+        extension = Path(ejecucion.certificado.name).suffix
+        # Nombre legible en vez del uuid interno del almacenamiento.
+        respuesta = FileResponse(
+            archivo, content_type=tipo, as_attachment=True,
+            filename=f"certificado-{ejecucion.fecha:%Y-%m-%d}{extension}",
+        )
         respuesta["X-Content-Type-Options"] = "nosniff"
         patch_cache_control(respuesta, private=True, no_store=True)  # no queda en equipos compartidos
         return respuesta

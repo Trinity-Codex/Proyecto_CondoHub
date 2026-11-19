@@ -12,15 +12,18 @@ o ya venció sin haberse hecho. Ninguna mantención vence sin un aviso previo.
 Uso: python manage.py enviar_alertas_mantenciones [--fecha AAAA-MM-DD]
 En la demo de Render no hay tareas programadas: se ejecuta a mano. En producción lo programa #29.
 """
+import logging
 from datetime import timedelta
 
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.urls import reverse
 
 from apps.condominios.models import Membresia
 from apps.notificaciones.observador import Evento, Sujeto
 
 from .models import AlertaEnviada, Mantencion
+
+logger = logging.getLogger(__name__)
 
 
 class Alerta(Sujeto):
@@ -81,14 +84,21 @@ def enviar_alertas(hoy):
 
     enviadas = 0
     for mantencion in pendientes:
+        destinatarios = administradores.get(mantencion.condominio_id, [])
+        if not destinatarios:
+            continue  # sin a quién avisar no se deja constancia: el aviso sale cuando haya un administrador activo
         try:
             with transaction.atomic():
-                # Primero la constancia: si otra ejecución ya la creó, la restricción única omite este aviso.
-                AlertaEnviada.objects.create(mantencion=mantencion, fecha_objetivo=mantencion.proxima_fecha)
-                destinatarios = administradores.get(mantencion.condominio_id, [])
-                if destinatarios:
-                    Alerta().notificar(evento_para(mantencion, destinatarios, hoy))
-        except IntegrityError:
+                # Primero la constancia: si otra ejecución ya la creó (get_or_create resuelve la carrera con la
+                # restricción única), se omite este aviso. Si notificar falla, la constancia se deshace y se reintenta.
+                _, creada = AlertaEnviada.objects.get_or_create(
+                    mantencion=mantencion, fecha_objetivo=mantencion.proxima_fecha
+                )
+                if not creada:
+                    continue
+                Alerta().notificar(evento_para(mantencion, destinatarios, hoy))
+        except Exception:  # noqa: BLE001 - un fallo en una mantención no debe frenar los avisos de las demás
+            logger.exception("No se pudo avisar la mantención %s (vence %s)", mantencion.pk, mantencion.proxima_fecha)
             continue
         enviadas += 1
     return enviadas
