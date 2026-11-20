@@ -25,6 +25,10 @@
         {% endif %}
         <li class="list-group-item d-flex justify-content-between"><span>Tu parte de los gastos</span><span>{{ cobro.monto|pesos }}</span></li>
         <li class="list-group-item d-flex justify-content-between"><span>Fondo de reserva ({{ cobro.periodo.porcentaje_fondo_reserva|floatformat:"-2" }} %)</span><span>{{ cobro.monto_fondo_reserva|pesos }}</span></li>
+        {# Ítems de cobro (#117): una línea por cuota o multa de ESTA unidad, copiada al emitir (LineaCobro). #}
+        {% for linea in cobro.lineas.all %}
+        <li class="list-group-item d-flex justify-content-between gap-3"><span>{{ linea.nombre }}</span><span class="text-nowrap">{{ linea.monto|pesos }}</span></li>
+        {% endfor %}
         <li class="list-group-item d-flex justify-content-between fw-semibold"><span>Total a pagar</span><span>{{ cobro.total|pesos }}</span></li>
         <li class="list-group-item d-flex justify-content-between align-items-center"><span>Estado</span>{% include "pagos/_estado_cobro.html" with estado=cobro.estado %}</li>
         <li class="list-group-item d-flex justify-content-between"><span>Pagado</span><span>{{ pagado|pesos }}</span></li>

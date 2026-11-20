@@ -13,7 +13,8 @@ from django.urls import reverse
 from apps.auditoria.models import RegistroAuditoria
 from apps.condominios.models import Membresia, Residente
 from apps.core.pruebas import crear_escenario, crear_usuario
-from apps.gastos.models import DetalleGastoComun, Egreso, PeriodoGasto
+from apps.core.templatetags.condohub import pesos
+from apps.gastos.models import DetalleGastoComun, Egreso, ItemCobro, PeriodoGasto
 from apps.gastos.reportes import anotar_pagado, generar_reporte
 from apps.gastos.servicios import emitir_periodo
 from apps.notificaciones.models import Notificacion
@@ -727,3 +728,85 @@ class AnularPagoTest(TestCase):
         self.assertNotContains(respuesta, self.url)  # ya no se ofrece anularlo de nuevo
         self.assertContains(respuesta, 'class="insignia insignia-con-deuda">Anulado')
         self.assertEqual(respuesta.context["total_adeudado"], 42000)
+
+
+class DesgloseItemsDeCobroTest(TestCase):
+    """
+    RQ-02 parte 2 (#117): el residente ve cada ítem de cobro de SU cobro como una línea separada
+    en el detalle, el estado de cuenta y el aviso PDF. Nunca ve la multa de otra unidad.
+    """
+
+    def setUp(self):
+        from apps.gastos.tests_items import crear_item, periodo_con_egreso
+
+        self.crear_item, self.periodo_con_egreso = crear_item, periodo_con_egreso
+        self.e = crear_escenario()  # A101 (0,4), A102 (0,3), B101 (0,3)
+        self.periodo = periodo_con_egreso(self.e.condominio, self.e.administrador)
+        crear_item(self.periodo, self.e.administrador, monto=30000, nombre="Cuota extraordinaria fachada",
+                   modo=ItemCobro.Modo.PRORRATEO)
+        crear_item(self.periodo, self.e.administrador, monto=25000, nombre="Multa A101 ruidos",
+                   unidades=[self.e.a101])
+        crear_item(self.periodo, self.e.administrador, monto=15000, nombre="Multa B101 mascotas",
+                   unidades=[self.e.b101])
+        emitir_periodo(self.periodo, usuario=self.e.administrador)
+        self.cobro_a101 = DetalleGastoComun.objects.get(periodo=self.periodo, unidad=self.e.a101)
+        self.cobro_b101 = DetalleGastoComun.objects.get(periodo=self.periodo, unidad=self.e.b101)
+
+    def test_detalle_muestra_sus_lineas_y_cuadra_con_el_total(self):
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(reverse("pagos:cobro_detalle", args=[self.cobro_a101.pk]))
+        self.assertEqual(respuesta.status_code, 200)
+        cobro = respuesta.context["cobro"]
+        lineas = {linea.nombre: linea.monto for linea in cobro.lineas.all()}
+        # A101 tiene alícuota 0,4: le tocan $12.000 de la cuota de $30.000, más su multa.
+        self.assertEqual(lineas, {"Cuota extraordinaria fachada": 12000, "Multa A101 ruidos": 25000})
+        self.assertEqual(cobro.monto + cobro.monto_fondo_reserva + sum(lineas.values()), cobro.total)
+        self.assertContains(respuesta, "Cuota extraordinaria fachada")
+        self.assertContains(respuesta, pesos(25000))
+        self.assertNotContains(respuesta, "Multa B101 mascotas")
+
+    def test_estado_de_cuenta_muestra_la_columna_de_items(self):
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(reverse("pagos:estado_cuenta"))
+        self.assertContains(respuesta, ">Ítems</th>")
+        self.assertEqual(self.cobro_a101.monto_items, 37000)
+        celda = f'<td class="text-end text-nowrap d-none d-md-table-cell">{pesos(37000)}</td>'
+        self.assertContains(respuesta, celda, html=True)
+
+    def test_aviso_pdf_lista_cada_linea_de_su_unidad(self):
+        url = reverse("pagos:aviso_cobro", args=[self.cobro_a101.pk])
+        for usuario in (self.e.residente, self.e.administrador):
+            with self.subTest(usuario=usuario):
+                self.client.force_login(usuario)
+                respuesta = self.client.get(url)
+                self.assertEqual(respuesta.status_code, 200)
+                texto = " ".join(" ".join(p.extract_text() for p in PdfReader(BytesIO(respuesta.content)).pages).split())
+                for fragmento in ("Cuota extraordinaria fachada $ 12.000", "Multa A101 ruidos $ 25.000",
+                                  "Intereses por mora $ 0"):
+                    self.assertIn(fragmento, texto)
+                self.assertNotIn("Multa B101", texto)
+                self.assertNotIn("Ítems adicionales", texto)
+
+    def test_cobro_de_otra_unidad_o_condominio_da_404(self):
+        self.client.force_login(self.e.residente)
+        for nombre in ("pagos:cobro_detalle", "pagos:aviso_cobro"):
+            with self.subTest(ruta=nombre):
+                self.assertEqual(self.client.get(reverse(nombre, args=[self.cobro_b101.pk])).status_code, 404)
+        self.client.force_login(self.e.residente_ajeno)
+        for nombre in ("pagos:cobro_detalle", "pagos:aviso_cobro"):
+            with self.subTest(ruta=nombre, usuario="ajeno"):
+                self.assertEqual(self.client.get(reverse(nombre, args=[self.cobro_a101.pk])).status_code, 404)
+
+    def test_residente_b_ve_su_multa_y_no_la_ajena(self):
+        self.client.force_login(self.e.residente_b)
+        respuesta = self.client.get(reverse("pagos:cobro_detalle", args=[self.cobro_b101.pk]))
+        self.assertContains(respuesta, "Multa B101 mascotas")
+        self.assertNotContains(respuesta, "Multa A101 ruidos")
+
+    def test_la_demo_de_render_permite_el_mantenedor_de_items(self):
+        from apps.core.middleware_demo import es_escritura_bloqueada
+
+        for ruta in ("gastos:item_nuevo", "gastos:item_editar", "gastos:item_eliminar"):
+            with self.subTest(ruta=ruta):
+                self.assertFalse(es_escritura_bloqueada("POST", ruta))
+        self.assertTrue(es_escritura_bloqueada("POST", "gastos:periodo_emitir"))

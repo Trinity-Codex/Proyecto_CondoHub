@@ -13,7 +13,8 @@ from django.template import engines
 # TRACE...) se trata como escritura.
 METODOS_SEGUROS = {"GET", "HEAD", "OPTIONS"}
 
-# Únicos POST de la demo: entrar, salir, cambiar de condominio y confirmar un aviso prioritario.
+# Únicos POST de la demo: entrar, salir, cambiar de condominio, confirmar un aviso prioritario y los
+# mantenedores listados abajo.
 # Los tres primeros solo escriben la sesión y last_login; la vista conserva sus validaciones
 # (credenciales, pertenencia al condominio).
 POST_PERMITIDOS = {
@@ -30,6 +31,11 @@ POST_PERMITIDOS = {
     # Fotos de incidentes (#122): la demo deja probar la subida; en Render el disco es efímero.
     "incidentes:nuevo",
     "incidentes:foto_subir",
+    # Ítems de cobro (#117): la demo deja probar el mantenedor de cuotas y multas del período abierto.
+    # La vista conserva sus reglas (solo administrador, solo con el período abierto, auditoría).
+    "gastos:item_nuevo",
+    "gastos:item_editar",
+    "gastos:item_eliminar",
 }
 
 # GET que hoy escriben datos de negocio. Revisión del Issue #111: abrir una notificación

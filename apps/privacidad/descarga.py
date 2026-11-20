@@ -16,7 +16,7 @@ def datos_de(usuario):
     cobros = (
         cobros_visibles(DetalleGastoComun.objects.filter(periodo__estado=PeriodoGasto.Estado.EMITIDO), usuario, incluir_bajas=True)
         .select_related("periodo__condominio", "unidad__edificio")
-        .prefetch_related("pagos")
+        .prefetch_related("pagos", "lineas")
         .order_by("periodo__condominio__nombre", "-periodo__anio", "-periodo__mes", "unidad__numero")
     )
     return {
@@ -50,6 +50,12 @@ def datos_de(usuario):
                 "condominio": c.periodo.condominio.nombre,
                 "unidad": str(c.unidad),
                 "periodo": str(c.periodo),
+                # Desglose del total (#117): gastos + fondo de reserva + ítems de cobro = total.
+                "gastos": c.monto,
+                "fondo_reserva": c.monto_fondo_reserva,
+                "items": c.monto_items,
+                # Solo las líneas de este cobro (de su unidad): nunca los ítems de otras unidades.
+                "lineas": [{"nombre": linea.nombre, "monto": linea.monto} for linea in c.lineas.all()],
                 "total": c.total,
                 "pagado": pagado_del_cobro(c),
                 "saldo": saldo_del_cobro(c),
