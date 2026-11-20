@@ -6,11 +6,20 @@ Permisos:
   - Ver lista y detalle:            el residente ve los suyos; administrador,
                                     comité y conserje ven todos
   - Cambiar estado:                 administrador y conserje
+  - Fotos de respaldo (Issue #122): las ve quien ve el incidente; el residente sube las «antes»
+                                    al reportar; administrador y conserje suben las «después» y borran
 """
+import mimetypes
+
 from django.contrib import messages
+from django.db import transaction
 from django.db.models import Case, Count, F, IntegerField, Q, When
+from django.http import FileResponse, Http404
 from django.shortcuts import redirect
+from django.utils.cache import patch_cache_control
+from django.views import View
 from django.views.generic import CreateView, DetailView, ListView
+from django.views.generic.detail import SingleObjectMixin
 
 from apps.core.listados import FiltrosGetMixin
 from apps.core.permisos import (
@@ -23,8 +32,19 @@ from apps.core.permisos import (
     tiene_rol,
 )
 
-from .forms import CambiarEstadoForm, IncidenteForm
-from .models import Incidente
+from .forms import CambiarEstadoForm, FotosDespuesForm, IncidenteForm
+from .models import FotoIncidente, Incidente, SubidaNoPermitida
+
+
+def solo_lo_visible(request, qs, campo_reportante="reportado_por"):
+    """
+    Regla única de visibilidad: el equipo del condominio ve todo; un residente, solo lo que reportó.
+    `campo_reportante` es la ruta hasta quien reportó (las fotos llegan por su incidente). Los incidentes y sus
+    fotos la comparten para que nunca se desalineen. @spec:incidentes-visibilidad-de-incidentes
+    """
+    if tiene_rol(request, ADMINISTRADOR, COMITE, CONSERJE):
+        return qs
+    return qs.filter(**{campo_reportante: request.user})
 
 
 class IncidentesVisiblesMixin(CondominioQuerysetMixin):
@@ -32,9 +52,7 @@ class IncidentesVisiblesMixin(CondominioQuerysetMixin):
 
     def get_queryset(self):
         qs = super().get_queryset().select_related("reportado_por", "unidad__edificio")
-        if tiene_rol(self.request, ADMINISTRADOR, COMITE, CONSERJE):
-            return qs
-        return qs.filter(reportado_por=self.request.user)
+        return solo_lo_visible(self.request, qs)
 
 
 def por_urgencia():
@@ -106,7 +124,10 @@ class IncidenteCreateView(RolRequeridoMixin, CreateView):
         incidente = form.save(commit=False)
         incidente.condominio = self.request.condominio
         incidente.reportado_por = self.request.user
-        incidente.reportar()  # guarda y avisa a la administración (patrón Observer)
+        # Incidente y fotos «antes» se guardan juntos: si una foto falla, no queda un reporte a medias.
+        with transaction.atomic():
+            incidente.reportar()  # guarda y avisa a la administración (patrón Observer)
+            FotoIncidente.subir(incidente, form.cleaned_data["fotos"], FotoIncidente.Etapa.ANTES, self.request.user)
         messages.success(self.request, f"Incidente #{incidente.pk} reportado. Te avisaremos cuando cambie su estado.")
         return redirect(incidente)
 
@@ -125,6 +146,13 @@ class IncidenteDetailView(RolRequeridoMixin, IncidentesVisiblesMixin, DetailView
         contexto = super().get_context_data(**kwargs)
         if self.puede_gestionar():
             contexto["form_estado"] = kwargs.get("form_estado") or CambiarEstadoForm(instance=self.object)
+            contexto["form_fotos"] = FotosDespuesForm(existentes=self.object.fotos.count())
+        # Booleano explícito: la plantilla no debe deducir el permiso de que exista un formulario.
+        contexto["puede_gestionar"] = self.puede_gestionar()
+        # @spec:incidentes-fotos-de-respaldo: si puede ver el incidente, ve todas sus fotos (mismas reglas de visibilidad).
+        fotos = list(self.object.fotos.select_related("subido_por"))
+        contexto["fotos_antes"] = [f for f in fotos if f.etapa == FotoIncidente.Etapa.ANTES]
+        contexto["fotos_despues"] = [f for f in fotos if f.etapa == FotoIncidente.Etapa.DESPUES]
         return contexto
 
     def post(self, request, *args, **kwargs):
@@ -141,3 +169,73 @@ class IncidenteDetailView(RolRequeridoMixin, IncidentesVisiblesMixin, DetailView
         self.object.cambiar_estado(form.cleaned_data["estado"], form.cleaned_data["respuesta"], usuario=request.user)
         messages.success(request, "Estado actualizado y notificado al residente.")
         return redirect(self.object)
+
+
+class FotoSubirView(RolRequeridoMixin, CondominioQuerysetMixin, SingleObjectMixin, View):
+    """Administrador y conserje suben fotos «después» a un incidente de su condominio (solo POST)."""
+
+    roles_permitidos = [ADMINISTRADOR, CONSERJE]
+    model = Incidente
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        # @spec:incidentes-fotos-de-respaldo
+        incidente = self.get_object()  # 404 si el incidente es de otro condominio
+        form = FotosDespuesForm(request.POST, request.FILES, existentes=incidente.fotos.count())
+        if form.is_valid():
+            try:
+                fotos = FotoIncidente.subir(incidente, form.cleaned_data["fotos"], FotoIncidente.Etapa.DESPUES, request.user)
+            except SubidaNoPermitida as error:
+                # El servicio cuenta el cupo con el incidente bloqueado: otra subida pudo llenarlo después del aviso del formulario.
+                messages.error(request, str(error))
+            else:
+                messages.success(request, f"Se subieron {len(fotos)} foto(s) al incidente #{incidente.pk}.")
+        else:
+            for error in form.errors["fotos"]:
+                messages.error(request, error)
+        return redirect(incidente)
+
+
+class FotoBorrarView(RolRequeridoMixin, CondominioQuerysetMixin, SingleObjectMixin, View):
+    """Solo administrador y conserje borran fotos (solo POST); la baja queda en auditoría."""
+
+    roles_permitidos = [ADMINISTRADOR, CONSERJE]
+    model = FotoIncidente
+    campo_condominio = "incidente__condominio"
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        # @spec:incidentes-fotos-de-respaldo
+        foto = self.get_object()
+        incidente = foto.incidente
+        foto.eliminar(request.user)
+        messages.success(request, "Foto eliminada.")
+        return redirect(incidente)
+
+
+class FotoArchivoView(RolRequeridoMixin, CondominioQuerysetMixin, SingleObjectMixin, View):
+    """
+    Entrega el archivo de la foto. No se sirve por MEDIA_URL: aquí se aplican las mismas reglas
+    del incidente, así que pedir la URL directa sin permiso da 404 (otro condominio u otro residente).
+    """
+
+    roles_permitidos = [ADMINISTRADOR, COMITE, CONSERJE, RESIDENTE]
+    model = FotoIncidente
+    campo_condominio = "incidente__condominio"
+
+    def get_queryset(self):
+        return solo_lo_visible(self.request, super().get_queryset(), "incidente__reportado_por")
+
+    def get(self, request, *args, **kwargs):
+        # @spec:incidentes-fotos-de-respaldo y @spec:incidentes-visibilidad-de-incidentes: mismas reglas de visibilidad que el incidente
+        foto = self.get_object()
+        try:
+            archivo = foto.imagen.open("rb")
+        except FileNotFoundError:
+            raise Http404("El archivo de la foto ya no existe.") from None
+        # La extensión guardada sale del formato que validó Pillow (ver CampoFotos), así el tipo coincide con los bytes.
+        tipo = mimetypes.guess_type(foto.imagen.name)[0] or "application/octet-stream"
+        respuesta = FileResponse(archivo, content_type=tipo)
+        respuesta["X-Content-Type-Options"] = "nosniff"
+        patch_cache_control(respuesta, private=True)  # una foto de un incidente no debe quedar en cachés compartidas
+        return respuesta

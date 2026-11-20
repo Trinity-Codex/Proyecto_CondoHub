@@ -190,6 +190,9 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 # con la variable de entorno del mismo nombre.
 MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT") or BASE_DIR / "media")
 MEDIA_URL = "/media/"
+# Subida de fotos de incidentes (#122). MEDIA_ROOT nunca está vacío, así que no sirve de guarda: sin un
+# almacenamiento persistente (#29) las fotos se perderían al reiniciar. Se enciende solo con esta variable.
+FOTOS_INCIDENTES_HABILITADAS = _booleano("FOTOS_INCIDENTES_HABILITADAS", False)
 # Las pruebas (y cargar_demo dentro de ellas) escriben en una carpeta temporal que se borra
 # al terminar, no en la carpeta media/ del proyecto.
 if sys.argv[1:2] == ["test"]:
@@ -198,6 +201,7 @@ if sys.argv[1:2] == ["test"]:
     import tempfile
 
     MEDIA_ROOT = Path(tempfile.mkdtemp(prefix="condohub-media-pruebas-"))
+    FOTOS_INCIDENTES_HABILITADAS = True
     atexit.register(shutil.rmtree, MEDIA_ROOT, ignore_errors=True)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

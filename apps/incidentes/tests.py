@@ -1,18 +1,26 @@
 """Pruebas de incidentes (RF07, RF08) y sus notificaciones (RF10)."""
+import os
+import tempfile
 from datetime import timedelta
+from pathlib import Path
+from io import BytesIO
 from unittest import mock
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
 from apps.auditoria.models import RegistroAuditoria
-from apps.core.pruebas import crear_escenario
+from apps.condominios.models import Membresia
+from apps.core.pruebas import crear_escenario, crear_usuario
 from apps.notificaciones.models import Notificacion
 
-from .models import Incidente
+from .forms import MAX_BYTES_FOTO, MAX_FOTOS_POR_INCIDENTE, CampoFotos, FotosDespuesForm
+from .models import FotoIncidente, Incidente, SubidaNoPermitida
 
 
 class IncidenteTest(TestCase):
@@ -241,3 +249,320 @@ class AuditoriaCambioDeEstadoTest(TestCase):
         self.incidente.refresh_from_db()
         self.assertEqual(self.incidente.estado, Incidente.Estado.RECIBIDO)
         self.assertEqual(RegistroAuditoria.objects.count(), 0)
+
+
+def imagen(nombre="foto.jpg", formato="JPEG"):
+    """Imagen real mínima, lista para subir (el formato lo decide Pillow, no el nombre)."""
+    contenido = BytesIO()
+    Image.new("RGB", (20, 20), "red").save(contenido, format=formato)
+    return SimpleUploadedFile(nombre, contenido.getvalue())
+
+
+class FotosIncidenteTest(TestCase):
+    """Fotos de respaldo antes/después (Issue #122): subida, límites, permisos, aislamiento y auditoría."""
+
+    def setUp(self):
+        self.e = crear_escenario()
+        # Los archivos de prueba van a una carpeta temporal que se borra sola.
+        carpeta = self.enterContext(tempfile.TemporaryDirectory())
+        self.enterContext(override_settings(MEDIA_ROOT=carpeta))
+        self.media = carpeta
+        self.incidente = Incidente.objects.create(
+            condominio=self.e.condominio, reportado_por=self.e.residente, categoria=Incidente.Categoria.ASEO,
+            titulo="Basurero sucio", descripcion="x", estado=Incidente.Estado.RESUELTO,
+        )
+
+    def foto(self, etapa=FotoIncidente.Etapa.ANTES, incidente=None, usuario=None):
+        return FotoIncidente.subir(
+            incidente or self.incidente, [imagen()], etapa, usuario or self.e.residente
+        )[0]
+
+    def reportar(self, *archivos, usuario=None):
+        self.client.force_login(usuario or self.e.residente)
+        return self.client.post(reverse("incidentes:nuevo"), {
+            "categoria": Incidente.Categoria.MANTENCION, "titulo": "Fuga", "descripcion": "Gotea.",
+            "fotos": list(archivos),
+        })
+
+    def subir_despues(self, usuario, *archivos, incidente=None):
+        self.client.force_login(usuario)
+        incidente = incidente or self.incidente
+        return self.client.post(reverse("incidentes:foto_subir", args=[incidente.pk]), {"fotos": list(archivos)}, follow=True)
+
+    def mensajes(self, respuesta):
+        return [str(m) for m in respuesta.context["messages"]]
+
+    def auditoria(self, accion):
+        return RegistroAuditoria.objects.filter(objeto_tipo="fotoincidente", accion=accion)
+
+    # --- subida ---
+
+    def test_residente_sube_fotos_antes_al_reportar(self):
+        respuesta = self.reportar(imagen("a.jpg"), imagen("b.png", "PNG"))
+        incidente = Incidente.objects.latest("pk")
+        self.assertRedirects(respuesta, incidente.get_absolute_url())
+        fotos = list(incidente.fotos.all())
+        self.assertEqual(len(fotos), 2)
+        for foto in fotos:
+            self.assertEqual(foto.etapa, FotoIncidente.Etapa.ANTES)
+            self.assertEqual(foto.subido_por, self.e.residente)
+            # Nombre generado y dentro de incidentes/<condominio_id>/: no queda el nombre que puso el usuario.
+            carpeta, nombre = os.path.split(foto.imagen.name)
+            self.assertEqual(carpeta, f"incidentes/{self.e.condominio.pk}")
+            self.assertNotIn(nombre.split(".")[0], ("a", "b"))
+            self.assertTrue(os.path.exists(os.path.join(self.media, foto.imagen.name)))
+        self.assertEqual(self.auditoria("crear").count(), 2)
+
+    def test_reportar_sin_fotos_sigue_funcionando(self):
+        self.reportar()
+        self.assertEqual(Incidente.objects.latest("pk").fotos.count(), 0)
+
+    def test_administrador_y_conserje_suben_fotos_despues(self):
+        for usuario in (self.e.administrador, self.e.conserje):
+            respuesta = self.subir_despues(usuario, imagen())
+            self.assertIn("Se subieron 1 foto(s) al incidente", self.mensajes(respuesta)[0])
+        fotos = self.incidente.fotos.all()
+        self.assertEqual([f.etapa for f in fotos], [FotoIncidente.Etapa.DESPUES] * 2)
+        self.assertEqual([f.subido_por for f in fotos], [self.e.administrador, self.e.conserje])
+
+    def test_residente_y_comite_no_suben_fotos_despues(self):
+        for usuario in (self.e.residente, self.e.comite):
+            respuesta = self.subir_despues(usuario, imagen())
+            self.assertEqual(respuesta.status_code, 403)
+        self.assertEqual(FotoIncidente.objects.count(), 0)
+
+    def test_subir_a_incidente_de_otro_condominio_da_404(self):
+        ajeno = Incidente.objects.create(
+            condominio=self.e.ajeno, reportado_por=self.e.residente_ajeno, categoria=Incidente.Categoria.OTRO,
+            titulo="Ajeno", descripcion="x",
+        )
+        self.assertEqual(self.subir_despues(self.e.administrador, imagen(), incidente=ajeno).status_code, 404)
+        self.assertEqual(FotoIncidente.objects.count(), 0)
+
+    # --- rechazos ---
+
+    def test_rechaza_txt_renombrado_a_jpg(self):
+        falso = SimpleUploadedFile("nota.jpg", b"esto es texto, no una imagen")
+        respuesta = self.reportar(falso)
+        self.assertEqual(respuesta.status_code, 200)  # vuelve al formulario con el error
+        self.assertIn("«nota.jpg»: no es una imagen JPG o PNG válida.", respuesta.context["form"].errors["fotos"])
+        self.assertFalse(Incidente.objects.filter(titulo="Fuga").exists())  # nada queda a medias
+
+    def test_rechaza_extension_que_no_es_jpg_ni_png(self):
+        respuesta = self.reportar(imagen("animada.gif", "GIF"))
+        self.assertIn("«animada.gif»: solo se aceptan imágenes JPG o PNG.", respuesta.context["form"].errors["fotos"])
+
+    def test_rechaza_mas_de_5_mb(self):
+        pesada = SimpleUploadedFile("grande.jpg", b"x" * (MAX_BYTES_FOTO + 1))
+        respuesta = self.reportar(pesada)
+        self.assertIn("«grande.jpg»: supera el máximo de 5 MB (pesa unos 5.1 MB).", respuesta.context["form"].errors["fotos"])
+        self.assertEqual(FotoIncidente.objects.count(), 0)
+
+    def test_rechaza_la_foto_numero_11(self):
+        for _ in range(MAX_FOTOS_POR_INCIDENTE):
+            self.foto(FotoIncidente.Etapa.ANTES)
+        respuesta = self.subir_despues(self.e.administrador, imagen())
+        self.assertIn("Cada incidente admite hasta 10 fotos", self.mensajes(respuesta)[0])
+        self.assertEqual(self.incidente.fotos.count(), MAX_FOTOS_POR_INCIDENTE)
+
+    def test_rechaza_11_fotos_en_un_mismo_reporte(self):
+        respuesta = self.reportar(*[imagen() for _ in range(MAX_FOTOS_POR_INCIDENTE + 1)])
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("quieres agregar 11", respuesta.context["form"].errors["fotos"][0])
+        self.assertFalse(Incidente.objects.filter(titulo="Fuga").exists())
+
+    # --- borrar ---
+
+    def test_administrador_y_conserje_borran_y_queda_en_auditoria(self):
+        for usuario in (self.e.administrador, self.e.conserje):
+            foto = self.foto()
+            ruta = os.path.join(self.media, foto.imagen.name)
+            self.client.force_login(usuario)
+            with self.captureOnCommitCallbacks(execute=True):
+                respuesta = self.client.post(reverse("incidentes:foto_borrar", args=[foto.pk]))
+            self.assertRedirects(respuesta, self.incidente.get_absolute_url())
+            self.assertFalse(FotoIncidente.objects.filter(pk=foto.pk).exists())
+            self.assertFalse(os.path.exists(ruta))  # el archivo también sale del disco
+            baja = self.auditoria("eliminar").get(objeto_id=str(foto.pk))
+            self.assertEqual(baja.usuario_id, usuario.pk)
+            self.assertEqual(baja.antes, {"incidente": self.incidente.pk, "etapa": "ANTES"})
+
+    def test_residente_y_comite_no_borran(self):
+        foto = self.foto()
+        for usuario in (self.e.residente, self.e.comite):
+            self.client.force_login(usuario)
+            self.assertEqual(self.client.post(reverse("incidentes:foto_borrar", args=[foto.pk])).status_code, 403)
+        self.assertTrue(FotoIncidente.objects.filter(pk=foto.pk).exists())
+        self.assertEqual(self.auditoria("eliminar").count(), 0)
+
+    def test_no_borra_fotos_de_otro_condominio(self):
+        foto = self.foto()
+        # Administrador de OTRO condominio: tiene el rol, pero la foto no es de su condominio activo.
+        otro_admin = crear_usuario("admin@ajeno.cl")
+        Membresia.objects.create(usuario=otro_admin, condominio=self.e.ajeno, rol=Membresia.Rol.ADMINISTRADOR)
+        self.client.force_login(otro_admin)
+        self.assertEqual(self.client.post(reverse("incidentes:foto_borrar", args=[foto.pk])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("incidentes:foto", args=[foto.pk])).status_code, 404)
+        self.assertTrue(FotoIncidente.objects.filter(pk=foto.pk).exists())
+
+    # --- quién ve (galería y archivo por URL directa) ---
+
+    def test_ven_el_archivo_administrador_comite_conserje_y_el_residente_que_reporto(self):
+        foto = self.foto()
+        for usuario in (self.e.administrador, self.e.comite, self.e.conserje, self.e.residente):
+            self.client.force_login(usuario)
+            respuesta = self.client.get(reverse("incidentes:foto", args=[foto.pk]))
+            self.assertEqual(respuesta.status_code, 200, usuario.email)
+            self.assertEqual(respuesta["Content-Type"], "image/jpeg")
+            self.assertEqual(respuesta["X-Content-Type-Options"], "nosniff")
+            self.assertIn("private", respuesta["Cache-Control"])
+            b"".join(respuesta.streaming_content)  # leer la respuesta la cierra sin cerrar la conexión de MySQL
+
+    def test_otro_residente_no_ve_el_archivo_por_url_directa(self):
+        foto = self.foto()
+        self.client.force_login(self.e.residente_b)  # mismo condominio, pero no reportó el incidente
+        self.assertEqual(self.client.get(reverse("incidentes:foto", args=[foto.pk])).status_code, 404)
+
+    def test_residente_de_otro_condominio_no_ve_el_archivo(self):
+        foto = self.foto()
+        self.client.force_login(self.e.residente_ajeno)
+        self.assertEqual(self.client.get(reverse("incidentes:foto", args=[foto.pk])).status_code, 404)
+
+    def test_sin_sesion_el_archivo_lleva_al_login(self):
+        foto = self.foto()
+        respuesta = self.client.get(reverse("incidentes:foto", args=[foto.pk]))
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertIn("iniciar-sesion", respuesta["Location"])
+
+    def test_el_archivo_no_se_sirve_por_media_url(self):
+        foto = self.foto()
+        self.client.force_login(self.e.administrador)
+        html = self.client.get(self.incidente.get_absolute_url()).content.decode()
+        self.assertIn(reverse("incidentes:foto", args=[foto.pk]), html)
+        self.assertNotIn(foto.imagen.url, html)
+
+    def test_detalle_muestra_antes_y_despues_con_fecha_y_autor(self):
+        antes = self.foto(FotoIncidente.Etapa.ANTES, usuario=self.e.residente)
+        despues = self.foto(FotoIncidente.Etapa.DESPUES, usuario=self.e.conserje)
+        # El residente que reportó ve ambas etapas de su incidente resuelto.
+        self.client.force_login(self.e.residente)
+        respuesta = self.client.get(self.incidente.get_absolute_url())
+        self.assertEqual(list(respuesta.context["fotos_antes"]), [antes])
+        self.assertEqual(list(respuesta.context["fotos_despues"]), [despues])
+        self.assertContains(respuesta, "Fotos de respaldo")
+        # La plantilla muestra la hora local, no la UTC con que se guarda.
+        self.assertContains(respuesta, f"{timezone.localtime(despues.fecha_subida):%d-%m-%Y %H:%M} · conserje")
+        self.assertContains(respuesta, f"{timezone.localtime(antes.fecha_subida):%d-%m-%Y %H:%M} · residente")
+        # Sin permiso de gestión no hay botón de borrar ni formulario de subida.
+        self.assertNotContains(respuesta, "foto_borrar")
+        self.assertNotContains(respuesta, reverse("incidentes:foto_subir", args=[self.incidente.pk]))
+
+    def test_gestion_ve_boton_de_borrar_y_formulario_de_subida(self):
+        foto = self.foto()
+        self.client.force_login(self.e.conserje)
+        respuesta = self.client.get(self.incidente.get_absolute_url())
+        self.assertContains(respuesta, reverse("incidentes:foto_borrar", args=[foto.pk]))
+        self.assertContains(respuesta, reverse("incidentes:foto_subir", args=[self.incidente.pk]))
+
+    def test_residente_ajeno_no_ve_la_galeria_de_otro_residente(self):
+        self.foto()
+        self.client.force_login(self.e.residente_b)
+        self.assertEqual(self.client.get(self.incidente.get_absolute_url()).status_code, 404)
+
+    def archivos_en_disco(self):
+        return [p for p in Path(self.media).rglob("*") if p.is_file()]
+
+    # --- subida apagada (FOTOS_INCIDENTES_HABILITADAS=False): no se escribe nada en disco ---
+
+    def test_subida_apagada_el_formulario_rechaza_las_fotos(self):
+        with override_settings(FOTOS_INCIDENTES_HABILITADAS=False):
+            respuesta = self.reportar(imagen())
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(
+            respuesta.context["form"].errors["fotos"], ["La subida de fotos aún no está habilitada en este servidor."]
+        )
+        self.assertFalse(Incidente.objects.filter(titulo="Fuga").exists())
+
+    def test_subida_apagada_subir_se_niega_y_no_escribe(self):
+        with override_settings(FOTOS_INCIDENTES_HABILITADAS=False):
+            with self.assertRaisesMessage(SubidaNoPermitida, "aún no está habilitada"):
+                FotoIncidente.subir(self.incidente, [imagen()], FotoIncidente.Etapa.ANTES, self.e.residente)
+        self.assertEqual(FotoIncidente.objects.count(), 0)
+        self.assertEqual(RegistroAuditoria.objects.count(), 0)
+
+    def test_subida_apagada_reportar_sin_fotos_sigue_funcionando(self):
+        with override_settings(FOTOS_INCIDENTES_HABILITADAS=False):
+            respuesta = self.reportar()
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertTrue(Incidente.objects.filter(titulo="Fuga").exists())
+
+    # --- cupo: lo exige el servicio, y el formulario cuenta antes de abrir nada con Pillow ---
+
+    def test_el_servicio_rechaza_pasar_de_10_aunque_no_pase_por_el_formulario(self):
+        for _ in range(MAX_FOTOS_POR_INCIDENTE):
+            self.foto()
+        antes = len(self.archivos_en_disco())
+        with self.assertRaisesMessage(SubidaNoPermitida, "ya tiene 10 y quieres agregar 1"):
+            FotoIncidente.subir(self.incidente, [imagen()], FotoIncidente.Etapa.DESPUES, self.e.administrador)
+        self.assertEqual(self.incidente.fotos.count(), MAX_FOTOS_POR_INCIDENTE)
+        self.assertEqual(len(self.archivos_en_disco()), antes)
+
+    def test_la_vista_avisa_si_otra_subida_llenó_el_cupo_despues_del_aviso_del_formulario(self):
+        for _ in range(MAX_FOTOS_POR_INCIDENTE):
+            self.foto()
+        # Simula la carrera: el formulario contó 0 fotos, pero al subir el cupo ya estaba lleno.
+        with mock.patch("apps.incidentes.views.FotosDespuesForm", lambda *a, **k: FotosDespuesForm(*a, existentes=0)):
+            respuesta = self.subir_despues(self.e.administrador, imagen())
+        self.assertIn("Cada incidente admite hasta 10 fotos", self.mensajes(respuesta)[0])
+        self.assertEqual(self.incidente.fotos.count(), MAX_FOTOS_POR_INCIDENTE)
+
+    def test_el_formulario_cuenta_antes_de_abrir_los_archivos_con_pillow(self):
+        with mock.patch.object(CampoFotos, "validar_foto") as validar:
+            respuesta = self.reportar(*[imagen() for _ in range(MAX_FOTOS_POR_INCIDENTE + 1)])
+        self.assertIn("quieres agregar 11", respuesta.context["form"].errors["fotos"][0])
+        validar.assert_not_called()
+
+    # --- archivos huérfanos: si la transacción se revierte, el archivo escrito se borra ---
+
+    def test_si_falla_la_auditoria_no_quedan_archivos_ni_filas(self):
+        with mock.patch("apps.incidentes.models.registrar", side_effect=[None, RuntimeError("falla controlada")]):
+            with self.assertRaises(RuntimeError):
+                FotoIncidente.subir(self.incidente, [imagen("a.jpg"), imagen("b.jpg")], FotoIncidente.Etapa.ANTES, self.e.residente)
+        self.assertEqual(FotoIncidente.objects.count(), 0)
+        self.assertEqual(self.archivos_en_disco(), [])  # ni la foto que sí alcanzó a guardarse
+
+    def test_si_falla_la_subida_al_reportar_no_queda_incidente_ni_archivo(self):
+        with mock.patch("apps.incidentes.models.registrar", side_effect=RuntimeError("falla controlada")):
+            with self.assertRaises(RuntimeError):
+                self.reportar(imagen())
+        self.assertFalse(Incidente.objects.filter(titulo="Fuga").exists())
+        self.assertEqual(self.archivos_en_disco(), [])
+
+    # --- el tipo servido coincide con los bytes ---
+
+    def test_un_png_llamado_jpg_se_guarda_como_png_y_se_sirve_como_image_png(self):
+        self.reportar(imagen("foto.jpg", "PNG"))
+        foto = FotoIncidente.objects.get()
+        self.assertTrue(foto.imagen.name.endswith(".png"), foto.imagen.name)
+        respuesta = self.client.get(reverse("incidentes:foto", args=[foto.pk]))
+        self.assertEqual(respuesta["Content-Type"], "image/png")
+        b"".join(respuesta.streaming_content)  # idem: close() a mano cierra la conexión y rompe la prueba siguiente
+
+    def test_un_jpeg_llamado_jpeg_se_guarda_como_jpg(self):
+        self.reportar(imagen("foto.jpeg", "JPEG"))
+        self.assertTrue(FotoIncidente.objects.get().imagen.name.endswith(".jpg"))
+
+    def test_el_detalle_pasa_un_booleano_explicito_de_permiso(self):
+        for usuario, esperado in ((self.e.administrador, True), (self.e.residente, False)):
+            self.client.force_login(usuario)
+            respuesta = self.client.get(reverse("incidentes:detalle", args=[self.incidente.pk]))
+            self.assertIs(respuesta.context["puede_gestionar"], esperado, usuario.email)
+
+    # --- auditoría ---
+
+    def test_la_subida_registra_quien_incidente_y_etapa(self):
+        foto = self.foto(FotoIncidente.Etapa.DESPUES, usuario=self.e.conserje)
+        registro = self.auditoria("crear").get(objeto_id=str(foto.pk))
+        self.assertEqual(registro.usuario_id, self.e.conserje.pk)
+        self.assertEqual(registro.condominio_id, self.e.condominio.pk)
+        self.assertEqual(registro.despues, {"incidente": self.incidente.pk, "etapa": "DESPUES"})
