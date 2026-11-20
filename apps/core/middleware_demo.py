@@ -72,7 +72,10 @@ class SoloLecturaDemoMiddleware:
     def process_view(self, request, vista, args, kwargs):
         # Una ruta sin resolver ya termina en 404 antes de llegar aquí.
         ruta = request.resolver_match.view_name
-        if not es_escritura_bloqueada(request.method, ruta):
+        # La ejecución de una mantención se permite en la demo, pero sin adjuntos: el disco de Render es efímero
+        # y de lo contrario cualquiera podría llenarlo con archivos de 5 MB.
+        con_adjunto = ruta == "mantenciones:ejecucion" and request.method == "POST" and bool(request.FILES)
+        if not con_adjunto and not es_escritura_bloqueada(request.method, ruta):
             return None
         contenido = engines["django"].from_string(PAGINA_BLOQUEO).render(request=request)
         return HttpResponseForbidden(contenido)

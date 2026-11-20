@@ -118,7 +118,7 @@ class EjecucionTest(TestCase):
         self.assertEqual(registro.usuario_id, self.e.administrador.pk)
         self.assertEqual(registro.condominio_id, self.e.condominio.pk)
         self.assertEqual(registro.antes, {"proxima_fecha": anterior.isoformat()})
-        self.assertEqual(registro.despues, {"fecha_ejecucion": "2027-01-31", "proxima_fecha": "2027-07-31"})
+        self.assertEqual(registro.despues, {"fecha_ejecucion": "2027-01-31", "proxima_fecha": "2027-07-31", "con_certificado": False})
 
     def test_si_la_auditoria_falla_no_queda_la_ejecucion(self):
         m = crear_mantencion(self.e.condominio)

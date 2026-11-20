@@ -5,6 +5,7 @@ El administrador carga las mantenciones que define el condominio (extintores, re
 con su frecuencia en meses. Esta app no afirma qué es obligatorio por ley: eso lo decide el cliente.
 """
 import calendar
+import uuid
 from datetime import date, timedelta
 
 from django.conf import settings
@@ -13,6 +14,15 @@ from django.db import models, transaction
 from django.utils import timezone
 
 from apps.auditoria.servicios import Accion, registrar
+
+
+
+def ruta_certificado(instancia, nombre):
+    """`upload_to` del certificado: nombre al azar y solo la extensión que ya fijó el validador (jpg, png o pdf)."""
+    extension = nombre.rsplit(".", 1)[-1].lower() if "." in nombre else ""
+    extension = extension if extension in ("jpg", "png", "pdf") else "bin"
+    return f"mantenciones/certificados/{uuid.uuid4().hex}.{extension}"
+
 
 # Anticipación por defecto con la que una mantención pasa a «por vencer».
 ANTICIPACION_POR_DEFECTO = 15
@@ -83,7 +93,7 @@ class Mantencion(models.Model):
         return self.estado_en(timezone.localdate())
 
     # @spec:mantenciones-calendario-de-mantenciones
-    def registrar_ejecucion(self, usuario, fecha, observacion=""):
+    def registrar_ejecucion(self, usuario, fecha, observacion="", certificado=None):
         """
         Anota que la mantención se hizo en `fecha` y recalcula la próxima: fecha + frecuencia_meses.
         Se parte de la fecha en que se HIZO (no de la que tocaba): así una mantención atrasada no se «pone al día»
@@ -92,14 +102,17 @@ class Mantencion(models.Model):
         with transaction.atomic():
             anterior = self.proxima_fecha
             ejecucion = EjecucionMantencion.objects.create(
-                mantencion=self, fecha=fecha, observacion=observacion, usuario=usuario,
+                mantencion=self, fecha=fecha, observacion=observacion, usuario=usuario, certificado=certificado or "",
             )
             self.proxima_fecha = sumar_meses(fecha, self.frecuencia_meses)
             self.save(update_fields=["proxima_fecha"])
             registrar(
                 usuario, self.condominio, Accion.CREAR, ejecucion,
                 antes={"proxima_fecha": anterior.isoformat()},
-                despues={"fecha_ejecucion": fecha.isoformat(), "proxima_fecha": self.proxima_fecha.isoformat()},
+                despues={
+                    "fecha_ejecucion": fecha.isoformat(), "proxima_fecha": self.proxima_fecha.isoformat(),
+                    "con_certificado": bool(certificado),
+                },
             )
         return ejecucion
 
@@ -114,7 +127,8 @@ class EjecucionMantencion(models.Model):
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+",
     )
-    # TODO(#116): certificado o foto adjunta (JPG, PNG o PDF, máx. 5 MB) cuando se una apps/core/imagenes.py
+    # Certificado o foto (JPG, PNG o PDF, máx. 5 MB). No se publica por MEDIA_URL: lo entrega CertificadoView con permisos.
+    certificado = models.FileField(upload_to=ruta_certificado, blank=True)
     creado = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -124,3 +138,18 @@ class EjecucionMantencion(models.Model):
 
     def __str__(self):
         return f"{self.mantencion} · {self.fecha:%d-%m-%Y}"
+
+
+class AlertaEnviada(models.Model):
+    """
+    Constancia de que ya se avisó de una mantención para una fecha de vencimiento (Issue #123). Un aviso por
+    mantención y por ciclo: al registrar una ejecución la fecha cambia y el ciclo siguiente puede avisar de nuevo.
+    La restricción única hace idempotente al comando aunque corra varias veces el mismo día.
+    """
+
+    mantencion = models.ForeignKey(Mantencion, on_delete=models.CASCADE, related_name="alertas")
+    fecha_objetivo = models.DateField("fecha de vencimiento avisada")
+    enviada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["mantencion", "fecha_objetivo"], name="una_alerta_por_ciclo")]
