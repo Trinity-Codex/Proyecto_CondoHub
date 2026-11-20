@@ -26,8 +26,8 @@ COPY . .
 
 # Usuario sin privilegios, dueño solo de lo que la demo escribe en ejecución.
 RUN useradd --create-home --uid 10001 condohub \
-    && mkdir -p .demo_cliente staticfiles \
-    && chown condohub:condohub .demo_cliente staticfiles
+    && mkdir -p .demo_cliente staticfiles media \
+    && chown condohub:condohub .demo_cliente staticfiles media
 USER condohub
 
 # Render entrega el puerto en $PORT; 10000 es su valor por defecto.
