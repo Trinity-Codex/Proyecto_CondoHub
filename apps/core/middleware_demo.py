@@ -27,6 +27,9 @@ POST_PERMITIDOS = {
     "mantenciones:nueva",
     "mantenciones:editar",
     "mantenciones:ejecucion",
+    # Fotos de incidentes (#122): la demo deja probar la subida; en Render el disco es efímero.
+    "incidentes:nuevo",
+    "incidentes:foto_subir",
 }
 
 # GET que hoy escriben datos de negocio. Revisión del Issue #111: abrir una notificación
