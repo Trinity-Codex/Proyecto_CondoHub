@@ -9,7 +9,7 @@
 {% include "pagos/_total_adeudado.html" %}
 
 {% comment %}
-  En el celular (RNF03) se ocultan "Gastos" y "Fondo reserva" (están en el detalle del
+  En el celular (RNF03) se ocultan "Gastos", "Fondo reserva" e "Ítems" (están en el detalle del
   cobro) y la unidad pasa debajo del período, para que el total, el estado y el botón
   se vean sin deslizar la tabla.
 {% endcomment %}
@@ -17,7 +17,7 @@
 <div class="table-responsive">
   <table class="table table-hover align-middle mb-0">
     <thead>
-      <tr><th scope="col">Período</th><th scope="col" class="d-none d-md-table-cell">Unidad</th><th scope="col" class="text-end d-none d-md-table-cell">Gastos</th><th scope="col" class="text-end d-none d-md-table-cell">Fondo reserva</th><th scope="col" class="text-end">Total</th><th scope="col">Estado</th><th scope="col"><span class="visually-hidden">Acciones</span></th></tr>
+      <tr><th scope="col">Período</th><th scope="col" class="d-none d-md-table-cell">Unidad</th><th scope="col" class="text-end d-none d-md-table-cell">Gastos</th><th scope="col" class="text-end d-none d-md-table-cell">Fondo reserva</th><th scope="col" class="text-end d-none d-md-table-cell">Ítems</th><th scope="col" class="text-end">Total</th><th scope="col">Estado</th><th scope="col"><span class="visually-hidden">Acciones</span></th></tr>
     </thead>
     <tbody>
       {% for c in cobros %}
@@ -26,12 +26,14 @@
         <td class="d-none d-md-table-cell">{{ c.unidad }}</td>
         <td class="text-end text-nowrap d-none d-md-table-cell">{{ c.monto|pesos }}</td>
         <td class="text-end text-nowrap d-none d-md-table-cell">{{ c.monto_fondo_reserva|pesos }}</td>
+        {# Cuotas extraordinarias y multas (#117); el detalle de cada una está en «Ver detalle». «—» si no hay, como en la vista del período. #}
+        <td class="text-end text-nowrap d-none d-md-table-cell">{% if c.monto_items %}{{ c.monto_items|pesos }}{% else %}—{% endif %}</td>
         <td class="text-end text-nowrap fw-semibold">{{ c.total|pesos }}{% if c.pagado and c.estado != "PAGADO" %}<div class="small fw-normal text-muted">Abonado {{ c.pagado|pesos }} · Saldo {{ c.saldo|pesos }}</div>{% endif %}</td>
         <td>{% include "pagos/_estado_cobro.html" with estado=c.estado %}</td>
         <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'pagos:cobro_detalle' c.pk %}" aria-label="Ver detalle"><i class="bi bi-eye"></i><span class="d-none d-md-inline"> Ver detalle</span></a></td>
       </tr>
       {% empty %}
-      <tr><td colspan="7" class="text-center text-muted py-4">Aún no tienes cobros emitidos.</td></tr>
+      <tr><td colspan="8" class="text-center text-muted py-4">Aún no tienes cobros emitidos.</td></tr>
       {% endfor %}
     </tbody>
   </table>

@@ -20,7 +20,7 @@
 
 - [x] 4.1 Datos demo en `apps/gastos/demo.py`: una cuota extraordinaria general y una multa a una unidad; verificar con `cargar_demo` y su prueba.
 - [x] 4.2 Prueba de que el residente solo obtiene las líneas de su unidad y de sus meses de residencia (#46) y de que el total adeudado las incluye.
-- [ ] 4.3 Correr `python manage.py test apps` completo y `openspec validate --all --strict` en verde.
+- [x] 4.3 Correr `python manage.py test apps` completo y `openspec validate --all --strict` en verde.
 
 ## Workflow follow-up
 

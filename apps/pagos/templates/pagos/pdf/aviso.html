@@ -19,8 +19,9 @@ Vencimiento: {{ periodo.fecha_vencimiento|date:"d-m-Y"|default:"Sin registrar" }
 <table>
 <tr><td>Parte de los gastos comunes</td><td>$ {{ cobro.monto|miles }}</td></tr>
 <tr><td>Aporte al fondo de reserva</td><td>$ {{ cobro.monto_fondo_reserva|miles }}</td></tr>
-<tr><td>Ítems adicionales</td><td>$ {{ cobro.monto_items|miles }}</td></tr>
-<tr><td>Intereses y multas</td><td>$ 0</td></tr>
+{# Ítems de cobro (#117): una fila por cuota o multa de esta unidad. Las multas van aquí, no en intereses. #}
+{% for linea in cobro.lineas.all %}<tr><td>{{ linea.nombre }}</td><td>$ {{ linea.monto|miles }}</td></tr>
+{% endfor %}<tr><td>Intereses por mora</td><td>$ 0</td></tr>
 <tr><td>Cobro del período</td><td>$ {{ cobro.total|miles }}</td></tr>
 <tr><td>Pagos vigentes del cobro</td><td>$ {{ pagado|miles }}</td></tr>
 <tr><td>Saldo del período</td><td>$ {{ saldo|miles }}</td></tr>

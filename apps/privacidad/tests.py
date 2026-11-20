@@ -290,3 +290,50 @@ class AuditoriaSolicitudesTest(TestCase):
         self.assertEqual((cerrar.antes, cerrar.despues), ({"estado": "PENDIENTE"}, {"estado": "CERRADA"}))
         # Ni el detalle ni la respuesta se copian a la auditoría.
         self.assertNotIn("9876", str(presentar.despues) + str(cerrar.antes) + str(cerrar.despues))
+
+
+class DescargaItemsDeCobroTest(TestCase):
+    """#117: la descarga exporta las líneas de ítems de los cobros del titular, nunca las de otra unidad."""
+
+    def setUp(self):
+        from apps.gastos.servicios import emitir_periodo
+        from apps.gastos.tests_items import crear_item, periodo_con_egreso
+
+        self.e = crear_escenario()
+        periodo = periodo_con_egreso(self.e.condominio, self.e.administrador)
+        crear_item(periodo, self.e.administrador, monto=10000, nombre="Cuota general")
+        crear_item(periodo, self.e.administrador, monto=25000, nombre="Multa B101", unidades=[self.e.b101])
+        emitir_periodo(periodo, usuario=self.e.administrador)
+
+    def cobros_de(self, usuario):
+        self.client.force_login(usuario)
+        return json.loads(self.client.get(reverse("privacidad:descargar")).content)["cobros"]
+
+    def test_exporta_el_desglose_de_su_cobro(self):
+        (cobro,) = self.cobros_de(self.e.residente)
+        self.assertEqual(cobro["lineas"], [{"nombre": "Cuota general", "monto": 10000}])
+        self.assertEqual(cobro["items"], 10000)
+        self.assertEqual(cobro["gastos"] + cobro["fondo_reserva"] + cobro["items"], cobro["total"])
+
+    def test_la_multa_solo_sale_a_su_unidad(self):
+        (cobro_b,) = self.cobros_de(self.e.residente_b)
+        self.assertEqual({linea["nombre"] for linea in cobro_b["lineas"]}, {"Cuota general", "Multa B101"})
+        self.assertEqual(self.cobros_de(self.e.residente_ajeno), [])
+
+    def test_sin_consultas_por_cobro(self):
+        """prefetch_related("lineas"): las líneas de todos los cobros salen en una sola consulta (sin N+1)."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from apps.gastos.servicios import emitir_periodo
+        from apps.gastos.tests_items import crear_item, periodo_con_egreso
+
+        self.cobros_de(self.e.residente)  # calienta la sesión
+        with CaptureQueriesContext(connection) as uno:
+            self.cobros_de(self.e.residente)
+        otro = periodo_con_egreso(self.e.condominio, self.e.administrador, mes=11)
+        crear_item(otro, self.e.administrador, monto=5000, nombre="Otra cuota")
+        emitir_periodo(otro, usuario=self.e.administrador)
+        with CaptureQueriesContext(connection) as dos:
+            self.assertEqual(len(self.cobros_de(self.e.residente)), 2)
+        self.assertEqual(len(dos), len(uno))
