@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     "apps.privacidad",      # aviso de privacidad, público (#51)
     "apps.cartera",         # deuda por antigüedad (#54)
     "apps.rendicion",       # rendición de cuentas mensual (#55)
+    "apps.mantenciones",    # calendario de mantenciones periódicas (#123)
 ]
 
 MIDDLEWARE = [

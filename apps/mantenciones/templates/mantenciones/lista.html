@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block titulo %}Mantenciones{% endblock %}
+
+{% block contenido %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h3 mb-0"><i class="bi bi-calendar2-check" aria-hidden="true"></i> Mantenciones</h1>
+  {% if es_admin %}
+  <a class="btn btn-primary" href="{% url 'mantenciones:nueva' %}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Nueva mantención</a>
+  {% endif %}
+</div>
+{# El condominio define qué mantenciones lleva y cada cuánto: la lista no pretende ser un listado de obligaciones legales. #}
+<p class="text-muted small">Ordenadas por urgencia: primero las vencidas y luego por próxima fecha. Cada condominio define qué mantenciones lleva y con qué frecuencia.</p>
+
+{% include "_chips.html" with chips=chips etiqueta="Filtrar por estado" %}
+
+<div class="card">
+<div class="table-responsive">
+  <table class="table table-hover align-middle mb-0">
+    <caption class="visually-hidden">Mantenciones del condominio, de la más urgente a la menos urgente</caption>
+    {# En el celular se ocultan frecuencia y proveedor: la frecuencia va bajo el nombre y el proveedor queda en la tabla de escritorio (RNF03). #}
+    <thead>
+      <tr>
+        <th scope="col">Mantención</th>
+        <th scope="col">Próxima fecha</th>
+        <th scope="col">Estado</th>
+        <th scope="col" class="d-none d-md-table-cell">Frecuencia</th>
+        <th scope="col" class="d-none d-md-table-cell">Proveedor</th>
+        {% if es_admin %}<th scope="col"><span class="visually-hidden">Acciones</span></th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in mantenciones %}
+      <tr>
+        <td>{{ m.nombre }}<div class="small text-muted d-md-none">Cada {{ m.frecuencia_meses }} mes{{ m.frecuencia_meses|pluralize:"es" }}</div></td>
+        <td class="text-nowrap">
+          {{ m.proxima_fecha|date:"d-m-Y" }}
+          <div class="small text-muted">
+            {% if m.dias_restantes < 0 %}Hace {{ m.dias_abs }} día{{ m.dias_abs|pluralize }}
+            {% elif m.dias_restantes == 0 %}Hoy
+            {% else %}En {{ m.dias_abs }} día{{ m.dias_abs|pluralize }}{% endif %}
+          </div>
+        </td>
+        <td><span class="insignia insignia-{{ m.color_estado }}">{{ m.estado_hoy.label }}</span></td>
+        <td class="d-none d-md-table-cell">Cada {{ m.frecuencia_meses }} mes{{ m.frecuencia_meses|pluralize:"es" }}</td>
+        <td class="d-none d-md-table-cell">{{ m.proveedor.razon_social|default:"—" }}</td>
+        {% if es_admin %}
+        {# Sin text-nowrap: en el celular el segundo botón baja de línea en vez de salirse de la tabla. #}
+        <td class="text-end">
+          <a class="btn btn-sm btn-primary" href="{% url 'mantenciones:ejecucion' m.pk %}" aria-label="Registrar ejecución de {{ m.nombre }}"><i class="bi bi-check2-circle" aria-hidden="true"></i><span class="d-none d-md-inline"> Registrar ejecución</span></a>
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'mantenciones:editar' m.pk %}" aria-label="Editar {{ m.nombre }}"><i class="bi bi-pencil" aria-hidden="true"></i><span class="d-none d-md-inline"> Editar</span></a>
+        </td>
+        {% endif %}
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="text-center text-muted py-4">{% if hay_filtros %}No hay mantenciones con ese estado.{% else %}Aún no hay mantenciones registradas.{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+</div>
+{% endblock %}

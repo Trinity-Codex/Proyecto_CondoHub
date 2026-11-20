@@ -132,6 +132,17 @@ class MenuAdministracionTest(TestCase):
         self.assertContains(respuesta, 'class="nav-link dropdown-toggle active"')
         self.assertContains(respuesta, f'class="dropdown-item active" href="{reverse("rendicion:inicio")}"')
 
+    def test_mantenciones_se_ve_para_administrador_comite_y_conserje_pero_no_para_el_residente(self):
+        # Va fuera de «Administración» (el conserje no la ve): es un enlace propio de la barra (#123).
+        enlace = reverse("mantenciones:lista")
+        for usuario in (self.e.administrador, self.e.comite, self.e.conserje):
+            self.assertContains(self.menu(usuario), f'href="{enlace}"')
+        self.assertNotContains(self.menu(self.e.residente), enlace)
+
+    def test_mantenciones_marca_su_enlace_al_estar_en_ella(self):
+        respuesta = self.menu(self.e.conserje, "mantenciones:lista")
+        self.assertContains(respuesta, f'class="nav-link active" href="{reverse("mantenciones:lista")}"')
+
     def test_residentes_y_conserje_no_ven_administracion(self):
         for usuario in (self.e.residente, self.e.conserje):
             self.assertNotContains(self.menu(usuario), "Administración")

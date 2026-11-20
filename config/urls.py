@@ -36,6 +36,7 @@ urlpatterns = [
     path("privacidad/", include("apps.privacidad.urls")),
     path("cartera/", include("apps.cartera.urls")),
     path("rendicion/", include("apps.rendicion.urls")),
+    path("mantenciones/", include("apps.mantenciones.urls")),
     path("", include("apps.core.urls")),
 ]
 

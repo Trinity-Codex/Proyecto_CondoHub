@@ -23,6 +23,10 @@ POST_PERMITIDOS = {
     # Aviso prioritario (#118): sin confirmarlo, el residente de la demo quedaría bloqueado en él.
     # Solo guarda la lectura del propio residente (LecturaComunicado).
     "comunicados:confirmar_aviso",
+    # Mantenciones (#123): la demo deja probar el alta, la edición y el registro de ejecuciones.
+    "mantenciones:nueva",
+    "mantenciones:editar",
+    "mantenciones:ejecucion",
     # Fotos de incidentes (#122): la demo deja probar la subida; en Render el disco es efímero.
     "incidentes:nuevo",
     "incidentes:foto_subir",

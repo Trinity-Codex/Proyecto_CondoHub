@@ -34,7 +34,7 @@ from apps.cuentas.demo import CLAVE_DEMO, USUARIOS
 APPS_DEMO = [
     "cuentas", "condominios", "reservas", "comunicados", "incidentes",
     "proveedores", "gastos", "pagos", "notificaciones",
-    "auditoria", "privacidad", "cartera", "rendicion",
+    "auditoria", "privacidad", "cartera", "rendicion", "mantenciones",
 ]
 
 
