@@ -1,13 +1,16 @@
 """Pruebas de core: condominio activo, permisos por rol, residentes, PDF y datos demo."""
+import os
+import subprocess
 import tempfile
 from datetime import date, time, timedelta
 from decimal import Decimal
 from io import BytesIO, StringIO
 from pathlib import Path
-from unittest import mock
+from unittest import mock, skipUnless
 
 from django import forms
 from django.conf import settings
+from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.core.management import call_command
 from django.db import connection
 from django.db.models import Count, Sum
@@ -791,3 +794,42 @@ class RespuestaCsvTest(SimpleTestCase):
         self.assertEqual(lineas[1], "'=SUMA(1);-5")  # el texto con apóstrofo; el número negativo intacto
         self.assertEqual(lineas[2], "'@cmd;7")
         self.assertEqual(lineas[3], "Torre A;1")
+
+
+class ModoSinConexionTest(SimpleTestCase):
+    def test_worker_publico_en_la_raiz_y_recursos_estaticos(self):
+        from django.contrib.staticfiles import finders
+        import re
+
+        self.assertEqual(reverse("core:service_worker"), "/sw.js")
+        respuesta = self.client.get("/sw.js")
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("javascript", respuesta["Content-Type"])
+        self.assertIn("no-cache", respuesta["Cache-Control"])
+        recursos = re.findall(r'"(/static/[^"]+)"', respuesta.content.decode())
+        self.assertIn("/static/sin-conexion.html", recursos)
+        self.assertIn("/static/js/modo-sin-conexion.js", recursos)
+        for url in recursos:
+            self.assertTrue(finders.find(url.removeprefix("/static/")), url)
+
+    def test_manifest_con_inicio_alcance_e_iconos_instalables(self):
+        import json
+        from django.contrib.staticfiles import finders
+        from PIL import Image
+
+        manifest = json.loads(Path(finders.find("manifest.webmanifest")).read_text())
+        self.assertEqual((manifest["start_url"], manifest["scope"], manifest["display"]), ("/", "/", "standalone"))
+        self.assertTrue(manifest["name"] and manifest["short_name"])
+        self.assertTrue({"192x192", "512x512"}.issubset({i["sizes"] for i in manifest["icons"]}))
+        for icono in manifest["icons"]:
+            with Image.open(finders.find(icono["src"].removeprefix("/static/"))) as imagen:
+                self.assertEqual(imagen.format, "PNG")
+                self.assertEqual("%dx%d" % imagen.size, icono["sizes"])
+
+
+
+@skipUnless(os.environ.get("PROBAR_PWA_CHROMIUM") == "1", "Requiere Chromium y Playwright")
+class NavegacionPwaTest(StaticLiveServerTestCase):
+    def test_instalar_perder_red_y_reintentar(self):
+        subprocess.run(["node", str(settings.BASE_DIR / "scripts/prueba_pwa.cjs"), self.live_server_url],
+                       check=True, timeout=100)

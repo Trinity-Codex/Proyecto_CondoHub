@@ -31,6 +31,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
   <link href="{% static 'css/condohub.css' %}?v=20261119b" rel="stylesheet">
   {# PWA: permite "instalar" el sitio en el celular como una app (RNF03). #}
+  <script>if (window.isSecureContext && "serviceWorker" in navigator) navigator.serviceWorker.register("{% url 'core:service_worker' %}", {updateViaCache: "none"}).catch(error => console.warn("CondoHub: no se pudo activar el modo sin conexión.", error));</script>
   <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
   <link rel="icon" href="{% static 'img/favicon.ico' %}" sizes="48x48">
   <link rel="icon" href="{% static 'img/icono-192.png' %}" type="image/png" sizes="192x192">

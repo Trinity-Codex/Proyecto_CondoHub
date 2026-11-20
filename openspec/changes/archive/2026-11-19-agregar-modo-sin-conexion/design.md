@@ -1,0 +1,3 @@
+La ruta /sw.js permite controlar el sitio completo y devuelve las rutas de los estáticos de la compilación. El registro se hace desde la plantilla base en contexto seguro. La instalación precarga exclusivamente recursos públicos sin credenciales. El worker respeta las respuestas del servidor, incluidos los errores HTTP. Ante un fallo de red en una navegación GET sirve la página estática. Las operaciones de escritura, las descargas privadas y los recursos externos no se almacenan.
+
+Chrome retiró la auditoría PWA de las versiones modernas de Lighthouse. La prueba de navegador consulta los errores de instalación mediante DevTools, corta la red y la restaura en un perfil nuevo de Chromium.

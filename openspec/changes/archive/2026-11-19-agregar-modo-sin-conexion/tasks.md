@@ -1,0 +1,4 @@
+- [x] Exponer el worker público en /sw.js y registrarlo desde la plantilla base.
+- [x] Precargar recursos públicos y mostrar una página de reintento sin red.
+- [x] Comprobar el manifiesto, la ruta y los archivos estáticos con Django.
+- [x] Preparar la prueba de instalación, pérdida de conexión y recuperación en Chromium.
