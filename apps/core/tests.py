@@ -833,3 +833,12 @@ class NavegacionPwaTest(StaticLiveServerTestCase):
     def test_instalar_perder_red_y_reintentar(self):
         subprocess.run(["node", str(settings.BASE_DIR / "scripts/prueba_pwa.cjs"), self.live_server_url],
                        check=True, timeout=100)
+
+
+class InicioTextoAmpliadoTest(TestCase):
+    """Con el texto al 200 % (WCAG 1.4.4, hallazgo de la prueba #59) los botones del inicio saltan de línea."""
+
+    def test_los_botones_del_residente_saltan_de_linea(self):
+        e = crear_escenario()
+        self.client.force_login(e.residente)
+        self.assertContains(self.client.get(reverse("core:inicio")), '<div class="d-flex flex-wrap gap-2">')

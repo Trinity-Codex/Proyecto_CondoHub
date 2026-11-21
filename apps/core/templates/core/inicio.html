@@ -8,7 +8,7 @@
     <h1 class="h3 mb-0">Hola, {{ user.first_name|default:user.email }}</h1>
     <p class="text-muted mb-0">{{ condominio_activo.nombre }} · {{ condominio_activo.comuna }}</p>
   </div>
-  <div class="d-flex gap-2">
+  <div class="d-flex flex-wrap gap-2">
     {% if es_residente %}
     <a class="btn btn-primary" href="{% url 'reservas:nueva' %}"><i class="bi bi-calendar-plus"></i> Reservar espacio</a>
     <a class="btn btn-outline-primary" href="{% url 'incidentes:nuevo' %}"><i class="bi bi-exclamation-triangle"></i> Reportar incidente</a>

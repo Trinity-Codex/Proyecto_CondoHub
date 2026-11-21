@@ -154,3 +154,14 @@ class TarifaEspacioTest(TestCase):
         self.assertContains(self.client.get(reverse("reservas:espacio_nuevo")), "data-monto")
         self.client.force_login(self.e.residente)
         self.assertEqual(self.client.get(reverse("reservas:espacio_nuevo")).status_code, 403)
+
+
+class TextoAmpliadoTest(TestCase):
+    """Con el texto al 200 % (WCAG 1.4.4, hallazgo de la prueba #59) los botones saltan de línea y no se salen."""
+
+    def test_los_grupos_de_botones_saltan_de_linea(self):
+        e = crear_escenario()
+        self.client.force_login(e.residente)
+        for url in (reverse("reservas:espacios"), reverse("reservas:nueva")):
+            with self.subTest(url=url):
+                self.assertContains(self.client.get(url), "d-flex flex-wrap gap-2")
