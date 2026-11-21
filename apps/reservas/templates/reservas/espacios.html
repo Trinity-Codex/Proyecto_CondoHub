@@ -32,7 +32,7 @@
           <li><i class="bi bi-cash"></i> {% if e.tarifa %}{{ e.tarifa|pesos }} por reserva{% else %}Sin costo{% endif %}</li>
         </ul>
       </div>
-      <div class="card-footer d-flex gap-2">
+      <div class="card-footer d-flex flex-wrap gap-2">
         <a class="btn btn-sm btn-outline-primary" href="{% url 'reservas:espacio_detalle' e.pk %}">Ver disponibilidad</a>
         {% if es_residente and e.activo %}
         <a class="btn btn-sm btn-primary" href="{% url 'reservas:nueva' %}?espacio={{ e.pk }}">Reservar</a>

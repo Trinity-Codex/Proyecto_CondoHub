@@ -345,3 +345,12 @@ class RecordatoriosTest(TestCase):
     def test_comando_rechaza_una_fecha_invalida(self):
         with self.assertRaisesMessage(CommandError, "AAAA-MM-DD"):
             call_command("enviar_recordatorios", fecha="07-04-2026")
+
+
+class TextoAmpliadoTest(TestCase):
+    """Con el texto al 200 % (WCAG 1.4.4, hallazgo de la prueba #59) «Marcar todas como leídas» baja de línea."""
+
+    def test_el_encabezado_salta_de_linea(self):
+        e = crear_escenario()
+        self.client.force_login(e.residente)
+        self.assertContains(self.client.get(reverse("notificaciones:lista")), "d-flex flex-wrap justify-content-between")
