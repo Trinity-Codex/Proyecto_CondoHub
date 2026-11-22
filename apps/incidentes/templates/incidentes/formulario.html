@@ -9,7 +9,7 @@
       <form method="post" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
         {% include "_formulario.html" with form=form %}
-        <div class="d-flex gap-2">
+        <div class="d-flex flex-wrap gap-2">
           <button class="btn btn-primary" type="submit">Enviar reporte</button>
           <a class="btn btn-outline-secondary" href="{% url 'incidentes:lista' %}">Cancelar</a>
         </div>
