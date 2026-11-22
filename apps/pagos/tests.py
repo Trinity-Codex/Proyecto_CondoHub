@@ -210,7 +210,7 @@ class EgresosParaResidenteTest(TestCase):
     """Issue #115 (RQ-09): el residente ve los egresos agrupados por categoría, sin sueldos ni descripciones libres."""
 
     SUELDO = "Sueldo conserje (jornada completa)"
-    CLASE_FILA = 'class="list-group-item d-flex justify-content-between gap-3"'
+    CLASE_FILA = 'class="list-group-item d-flex flex-wrap justify-content-between gap-3"'
 
     def fila(self, nombre, subtotal):
         """HTML de una fila de egresos tal como la pinta pagos/detalle.html."""

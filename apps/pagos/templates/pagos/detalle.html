@@ -17,28 +17,28 @@
     <div class="card h-100">
       <div class="card-header">Cómo se calculó tu cobro</div>
       <ul class="list-group list-group-flush">
-        <li class="list-group-item d-flex justify-content-between"><span>Total de egresos del período</span><span>{{ total_egresos|pesos }}</span></li>
+        <li class="list-group-item d-flex flex-wrap justify-content-between gap-3"><span>Total de egresos del período</span><span>{{ total_egresos|pesos }}</span></li>
         {# Criterio con que se repartió el período (patrón Strategy, apps/gastos/prorrateo.py) #}
-        <li class="list-group-item d-flex justify-content-between gap-3"><span>Reparto</span><span class="text-end">{{ cobro.periodo.get_criterio_prorrateo_display }}</span></li>
+        <li class="list-group-item d-flex flex-wrap justify-content-between gap-3"><span>Reparto</span><span class="text-end">{{ cobro.periodo.get_criterio_prorrateo_display }}</span></li>
         {% if cobro.periodo.criterio_prorrateo == "ALICUOTA" %}
-        <li class="list-group-item d-flex justify-content-between"><span>Alícuota de {{ cobro.unidad }}</span><span>{{ cobro.unidad.alicuota|floatformat:"-4" }}</span></li>
+        <li class="list-group-item d-flex flex-wrap justify-content-between gap-3"><span>Alícuota de {{ cobro.unidad }}</span><span>{{ cobro.unidad.alicuota|floatformat:"-4" }}</span></li>
         {% endif %}
-        <li class="list-group-item d-flex justify-content-between"><span>Tu parte de los gastos</span><span>{{ cobro.monto|pesos }}</span></li>
-        <li class="list-group-item d-flex justify-content-between"><span>Fondo de reserva ({{ cobro.periodo.porcentaje_fondo_reserva|floatformat:"-2" }} %)</span><span>{{ cobro.monto_fondo_reserva|pesos }}</span></li>
+        <li class="list-group-item d-flex flex-wrap justify-content-between gap-3"><span>Tu parte de los gastos</span><span>{{ cobro.monto|pesos }}</span></li>
+        <li class="list-group-item d-flex flex-wrap justify-content-between gap-3"><span>Fondo de reserva ({{ cobro.periodo.porcentaje_fondo_reserva|floatformat:"-2" }} %)</span><span>{{ cobro.monto_fondo_reserva|pesos }}</span></li>
         {# Ítems de cobro (#117): una línea por cuota o multa de ESTA unidad, copiada al emitir (LineaCobro). #}
         {% for linea in cobro.lineas.all %}
-        <li class="list-group-item d-flex justify-content-between gap-3"><span>{{ linea.nombre }}</span><span class="text-nowrap">{{ linea.monto|pesos }}</span></li>
+        <li class="list-group-item d-flex flex-wrap justify-content-between gap-3"><span>{{ linea.nombre }}</span><span class="text-nowrap">{{ linea.monto|pesos }}</span></li>
         {% endfor %}
-        <li class="list-group-item d-flex justify-content-between fw-semibold"><span>Total a pagar</span><span>{{ cobro.total|pesos }}</span></li>
-        <li class="list-group-item d-flex justify-content-between align-items-center"><span>Estado</span>{% include "pagos/_estado_cobro.html" with estado=cobro.estado %}</li>
-        <li class="list-group-item d-flex justify-content-between"><span>Pagado</span><span>{{ pagado|pesos }}</span></li>
-        <li class="list-group-item d-flex justify-content-between fw-semibold"><span>Saldo pendiente</span><span>{{ saldo|pesos }}</span></li>
+        <li class="list-group-item d-flex flex-wrap justify-content-between gap-3 fw-semibold"><span>Total a pagar</span><span>{{ cobro.total|pesos }}</span></li>
+        <li class="list-group-item d-flex flex-wrap justify-content-between gap-3 align-items-center"><span>Estado</span>{% include "pagos/_estado_cobro.html" with estado=cobro.estado %}</li>
+        <li class="list-group-item d-flex flex-wrap justify-content-between gap-3"><span>Pagado</span><span>{{ pagado|pesos }}</span></li>
+        <li class="list-group-item d-flex flex-wrap justify-content-between gap-3 fw-semibold"><span>Saldo pendiente</span><span>{{ saldo|pesos }}</span></li>
       </ul>
       {% if pagos %}
       <div class="card-header border-top">Pagos registrados</div>
       <ul class="list-group list-group-flush">
         {% for p in pagos %}
-        <li class="list-group-item d-flex justify-content-between">
+        <li class="list-group-item d-flex flex-wrap justify-content-between gap-3">
           <span>{{ p.fecha|date:"d-m-Y" }} <span class="small text-muted">· {{ p.get_medio_display }}</span> · <a href="{% url 'pagos:comprobante_pago' p.pk %}" aria-label="Descargar comprobante del pago {{ p.pk }}">Comprobante PDF</a>
             {# El residente ve el pago anulado y por qué (#53): explica por qué su saldo volvió a subir. #}
             {% if p.anulado %}<br><span class="insignia insignia-con-deuda">Anulado</span> <span class="small">{{ p.motivo_anulacion }}</span>{% endif %}</span>
@@ -56,7 +56,7 @@
       <ul class="list-group list-group-flush">
         {# Una línea por categoría (egresos_para_residente): sin descripción libre, proveedor ni fecha (#115). #}
         {% for e in egresos %}
-        <li class="list-group-item d-flex justify-content-between gap-3">
+        <li class="list-group-item d-flex flex-wrap justify-content-between gap-3">
           <span>{{ e.categoria }}</span>
           <span class="text-nowrap">{{ e.subtotal|pesos }}</span>
         </li>
