@@ -36,7 +36,7 @@ No se usó axe ni Lighthouse: cargar librerías externas en el entorno de revisi
 | 1.1.1 Contenido no textual | ✅ Todas las imágenes con `alt` |
 | 1.3.1 Información y relaciones | ✅ Campos con etiqueta; errores enlazados al campo |
 | 1.4.3 Contraste mínimo | ✅ Todo el texto cumple. La «b» naranja del logo (2,65:1) está exenta por ser parte de un logotipo |
-| 1.4.4 Cambio de tamaño del texto | ⚠️ → ✅ Seis páginas con desplazamiento horizontal al 200 %; cuatro corregidas en el PR #144, dos pendientes (abajo) |
+| 1.4.4 Cambio de tamaño del texto | ⚠️ → ✅ Seis páginas con desplazamiento horizontal al 200 %; todas corregidas (PR #144 y #147) |
 | 2.4.2 Título de página | ✅ Todas con título |
 | 3.1.1 Idioma de la página | ✅ `lang="es"` |
 | 3.3.1 Identificación de errores | ✅ `aria-invalid` y mensaje por campo |
@@ -50,8 +50,10 @@ No se usó axe ni Lighthouse: cargar librerías externas en el entorno de revisi
 | Espacios comunes | «Reservar» (+45 px) | Corregido (#144) |
 | Nueva reserva | «Cancelar» (+59 px) | Corregido (#144) |
 | Notificaciones | «Marcar todas como leídas» (+85 px) | Corregido (#144) |
-| Reportar incidente | «Cancelar» (+23 px) | Avisado a Winderson (`incidentes/formulario.html`) |
-| Detalle de un cobro | Montos con `text-nowrap` (+98 px) | Avisado a Winderson (`pagos/detalle.html`) |
+| Reportar incidente | «Cancelar» (+23 px) | Corregido (#147, Winderson) |
+| Detalle de un cobro | Montos con `text-nowrap` (+98 px) | Corregido (#147, Winderson) |
+
+Verificación después de las correcciones (lunes 23 de noviembre): las seis páginas miden 375 px de ancho con el texto al 200 %, sin desplazamiento horizontal.
 
 **Mejora sugerida (no exigida por AA).** Al enviar un formulario con errores, mover el foco al primer campo con error o a un resumen, para quien navega con teclado o lector de pantalla.
 
